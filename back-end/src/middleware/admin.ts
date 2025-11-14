@@ -1,0 +1,33 @@
+import { Request, Response, NextFunction } from "express";
+import Users from "../models/Users";
+
+// Middleware kiểm tra quyền Admin
+export const adminMiddleware = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  // Giả định: auth đã chạy trước và gán userId vào req.
+  // Lấy userId từ req.
+  const userId = (req as any).userId;
+
+  if (!userId) {
+    return res.status(403).json({ error: "Access denied. User ID not found." });
+  }
+
+  try {
+    // 1. Tìm User trong CSDL
+    const user = await Users.findById(userId);
+
+    // 2. Kiểm tra quyền Admin
+    if (user && user.role === "admin") {
+      // Nếu là Admin, cho phép đi tiếp
+      next();
+    } else {
+      // Nếu không phải Admin
+      res.status(403).json({ error: "Access denied. Admin rights required." });
+    }
+  } catch (error) {
+    res.status(500).json({ error: "Server error during authorization check." });
+  }
+};
