@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
-import Users from "../models/Users";
+import Users from "../models/User";
+import { AuthenticatedRequest } from "../types/express";
 
 // Middleware kiểm tra quyền Admin
 export const adminMiddleware = async (
@@ -9,7 +10,7 @@ export const adminMiddleware = async (
 ) => {
   // Giả định: auth đã chạy trước và gán userId vào req.
   // Lấy userId từ req.
-  const userId = (req as any).userId;
+  const userId = (req as AuthenticatedRequest).userId;
 
   if (!userId) {
     return res.status(403).json({ error: "Access denied. User ID not found." });
@@ -24,10 +25,11 @@ export const adminMiddleware = async (
       // Nếu là Admin, cho phép đi tiếp
       next();
     } else {
-      // Nếu không phải Admin
+      // Nếu không phải Admin hoặc User không tồn tại
       res.status(403).json({ error: "Access denied. Admin rights required." });
     }
   } catch (error) {
+    console.error(error); // Log lỗi server
     res.status(500).json({ error: "Server error during authorization check." });
   }
 };

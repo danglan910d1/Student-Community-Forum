@@ -2,10 +2,9 @@ import express from "express";
 import mongoose from "mongoose";
 import cors from "cors";
 import authRoutes from "./routes/authRoutes";
-// import userRoutes from "./routes/userRoutes";
-// import categoryRoutes from "./routes/categoryRoutes";
-// import transactionRoutes from "./routes/transactionRoutes";
-// import analyticsRoutes from "./routes/analyticsRoutes";
+import userRoutes from "./routes/userRouters";
+import topicRoutes from "./routes/topicRoutes";
+import tagRoutes from "./routes/tagRoutes";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -24,9 +23,8 @@ mongoose
 
 // Định tuyến (Routing)
 app.use("/api/auth", authRoutes);
-// app.use("/api/users", userRoutes);
-// app.use("/api/categories", categoryRoutes);
-// app.use("/api/transactions", transactionRoutes);
-// app.use("/api/analytics", analyticsRoutes);
+app.use("/api/users", userRoutes);
+app.use("/api/topics", topicRoutes);
+app.use("/api/tags", tagRoutes);
 
 app.listen(5000, () => console.log("Server running on port 5000"));

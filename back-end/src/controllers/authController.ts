@@ -1,7 +1,7 @@
 // src/controllers/authController.ts
 
 import { Request, Response } from "express";
-import User, { IUser } from "../models/Users"; // Đảm bảo import đúng cách (export default)
+import User from "../models/User";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 
@@ -16,6 +16,7 @@ const generateToken = (id: string): string => {
 };
 
 // --- [ Đăng ký ] ---
+// Vẫn sử dụng Request gốc vì đây là route công khai
 export const register = async (req: Request, res: Response) => {
   try {
     const { name, email, password } = req.body;
@@ -39,9 +40,8 @@ export const register = async (req: Request, res: Response) => {
     const newUser = await User.create({
       name,
       email,
-      password: hashedPassword,
-      // Mặc định role: "user", status: "active" (đã định nghĩa trong Schema)
-    } as IUser);
+      password: hashedPassword, // Mặc định role: "user", status: "active" (đã định nghĩa trong Schema)
+    });
 
     // 5. Trả về thông tin và token
     res.status(201).json({
@@ -58,6 +58,7 @@ export const register = async (req: Request, res: Response) => {
 };
 
 // --- [ Đăng nhập ] ---
+// Vẫn sử dụng Request gốc vì đây là route công khai
 export const login = async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
@@ -84,23 +85,8 @@ export const login = async (req: Request, res: Response) => {
   }
 };
 
-// --- [ Lấy thông tin User hiện tại ] ---
-// Cần sử dụng authMiddleware trước route này
-export const getMe = async (req: Request, res: Response) => {
-  try {
-    // userId được gán vào req object bởi authMiddleware
-    const userId = (req as any).userId;
-
-    // Tìm user và loại bỏ mật khẩu (mặc định Schema đã có select: false)
-    const user = await User.findById(userId).select("-password");
-
-    if (!user) {
-      return res.status(404).json({ error: "User not found." });
-    }
-
-    res.json(user);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Server error." });
-  }
+// --- [ Đăng xuất (Stateless) ] ---
+export const logout = (req: Request, res: Response) => {
+  // Frontend xóa token, Backend chỉ cần phản hồi thành công.
+  res.json({ message: "Logged out successfully." });
 };

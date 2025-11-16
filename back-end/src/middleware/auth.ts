@@ -28,7 +28,7 @@ export const authMiddleware = (
     // KHÔNG cần @ts-ignore nữa vì đã có:
     // a) Cài đặt @types/jsonwebtoken
     // b) Giả định: Đã mở rộng interface Request (thêm file types/express.d.ts)
-    (req as any).userId = decoded.id;
+    (req as Request).userId = decoded.id;
 
     // Chuyển sang middleware hoặc controller tiếp theo
     next();

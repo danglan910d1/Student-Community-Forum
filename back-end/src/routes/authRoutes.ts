@@ -1,8 +1,7 @@
 // src/routes/authRoutes.ts
 
 import { Router } from "express";
-import { register, login, getMe } from "../controllers/authController";
-import { authMiddleware } from "../middleware/auth";
+import { register, login, logout } from "../controllers/authController";
 
 const router = Router();
 
@@ -14,8 +13,7 @@ router.post("/register", register);
 // POST /api/auth/login
 router.post("/login", login);
 
-// Route lấy thông tin người dùng hiện tại (cần xác thực)
-// GET /api/auth/me
-router.get("/me", authMiddleware, getMe);
+// POST /api/auth/logout (Không cần middleware)
+router.post("/logout", logout);
 
 export default router;

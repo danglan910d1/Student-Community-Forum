@@ -10,10 +10,13 @@ export interface IUser {
   email: string;
   password: string;
   role: "user" | "admin"; // Phân quyền người dùng
-  avatar?: string; // URL ảnh đại diện
+  avatar?: string | null; // URL ảnh đại diện
   status: "active" | "banned"; // Trạng thái tài khoản
   createdAt: Date; // Mongoose tự động thêm với timestamps: true
   updatedAt: Date; // Mongoose tự động thêm với timestamps: true
+  isVerified: boolean;
+  otpCode?: string;
+  otpExpires?: Date;
 }
 
 // Định nghĩa Schema Mongoose (Quy tắc Cơ sở dữ liệu)
@@ -37,6 +40,9 @@ const userSchema = new Schema<IUser>(
     // Loại bỏ định nghĩa thủ công
     // createdAt: { type: Date, default: Date.now },
     // updatedAt: { type: Date, default: Date.now },
+    isVerified: { type: Boolean }, // Mặc định là FALSE
+    otpCode: { type: String },
+    otpExpires: { type: Date },
   },
   {
     // Tham số 2: Các tùy chọn cấu hình Schema tổng thể
