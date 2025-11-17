@@ -6,6 +6,7 @@ import {
   createTopic,
   getAllTopicsForAdmin,
   updateTopic,
+  getTopicById,
 } from "../controllers/topicController";
 import { authMiddleware } from "../middleware/auth";
 import { adminMiddleware } from "../middleware/admin";
@@ -15,6 +16,14 @@ const router = Router();
 // --- [ PUBLIC ] ---
 // GET /api/topics (Lấy tất cả topics đã được duyệt)
 router.get("/", getApprovedTopics);
+
+// GET /api/topics/admin/:id (Lấy chi tiết Topic bằng ID)
+router.get(
+  "/admin/:id",
+  authMiddleware,
+  adminMiddleware,
+  getTopicById as unknown as RequestHandler
+);
 
 // --- [ ADMIN ONLY ] ---
 // Tất cả các route admin đều cần authMiddleware và adminMiddleware

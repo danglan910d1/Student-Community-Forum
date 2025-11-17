@@ -71,7 +71,7 @@ export const createComment = async (
           .status(400)
           .json({ error: "Reply must belong to the same post as the parent." });
       }
-      // Sửa lỗi: Ép kiểu tường minh thành Types.ObjectId
+      // Ép kiểu tường minh thành Types.ObjectId
       parentIdObj = parentComment._id as Types.ObjectId;
     }
 
@@ -89,6 +89,11 @@ export const createComment = async (
       await Comment.findByIdAndUpdate(parentComment._id, {
         $inc: { replies_count: 1 },
       });
+    } // Điều này đảm bảo Post.comments_count chỉ đếm bình luận cấp 1.
+
+    // 6. Chỉ tăng comments_count cho Post nếu là ROOT comment.
+    if (!parentId) {
+      await Post.findByIdAndUpdate(postId, { $inc: { comments_count: 1 } });
     }
 
     res.status(201).json(newComment);
@@ -238,9 +243,64 @@ export const deleteComment = async (
       });
     }
 
+    //  5. Giảm comments_count của Post nếu đây là bình luận cấp 1.
+    // Logic này giữ nguyên: chỉ giảm count nếu là ROOT comment.
+    if (!comment.parentId) {
+      await Post.findByIdAndUpdate(comment.postId, {
+        $inc: { comments_count: -1 },
+      });
+    }
+
     res.json({ message: "Comment deleted successfully." });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Server error during comment deletion." });
+  }
+};
+
+// --- [ ADMIN: Lấy tất cả Comments (kể cả pending/deleted) ] ---
+// Hàm này cho phép Admin xem và duyệt tất cả Comments
+export const getAllCommentsForAdmin = async (
+  req: AuthenticatedRequest<{}, {}, {}, GetCommentsQuery>,
+  res: Response
+) => {
+  try {
+    const { postId, page = 1, limit = 10 } = req.query;
+    const pageNum = parseInt(page as string);
+    const limitNum = parseInt(limit as string);
+
+    const skip = (pageNum - 1) * limitNum;
+
+    const filter: any = {};
+
+    // Lọc theo Post ID (nếu cần)
+    if (postId && Types.ObjectId.isValid(postId)) {
+      filter.postId = new Types.ObjectId(postId);
+    }
+
+    // Admin có thể xem tất cả trạng thái, bao gồm cả is_deleted: true
+    // Nếu không có filter.is_deleted, Mongoose sẽ lấy cả hai.
+
+    const totalComments = await Comment.countDocuments(filter);
+
+    const comments = await Comment.find(filter)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limitNum)
+      .populate("userId", "name avatar")
+      .populate("postId", "title")
+      .populate("parentId", "content"); // Để Admin xem ngữ cảnh
+
+    res.json({
+      comments,
+      currentPage: pageNum,
+      totalPages: Math.ceil(totalComments / limitNum),
+      totalItems: totalComments,
+    });
+  } catch (error) {
+    console.error(error);
+    res
+      .status(500)
+      .json({ error: "Server error during fetching all comments for admin." });
   }
 };

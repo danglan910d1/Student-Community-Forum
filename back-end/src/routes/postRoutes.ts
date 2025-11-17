@@ -7,6 +7,7 @@ import {
   getPostById,
   updatePost,
   deletePost,
+  getPostByIdForAdmin,
 } from "../controllers/postController";
 import { authMiddleware } from "../middleware/auth";
 import { adminMiddleware } from "../middleware/admin"; // Dùng để kiểm tra vai trò
@@ -19,8 +20,8 @@ const router = Router();
 // User thường mặc định chỉ xem được "approved"
 router.get(
   "/",
-  authMiddleware, // Cho phép gán userId/userRole cho Admin
-  adminMiddleware, // Kiểm tra và gán req.userRole = 'admin' nếu hợp lệ
+  // authMiddleware, // Cho phép gán userId/userRole cho Admin
+  // adminMiddleware, // Kiểm tra và gán req.userRole = 'admin' nếu hợp lệ
   getPosts as unknown as RequestHandler // Dùng as unknown as RequestHandler vì đã thêm middleware
 );
 
@@ -39,13 +40,13 @@ router.put(
 
 // DELETE /api/posts/:id (User xóa bài của mình, Admin xóa bất kỳ)
 router.delete("/:id", authMiddleware, deletePost as unknown as RequestHandler);
-
-// Lưu ý: Các route chỉ dành cho Admin (nếu có, ví dụ: Lấy tất cả bài Pending)
-// router.get(
-//   "/admin/all",
-//   authMiddleware,
-//   adminMiddleware,
-//   getAllPostsForAdmin as unknown as RequestHandler
-// );
+// --- [ ADMIN ONLY ACCESS ] ---
+// GET /api/posts/admin/:id (Lấy chi tiết Bài viết bất kể status)
+router.get(
+  "/admin/:id",
+  authMiddleware,
+  adminMiddleware,
+  getPostByIdForAdmin as unknown as RequestHandler
+);
 
 export default router;

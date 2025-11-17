@@ -2,6 +2,8 @@ import { Request, Response } from "express";
 import Post from "../models/Post";
 import Topic from "../models/Topic";
 import Tag from "../models/Tag";
+import Comment from "../models/Comment";
+import Like from "../models/Like";
 import { AuthenticatedRequest } from "../types/express";
 import { Types } from "mongoose";
 
@@ -164,6 +166,7 @@ export const getPosts = async (
     res.status(500).json({ error: "Server error during fetching posts." });
   }
 };
+
 // --- [ PUBLIC: Lấy chi tiết Bài Viết và tăng Views ] ---
 export const getPostById = async (req: Request<PostParams>, res: Response) => {
   try {
@@ -191,6 +194,40 @@ export const getPostById = async (req: Request<PostParams>, res: Response) => {
     res
       .status(500)
       .json({ error: "Server error during fetching post details." });
+  }
+};
+
+// --- [ ADMIN: Lấy chi tiết Bài Viết Bất kể Status ] ---
+// Cần authMiddleware & adminMiddleware
+export const getPostByIdForAdmin = async (
+  req: AuthenticatedRequest<PostParams>,
+  res: Response
+) => {
+  try {
+    const { id } = req.params;
+
+    // 1. Kiểm tra tính hợp lệ của ID
+    if (!Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ error: "Invalid Post ID format." });
+    }
+
+    // 2. Tìm Bài viết chỉ bằng ID (KHÔNG lọc theo status)
+    const post = await Post.findById(id)
+      .populate("userId", "name avatar")
+      .populate("topicId", "name slug")
+      .populate("tags", "name");
+
+    if (!post) {
+      return res.status(404).json({ error: "Post not found." });
+    }
+
+    // 3. Phản hồi thành công
+    res.json(post);
+  } catch (error) {
+    console.error(error);
+    res
+      .status(500)
+      .json({ error: "Server error during fetching post details for admin." });
   }
 };
 
@@ -316,9 +353,17 @@ export const deletePost = async (
     // 3. Thực hiện xóa
     await post.deleteOne();
 
-    // **LƯU Ý QUAN TRỌNG:** Cần thêm logic để XÓA các Comments và Likes liên quan đến Post này
-    // await Comment.deleteMany({ postId: postId });
-    // await Like.deleteMany({ targetId: postId, targetType: "post" });
+    // 4. XÓA DỮ LIỆU LIÊN QUAN (QUAN TRỌNG)
+    // Xóa tất cả Comments thuộc về bài viết này
+    // Cần đảm bảo Comment Model và Like Model đã được import
+    if (typeof Comment !== "undefined") {
+      await Comment.deleteMany({ postId: postId });
+    }
+
+    // Xóa tất cả Likes nhắm vào bài viết này
+    if (typeof Like !== "undefined") {
+      await Like.deleteMany({ targetId: postId, targetType: "post" });
+    }
 
     res.json({ message: "Post deleted successfully." });
   } catch (error) {

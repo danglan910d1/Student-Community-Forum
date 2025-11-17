@@ -25,10 +25,17 @@ interface UpdateTagBody {
 export const getApprovedTags = async (req: Request, res: Response) => {
   try {
     // 1. Lấy topicId từ query parameters (ví dụ: /api/tags?topicId=...)
-    const { topicId } = req.query; // 2. Thiết lập điều kiện lọc cơ bản: chỉ lấy tags đã "approved"
+    const { topicId, name } = req.query;
 
-    const filter: any = { status: "approved" }; // 3. Xử lý lọc theo topicId (nếu có)
+    // 2. Thiết lập điều kiện lọc cơ bản: chỉ lấy tags đã "approved"
+    const filter: any = { status: "approved" };
 
+    if (name && typeof name === "string") {
+      // Thêm điều kiện tìm kiếm theo tên
+      filter.name = name;
+    }
+
+    // 3. Xử lý lọc theo topicId (nếu có)
     if (
       topicId &&
       typeof topicId === "string" &&
@@ -36,10 +43,12 @@ export const getApprovedTags = async (req: Request, res: Response) => {
     ) {
       // Chuyển đổi string thành ObjectId để so sánh chính xác trong MongoDB
       filter.topicId = new Types.ObjectId(topicId);
-    } // 4. Thực hiện tìm kiếm và chỉ chọn các trường cần thiết cho public
+    }
 
-    const tags = await Tag.find(filter).select("name topicId"); // 5. Phản hồi thành công
+    // 4. Thực hiện tìm kiếm và chỉ chọn các trường cần thiết cho public
+    const tags = await Tag.find(filter).select("name topicId");
 
+    // 5. Phản hồi thành công
     res.json(tags);
   } catch (error) {
     console.error(error);
@@ -55,31 +64,37 @@ export const suggestTag = async (
   try {
     // 1. Lấy dữ liệu từ body và userId từ request (đã xác thực)
     const { name, topicId } = req.body;
-    const userId = req.userId; // 2. Kiểm tra tính hợp lệ cơ bản của name
+    const userId = req.userId;
 
+    // 2. Kiểm tra tính hợp lệ cơ bản của name
     if (!name) {
       return res.status(400).json({ error: "Tag name is required." });
-    } // 3. Kiểm tra trùng lặp tên Tag
+    }
 
+    // 3. Kiểm tra trùng lặp tên Tag
     const tagExists = await Tag.findOne({ name });
     if (tagExists) {
       return res
         .status(400)
         .json({ error: "Tag with this name already exists." });
-    } // 4. Chuẩn bị dữ liệu cho Tag mới
+    }
 
+    // 4. Chuẩn bị dữ liệu cho Tag mới
     const tagData: Partial<ITag> = {
       name, // Gán userId của người tạo (cần chuyển string thành ObjectId)
       createdBy: new Types.ObjectId(userId),
       status: "pending", // QUY TẮC: User tạo -> Mặc định chờ Admin duyệt
-    }; // 5. Xử lý topicId (chỉ thêm nếu nó được cung cấp và hợp lệ)
+    };
 
+    // 5. Xử lý topicId (chỉ thêm nếu nó được cung cấp và hợp lệ)
     if (topicId && Types.ObjectId.isValid(topicId)) {
       tagData.topicId = new Types.ObjectId(topicId);
-    } // 6. Tạo Tag trong Database
+    }
 
-    const newTag = await Tag.create(tagData); // 7. Phản hồi thành công
+    // 6. Tạo Tag trong Database
+    const newTag = await Tag.create(tagData);
 
+    // 7. Phản hồi thành công
     res.status(201).json(newTag);
   } catch (error: any) {
     // Xử lý lỗi trùng lặp do unique index (nếu lỗi 11000 xảy ra sau kiểm tra 3)
@@ -102,12 +117,47 @@ export const getAllTagsForAdmin = async (
     const tags = await Tag.find()
       .populate("topicId", "name")
       .populate("createdBy", "name")
-      .sort({ createdAt: -1 }); // Sắp xếp để xem các tags mới nhất trước // 3. Phản hồi thành công
+      .sort({ createdAt: -1 }); // Sắp xếp để xem các tags mới nhất trước
 
+    // 3. Phản hồi thành công
     res.json(tags);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Server error during fetching all tags." });
+  }
+};
+
+// --- [ ADMIN: Lấy chi tiết Tag bằng ID ] ---
+// Cần authMiddleware & adminMiddleware
+export const getTagById = async (
+  req: AuthenticatedRequest<TagParams>,
+  res: Response
+) => {
+  try {
+    const { id } = req.params;
+
+    // 1. Kiểm tra tính hợp lệ của ID
+    if (!Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ error: "Invalid Tag ID format." });
+    }
+
+    // 2. Thực hiện tìm kiếm và Populate các trường liên quan
+    const tag = await Tag.findById(id)
+      .populate("topicId", "name slug") // Hiển thị tên Topic và slug (nếu có)
+      .populate("createdBy", "name username"); // Hiển thị thông tin người gợi ý
+
+    // 3. Kiểm tra Tag có tồn tại không
+    if (!tag) {
+      return res.status(404).json({ error: "Tag not found." });
+    }
+
+    // 4. Phản hồi thành công
+    res.json(tag);
+  } catch (error) {
+    console.error(error);
+    res
+      .status(500)
+      .json({ error: "Server error during fetching tag details." });
   }
 };
 
@@ -121,10 +171,12 @@ export const updateTag = async (
     const tagId = req.params.id;
     const { name, topicId, status } = req.body;
 
-    const updateFields: any = {}; // 2. Xử lý trường name
+    const updateFields: any = {};
 
-    if (name) updateFields.name = name; // 3. Xử lý trường topicId (là trường phức tạp nhất)
+    // 2. Xử lý trường name
+    if (name) updateFields.name = name;
 
+    // 3. Xử lý trường topicId (là trường phức tạp nhất)
     if (topicId !== undefined) {
       if (topicId === null) {
         // Trường hợp 3a: Gửi null -> xóa liên kết Topic
@@ -136,22 +188,28 @@ export const updateTag = async (
         // Trường hợp 3c: Gửi string không hợp lệ
         return res.status(400).json({ error: "Invalid topicId format." });
       }
-    } // 4. Xử lý trường status (Duyệt/Từ chối)
-    if (status) updateFields.status = status; // 5. Kiểm tra nếu không có trường nào được cung cấp để cập nhật
+    }
 
+    // 4. Xử lý trường status (Duyệt/Từ chối)
+    if (status) updateFields.status = status;
+
+    // 5. Kiểm tra nếu không có trường nào được cung cấp để cập nhật
     if (Object.keys(updateFields).length === 0) {
       return res.status(400).json({ error: "No fields provided for update." });
-    } // 6. Thực hiện Tìm kiếm và Cập nhật
+    }
 
+    // 6. Thực hiện Tìm kiếm và Cập nhật
     const updatedTag = await Tag.findByIdAndUpdate(tagId, updateFields, {
       new: true, // Trả về tài liệu sau khi cập nhật
       runValidators: true, // Chạy các quy tắc validation của Schema
-    }).populate("topicId", "name"); // Populate topic để trả về dữ liệu thân thiện // 7. Kiểm tra kết quả
+    }).populate("topicId", "name"); // Populate topic để trả về dữ liệu thân thiện
 
+    // 7. Kiểm tra kết quả
     if (!updatedTag) {
       return res.status(404).json({ error: "Tag not found." });
-    } // 8. Phản hồi thành công
+    }
 
+    // 8. Phản hồi thành công
     res.json(updatedTag);
   } catch (error: any) {
     // Xử lý lỗi trùng lặp tên Tag
@@ -160,5 +218,36 @@ export const updateTag = async (
     }
     console.error(error);
     res.status(500).json({ error: "Server error during tag update." });
+  }
+};
+
+// --- [ ADMIN: Xóa Tag ] ---
+export const deleteTag = async (
+  req: AuthenticatedRequest<TagParams>,
+  res: Response
+) => {
+  try {
+    const tagId = req.params.id;
+
+    // 1. Kiểm tra ID hợp lệ
+    if (!Types.ObjectId.isValid(tagId)) {
+      return res.status(400).json({ error: "Invalid Tag ID format." });
+    }
+
+    // 2. Thực hiện xóa
+    const deletedTag = await Tag.findByIdAndDelete(tagId);
+
+    if (!deletedTag) {
+      return res.status(404).json({ error: "Tag not found." });
+    }
+
+    // 3. Xử lý sau khi xóa: Trong các hệ thống lớn, nếu Tag bị xóa,
+    // cần cân nhắc cập nhật các Post có chứa Tag này nếu muốn duy trì
+    // tính sạch sẽ của mảng tags trong Post, nhưng thường không bắt buộc
+    // vì Mongoose sẽ bỏ qua ID không tồn tại.
+    res.json({ message: "Tag deleted successfully." });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Server error during tag deletion." });
   }
 };

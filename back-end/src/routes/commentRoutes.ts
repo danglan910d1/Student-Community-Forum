@@ -4,6 +4,7 @@ import {
   getComments,
   updateComment,
   deleteComment,
+  getAllCommentsForAdmin,
 } from "../controllers/commentController";
 import { authMiddleware } from "../middleware/auth";
 import { adminMiddleware } from "../middleware/admin";
@@ -40,6 +41,15 @@ router.delete(
   authMiddleware,
   adminMiddleware,
   deleteComment as unknown as RequestHandler
+);
+
+// --- [ ADMIN ONLY ACCESS ] ---
+// GET /api/comments/admin (Lấy tất cả comments, kể cả pending và đã xóa)
+router.get(
+  "/admin",
+  authMiddleware,
+  adminMiddleware,
+  getAllCommentsForAdmin as unknown as RequestHandler // <-- Route Admin bị thiếu đã được thêm
 );
 
 export default router;

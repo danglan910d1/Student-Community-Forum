@@ -32,7 +32,7 @@ interface GetLikeStatusQuery {
 
 // Hàm trợ giúp để kiểm tra sự tồn tại của đối tượng mục tiêu
 const checkTargetExists = async (targetType: TargetType, targetId: string) => {
-  // SỬA LỖI TS(7053): Ép kiểu targetType thành key hợp lệ của LikableModels
+  // Ép kiểu targetType thành key hợp lệ của LikableModels
   const Model = likableModels[targetType as keyof LikableModels];
 
   if (!Model) {
@@ -40,7 +40,7 @@ const checkTargetExists = async (targetType: TargetType, targetId: string) => {
     throw new Error("Invalid target type.");
   }
 
-  // SỬA LỖI 1: Cast kết quả sang 'any' để truy cập an toàn các thuộc tính động
+  // Cast kết quả sang 'any' để truy cập an toàn các thuộc tính động
   const target: any = await Model.findById(targetId);
 
   if (!target) return false;
@@ -139,7 +139,7 @@ export const toggleLike = async (
     }
 
     // 5. Phản hồi
-    // SỬA LỖI 2: Đã tính toán và trả về likeCount là một số (number)
+    // Đã tính toán và trả về likeCount là một số (number)
     res.json({
       message,
       isLiked, // Trạng thái cuối cùng
@@ -186,11 +186,11 @@ export const getLikeStatus = async (
     const isLiked = !!existingLike;
 
     // 4. Lấy tổng số likes
-    // SỬA LỖI TS(7053): Dùng validTargetType đã được ép kiểu
+    // Dùng validTargetType đã được ép kiểu
     const Model = likableModels[validTargetType];
     let likes_count = 0;
     if (Model) {
-      // SỬA LỖI 3: Cast kết quả sang 'any' để truy cập an toàn 'likes_count'
+      // Cast kết quả sang 'any' để truy cập an toàn 'likes_count'
       const target: any = await Model.findById(targetId as string).select(
         "likes_count"
       );

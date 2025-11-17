@@ -15,7 +15,7 @@ declare module "express-serve-static-core" {
 // } // Có thể gây lỗi khi resquest cần những field khác ngoài userId
 
 // 2. Định nghĩa một kiểu Request mới cho các Controllers đã được bảo vệ
-// Sửa đổi: Kế thừa tất cả các Generics của Request gốc
+// Kế thừa tất cả các Generics của Request gốc
 export interface AuthenticatedRequest<
   P = core.ParamsDictionary,
   ResBody = any,
