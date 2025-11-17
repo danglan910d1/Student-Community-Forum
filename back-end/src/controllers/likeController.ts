@@ -58,6 +58,7 @@ const checkTargetExists = async (targetType: TargetType, targetId: string) => {
 };
 
 // --- [ USER: Thích hoặc Bỏ Thích ] ---
+// Hàm này BẮT BUỘC authMiddleware
 export const toggleLike = async (
   req: AuthenticatedRequest<ToggleLikeParams>,
   res: Response
@@ -65,6 +66,13 @@ export const toggleLike = async (
   try {
     const { targetType, targetId } = req.params;
     const userId = req.userId;
+
+    // Kiểm tra Auth: Nếu không có userId (không thể xảy ra vì đã qua authMiddleware, nhưng thêm vào để an toàn)
+    if (!userId) {
+      return res
+        .status(401)
+        .json({ error: "Authentication required to perform this action." });
+    }
 
     // 1. Kiểm tra tính hợp lệ của tham số
     if (!targetType || !targetId || !Types.ObjectId.isValid(targetId)) {
@@ -175,20 +183,11 @@ export const getLikeStatus = async (
       return res.status(400).json({ error: "Unsupported target type." });
     }
 
-    // 2. Tìm kiếm Like
-    const existingLike = await Like.findOne({
-      userId: new Types.ObjectId(userId),
-      targetId: new Types.ObjectId(targetId as string),
-      targetType: targetType,
-    });
-
-    // 3. Phản hồi
-    const isLiked = !!existingLike;
-
-    // 4. Lấy tổng số likes
+    // 2. Lấy tổng số likes dù có đăng nhập hay không
     // Dùng validTargetType đã được ép kiểu
     const Model = likableModels[validTargetType];
     let likes_count = 0;
+    let isLiked = false;
     if (Model) {
       // Cast kết quả sang 'any' để truy cập an toàn 'likes_count'
       const target: any = await Model.findById(targetId as string).select(
@@ -197,6 +196,20 @@ export const getLikeStatus = async (
       likes_count = target?.likes_count || 0;
     }
 
+    // 3. Tìm kiếm Trạng thái Like của người dùng hiện tại (CHỈ KHI ĐĂNG NHẬP)
+    if (userId) {
+      // <-- THÊM ĐIỀU KIỆN KIỂM TRA userId TẠI ĐÂY
+      const existingLike = await Like.findOne({
+        userId: new Types.ObjectId(userId),
+        targetId: new Types.ObjectId(targetId as string),
+        targetType: targetType,
+      });
+      isLiked = !!existingLike;
+    } else {
+      isLiked = false; // Mặc định là false nếu không đăng nhập
+    }
+
+    // 4. Phản hồi
     res.json({
       isLiked,
       likes_count,
