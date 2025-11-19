@@ -17,14 +17,6 @@ const router = Router();
 // GET /api/topics (Lấy tất cả topics đã được duyệt)
 router.get("/", getApprovedTopics);
 
-// GET /api/topics/admin/:id (Lấy chi tiết Topic bằng ID)
-router.get(
-  "/admin/:id",
-  authMiddleware,
-  adminMiddleware,
-  getTopicById as unknown as RequestHandler
-);
-
 // --- [ ADMIN ONLY ] ---
 // Tất cả các route admin đều cần authMiddleware và adminMiddleware
 // POST /api/topics/admin (Tạo topic mới)
@@ -43,6 +35,14 @@ router.get(
   getAllTopicsForAdmin as unknown as RequestHandler
 );
 
+// GET /api/topics/admin/:id (Lấy chi tiết Topic bằng ID bất kể chi tiết)
+router.get(
+  "/admin/:id",
+  authMiddleware,
+  adminMiddleware,
+  getTopicById as unknown as RequestHandler
+);
+
 // PUT /api/topics/admin/:id (Cập nhật topic, bao gồm cả duyệt status)
 router.put(
   "/admin/:id",
@@ -51,6 +51,6 @@ router.put(
   updateTopic as unknown as RequestHandler
 );
 
-// Lưu ý: Thêm route DELETE Topic nếu cần thiết
+// Để xoá topics thì dùng PUT /api/topics/admin/:id, sửa status thành rejected
 
 export default router;

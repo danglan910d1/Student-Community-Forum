@@ -30,7 +30,6 @@ router.put("/password", authMiddleware, updatePassword as RequestHandler);
 router.get("/:id", getUserById);
 
 // --- [ ROUTES DÀNH CHO ADMIN ] ---
-
 // GET /api/users/:id/details (Xem chi tiết dành cho admin)
 router.get(
   "/:id/details",

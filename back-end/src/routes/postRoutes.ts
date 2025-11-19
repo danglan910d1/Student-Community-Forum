@@ -40,6 +40,7 @@ router.put(
 
 // DELETE /api/posts/:id (User xóa bài của mình, Admin xóa bất kỳ)
 router.delete("/:id", authMiddleware, deletePost as unknown as RequestHandler);
+
 // --- [ ADMIN ONLY ACCESS ] ---
 // GET /api/posts/admin/:id (Lấy chi tiết Bài viết bất kể status)
 router.get(

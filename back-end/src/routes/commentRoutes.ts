@@ -14,13 +14,11 @@ const router = Router();
 // Định nghĩa các Route cho Comments (Prefix: /api/comments)
 
 // --- [ PUBLIC ] ---
-
 // GET /api/comments?postId=...&parentId=...
 // Lấy danh sách bình luận (cấp 1 HOẶC replies) cho một bài viết (không cần đăng nhập)
 router.get("/", getComments as unknown as RequestHandler);
 
 // --- [ USER/ADMIN ACCESS - Cần Đăng nhập ] ---
-
 // POST /api/comments (Tạo bình luận mới hoặc trả lời/reply)
 // Cần authMiddleware để lấy userId
 router.post("/", authMiddleware, createComment as unknown as RequestHandler);
