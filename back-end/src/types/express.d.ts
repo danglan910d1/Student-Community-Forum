@@ -4,7 +4,9 @@ import * as core from "express-serve-static-core";
 // 1. Mở rộng Request gốc của Express (cho authMiddleware gán giá trị)
 declare module "express-serve-static-core" {
   interface Request {
-    userId?: string; // Tùy chọn, cho phép là undefined khi request mới tới
+    userId?: string;
+    // Tùy chọn, cho phép là undefined khi request mới tới
+    userRole?: "user" | "admin" | "banned";
   }
 }
 

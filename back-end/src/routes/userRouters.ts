@@ -43,7 +43,8 @@ router.get(
   getUserDetails as unknown as RequestHandler
 );
 
-// PUT /api/users/:id/status (Cấm/Mở khóa tài khoản)
+// PUT /api/users/:id/status (Cấm/Mở khóa tài khoản VÀ THAY ĐỔI ROLE)
+// Hàm Controller updateUserStatus đã được cấu hình để xử lý cả status và role từ body.
 router.put(
   "/:id/status",
   authMiddleware,

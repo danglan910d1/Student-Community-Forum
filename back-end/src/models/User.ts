@@ -27,15 +27,24 @@ export interface IUser {
 const userSchema = new Schema<IUser>(
   // Định nghĩa các field và quy tắc của chúng
   {
-    name: { type: String, required: true },
-    email: { type: String, required: true, unique: true },
+    name: { type: String, required: true, trim: true },
+    email: {
+      type: String,
+      required: true,
+      unique: true,
+      trim: true,
+      lowercase: true,
+    },
     password: {
       type: String,
       required: true,
       select: false, // Quy tắc của password: Ẩn mật khẩu khi query mặc định
     },
     role: { type: String, enum: ["user", "admin"], default: "user" },
-    avatar: { type: String, default: "" },
+    avatar: {
+      type: String,
+      default: "https://placehold.co/100x100/CCCCCC/000000?text=A",
+    },
     status: { type: String, enum: ["active", "banned"], default: "active" },
     // Loại bỏ định nghĩa thủ công
     // createdAt: { type: Date, default: Date.now },

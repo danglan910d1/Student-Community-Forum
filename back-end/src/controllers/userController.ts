@@ -1,7 +1,7 @@
 // src/controllers/userController.ts
 
 import { Request, Response } from "express";
-import User from "../models/User";
+import User, { IUser } from "../models/User";
 import Post from "../models/Post";
 import Comment from "../models/Comment";
 import Like from "../models/Like";
@@ -25,6 +25,7 @@ interface GetUserParams {
 
 interface UpdateUserStatusBody {
   status: "active" | "banned";
+  role?: "user" | "admin";
 }
 
 // --- [ Lấy thông tin User hiện tại ] ---
@@ -249,38 +250,62 @@ export const updateUserStatus = async (
   try {
     const targetUserId = req.params.id; // ID của user bị tác động
     const adminId = req.userId; // ID của admin thực hiện hành động
-    const { status } = req.body;
+    const { status, role } = req.body; // 1. KIỂM TRA QUYỀN HẠN: Admin không được tự tác động đến tài khoản của mình
 
-    // Admin không được tự tác động đến tài khoản của mình
     if (adminId === targetUserId) {
       return res.status(403).json({
-        error: "Administrators cannot change their own account status.",
+        error: "Administrators cannot change their own account status or role.",
       });
     }
 
-    // 1. Kiểm tra trạng thái hợp lệ
-    if (status !== "active" && status !== "banned") {
-      return res.status(400).json({ error: "Invalid status value." });
+    // KHẮC PHỤC LỖI ANY: Sử dụng Partial<IUser> để TypeScript kiểm soát các trường
+    const updateFields: Partial<IUser> = {}; // 2. LỌC và KIỂM TRA GIÁ TRỊ status
+
+    if (status) {
+      if (status !== "active" && status !== "banned") {
+        return res
+          .status(400)
+          .json({ error: "Invalid status value (must be active or banned)." });
+      }
+      updateFields.status = status;
+    } // 3. LỌC và KIỂM TRA GIÁ TRỊ role
+
+    if (role) {
+      if (role !== "user" && role !== "admin") {
+        return res
+          .status(400)
+          .json({ error: "Invalid role value (must be user or admin)." });
+      }
+      updateFields.role = role;
     }
 
-    // 2. Tìm và Cập nhật trạng thái
-    const user = await User.findByIdAndUpdate(
+    // 4. KIỂM TRA LỖI: Báo lỗi nếu không có trường nào được cung cấp
+    if (Object.keys(updateFields).length === 0) {
+      return res
+        .status(400)
+        .json({ error: "No valid status or role field provided for update." });
+    }
+
+    // 5. Tìm và Cập nhật trạng thái/role
+    const updatedUser = await User.findByIdAndUpdate(
       targetUserId,
-      { status: status },
-      { new: true } // Trả về tài liệu đã cập nhật
-    );
+      updateFields,
+      { new: true, runValidators: true }
+    ).select("-password");
 
-    if (!user) {
+    if (!updatedUser) {
       return res.status(404).json({ error: "User not found." });
-    }
+    } // 6. Thành công
 
-    // 3. Thành công
     res.json({
-      message: `User ${user.name} status updated to: ${user.status}.`,
+      message: `User ${updatedUser.name} updated. New Status: ${updatedUser.status}, New Role: ${updatedUser.role}.`,
+      user: updatedUser,
     });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: "Server error during user status update." });
+    res
+      .status(500)
+      .json({ error: "Server error during user status/role update." });
   }
 };
 

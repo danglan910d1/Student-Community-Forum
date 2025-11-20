@@ -4,58 +4,91 @@ import { Request, Response } from "express";
 import User from "../models/User";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-
-// Lấy secret key từ biến môi trường
-const JWT_SECRET = process.env.JWT_SECRET || "secret";
-
-// Hàm tạo JWT token
-const generateToken = (id: string): string => {
-  return jwt.sign({ id }, JWT_SECRET, {
-    expiresIn: "30d", // Token hết hạn sau 30 ngày
-  });
-};
+import { generateToken } from "../utils/jwt";
+import { asyncHandler } from "../utils/asyncHandler";
+import { BCRYPT_SALT_ROUNDS } from "../config/constants";
 
 // --- [ Đăng ký ] ---
 // Vẫn sử dụng Request gốc vì đây là route công khai
-export const register = async (req: Request, res: Response) => {
-  try {
-    const { name, email, password } = req.body;
+// export const register = async (req: Request, res: Response) => {
+//   try {
+//     const { name, email, password } = req.body;
 
-    // 1. Kiểm tra thiếu trường
-    if (!name || !email || !password) {
-      return res.status(400).json({ error: "Please enter all fields." });
-    }
+//     // 1. Kiểm tra thiếu trường
+//     if (!name || !email || !password) {
+//       return res.status(400).json({ error: "Please enter all fields." });
+//     }
 
-    // 2. Kiểm tra user đã tồn tại
-    const userExists = await User.findOne({ email });
-    if (userExists) {
-      return res.status(400).json({ error: "User already exists." });
-    }
+//     // BỔ SUNG: XỬ LÝ DỮ LIỆU ĐỊNH DANH (BẮT BUỘC)
+//     const processedEmail = email.trim().toLowerCase();
+//     const processedName = name.trim(); // 2. Kiểm tra user đã tồn tại
 
-    // 3. Hash mật khẩu (Bước 3: Đăng ký / Đăng nhập)
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
+//     const userExists = await User.findOne({ email: processedEmail });
+//     if (userExists) {
+//       return res.status(400).json({ error: "User already exists." });
+//     }
 
-    // 4. Tạo User mới
-    const newUser = await User.create({
-      name,
-      email,
-      password: hashedPassword, // Mặc định role: "user", status: "active" (đã định nghĩa trong Schema)
-    });
+//     // 3. Hash mật khẩu (Bước 3: Đăng ký / Đăng nhập)
+//     const salt = await bcrypt.genSalt(10);
+//     const hashedPassword = await bcrypt.hash(password, salt);
 
-    // 5. Trả về thông tin và token
-    res.status(201).json({
-      _id: newUser._id,
-      name: newUser.name,
-      email: newUser.email,
-      role: newUser.role,
-      token: generateToken(newUser._id.toString()),
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Server error during registration." });
+//     // 4. Tạo User mới
+//     const newUser = await User.create({
+//       name,
+//       email,
+//       password: hashedPassword, // Mặc định role: "user", status: "active" (đã định nghĩa trong Schema)
+//     });
+
+//     // 5. Trả về thông tin và token
+//     res.status(201).json({
+//       _id: newUser._id,
+//       name: newUser.name,
+//       email: newUser.email,
+//       role: newUser.role,
+//       token: generateToken(newUser._id.toString()),
+//     });
+//   } catch (error) {
+//     console.error(error);
+//     res.status(500).json({ error: "Server error during registration." });
+//   }
+// };
+export const register = asyncHandler(async (req, res) => {
+  const { name, email, password } = req.body;
+
+  // 1. Kiểm tra thiếu trường
+  if (!name || !email || !password) {
+    return res.status(400).json({ error: "Please enter all fields." });
   }
-};
+
+  // BỔ SUNG: XỬ LÝ DỮ LIỆU ĐỊNH DANH (BẮT BUỘC)
+  const processedEmail = email.trim().toLowerCase();
+  const processedName = name.trim(); // 2. Kiểm tra user đã tồn tại
+
+  const userExists = await User.findOne({ email: processedEmail });
+  if (userExists) {
+    return res.status(400).json({ error: "User already exists." });
+  }
+
+  // 3. Hash mật khẩu (Bước 3: Đăng ký / Đăng nhập)
+  const salt = await bcrypt.genSalt(BCRYPT_SALT_ROUNDS); // Sử dụng hằng số
+  const hashedPassword = await bcrypt.hash(password, salt);
+
+  // 4. Tạo User mới
+  const newUser = await User.create({
+    name: processedName,
+    email: processedEmail,
+    password: hashedPassword, // Mặc định role: "user", status: "active" (đã định nghĩa trong Schema)
+  });
+
+  // 5. Trả về thông tin và token
+  res.status(201).json({
+    _id: newUser._id,
+    name: newUser.name,
+    email: newUser.email,
+    role: newUser.role,
+    token: generateToken(newUser._id.toString(), newUser.role),
+  });
+});
 
 // --- [ Đăng nhập ] ---
 // Vẫn sử dụng Request gốc vì đây là route công khai
@@ -74,7 +107,7 @@ export const login = async (req: Request, res: Response) => {
         name: user.name,
         email: user.email,
         role: user.role,
-        token: generateToken(user._id.toString()),
+        token: generateToken(user._id.toString(), user.role),
       });
     } else {
       res.status(401).json({ error: "Invalid credentials." });
