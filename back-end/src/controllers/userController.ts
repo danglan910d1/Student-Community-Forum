@@ -2,6 +2,9 @@
 
 import { Request, Response } from "express";
 import User from "../models/User";
+import Post from "../models/Post";
+import Comment from "../models/Comment";
+import Like from "../models/Like";
 import bcrypt from "bcrypt";
 import { AuthenticatedRequest } from "../types/express"; // Sử dụng cho các route bảo vệ
 
@@ -281,33 +284,98 @@ export const updateUserStatus = async (
   }
 };
 
-// --- [ ADMIN: Xóa User ] ---
+// // --- [ ADMIN: Xóa User ] ---
+// export const deleteUser = async (
+//   req: AuthenticatedRequest<GetUserParams>,
+//   res: Response
+// ) => {
+//   try {
+//     // ID người hành động (Admin)
+//     const adminId = req.userId; // ID người bị tác động
+//     const targetUserId = req.params.id;
+
+//     // Admin không được tự xóa tài khoản của mình
+//     if (adminId === targetUserId) {
+//       return res
+//         .status(403)
+//         .json({ error: "Administrators cannot delete their own account." });
+//     }
+
+//     // 1. Tìm và Xóa User
+//     const user = await User.findByIdAndDelete(targetUserId);
+
+//     if (!user) {
+//       return res.status(404).json({ error: "User not found." });
+//     }
+
+//     // 2. Thành công
+//     res.json({
+//       message: `User ${user.name} and their data have been deleted.`,
+//     });
+//   } catch (error) {
+//     console.error(error);
+//     res.status(500).json({ error: "Server error during user deletion." });
+//   }
+// };
+
+// --- [ USER/ADMIN: Xóa User ] ---
+// Hàm này được dùng cho cả: DELETE /me (tự xóa) và DELETE /:id (Admin xóa người khác)
 export const deleteUser = async (
   req: AuthenticatedRequest<GetUserParams>,
   res: Response
 ) => {
   try {
-    // ID người hành động (Admin)
-    const adminId = req.userId; // ID người bị tác động
-    const targetUserId = req.params.id;
+    const callerId = req.userId; // ID người thực hiện hành động (User hoặc Admin)
+    const targetUserIdInParams = req.params.id; // ID người bị tác động (Chỉ có trong DELETE /:id)
+    const isAdmin = req.userRole === "admin";
 
-    // Admin không được tự xóa tài khoản của mình
-    if (adminId === targetUserId) {
-      return res
-        .status(403)
-        .json({ error: "Administrators cannot delete their own account." });
+    // 1. XÁC ĐỊNH ID CẦN XÓA (Target ID)
+    // Nếu có ID trong params (Admin đang xóa người khác), dùng ID đó.
+    // Nếu không (DELETE /me), dùng ID của người gọi.
+    const userIdToDelete = targetUserIdInParams
+      ? targetUserIdInParams
+      : callerId;
+
+    // 2. KIỂM TRA QUYỀN HẠN
+    // Rule 2a: User thường không được xóa người khác
+    if (targetUserIdInParams && !isAdmin) {
+      return res.status(403).json({
+        error: "Access denied. You do not have permission to delete this user.",
+      });
     }
 
-    // 1. Tìm và Xóa User
-    const user = await User.findByIdAndDelete(targetUserId);
+    // Rule 2b: Admin không được tự xóa tài khoản của mình qua DELETE /:id
+    if (targetUserIdInParams && isAdmin && targetUserIdInParams === callerId) {
+      return res.status(403).json({
+        error:
+          "Administrators must use the /me endpoint to delete their own account.",
+      });
+    }
+
+    // Đảm bảo có ID để xóa
+    if (!userIdToDelete) {
+      return res.status(400).json({ error: "User ID to delete is missing." });
+    } // 3. Tìm và Xóa User (Hard Delete)
+
+    const user = await User.findByIdAndDelete(userIdToDelete);
 
     if (!user) {
       return res.status(404).json({ error: "User not found." });
     }
 
-    // 2. Thành công
+    // 4. XÓA DỮ LIỆU LIÊN QUAN (Data Integrity)
+    // Khi người dùng bị xóa, tất cả nội dung do họ tạo ra cũng phải bị xóa theo.
+
+    // 4a. Xóa tất cả Bài viết, Comments, và Likes do User này tạo ra
+    await Post.deleteMany({ userId: userIdToDelete });
+    await Comment.deleteMany({ userId: userIdToDelete });
+    await Like.deleteMany({ userId: userIdToDelete });
+
+    // 4b. Xóa Likes nhắm vào Post và Comment của User này (đã được xử lý ở 4a nếu chúng ta dùng deleteMany trên Post/Comment)
+
+    // 5. Thành công
     res.json({
-      message: `User ${user.name} and their data have been deleted.`,
+      message: `User ${user.name} and all associated data have been successfully deleted.`,
     });
   } catch (error) {
     console.error(error);

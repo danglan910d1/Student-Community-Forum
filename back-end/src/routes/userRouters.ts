@@ -29,6 +29,9 @@ router.put("/password", authMiddleware, updatePassword as RequestHandler);
 // GET /api/users/:id (Xem hồ sơ công khai của người khác)
 router.get("/:id", getUserById);
 
+// DELETE /api/users/me (XÓA TÀI KHOẢN CỦA CHÍNH MÌNH)
+router.delete("/me", authMiddleware, deleteUser as unknown as RequestHandler);
+
 // --- [ ROUTES DÀNH CHO ADMIN ] ---
 // GET /api/users/:id/details (Xem chi tiết dành cho admin)
 router.get(
@@ -48,7 +51,8 @@ router.put(
   updateUserStatus as unknown as RequestHandler
 );
 
-// DELETE /api/users/:id (Xóa tài khoản người dùng khác)
+// DELETE /api/users/:id (XÓA TÀI KHOẢN NGƯỜI DÙNG KHÁC)
+// Giữ nguyên logic Admin để xóa người khác.
 router.delete(
   "/:id",
   authMiddleware,
