@@ -1,37 +1,25 @@
 // src/controllers/userController.ts
 
 import { Request, Response } from "express";
-import User, { IUser } from "../models/User";
+import User, { IUser, UserStatus } from "../models/User";
 import Post from "../models/Post";
 import Comment from "../models/Comment";
 import Like from "../models/Like";
 import bcrypt from "bcrypt";
 import { AuthenticatedRequest } from "../types/express"; // Sử dụng cho các route bảo vệ
-
-interface UpdateProfileBody {
-  name?: string;
-  avatar?: string | null;
-}
-
-interface UpdatePasswordBody {
-  oldPassword?: string;
-  newPassword?: string;
-}
-
-// Định nghĩa kiểu dữ liệu cho Params (tham số URL)
-interface GetUserParams {
-  id: string; // Tham số :id trong URL
-}
-
-interface UpdateUserStatusBody {
-  status: "active" | "banned";
-  role?: "user" | "admin";
-}
+import { asyncHandler } from "../utils/asyncHandler";
+import { BCRYPT_SALT_ROUNDS } from "../config/constants";
+import {
+  UpdateProfileBody,
+  UpdatePasswordBody,
+  GetUserParams,
+  UpdateUserStatusBody,
+} from "../types/user";
 
 // --- [ Lấy thông tin User hiện tại ] ---
 // Hàm này chạy sau authMiddleware, đảm bảo người dùng đã xác thực.
-export const getMe = async (req: AuthenticatedRequest, res: Response) => {
-  try {
+export const getMe = asyncHandler(
+  async (req: AuthenticatedRequest, res: Response) => {
     // 1. Lấy userId: Đã được gán bởi authMiddleware.
     //    TypeScript đảm bảo req.userId là string (nhờ AuthenticatedRequest).
     const userId = req.userId;
@@ -46,22 +34,44 @@ export const getMe = async (req: AuthenticatedRequest, res: Response) => {
 
     // 4. Thành công: Trả về thông tin user.
     res.json(user);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Server error." });
   }
-};
+);
 
 // --- [ Cập nhật Profile ] ---
-export const updateProfile = async (
-  // P (Params) = {} | ResBody = {} | ReqBody = UpdateProfileBody | ReqQuery = {}
-  req: AuthenticatedRequest<{}, {}, UpdateProfileBody, {}>,
-  res: Response
-) => {
-  try {
+export const updateProfile = asyncHandler(
+  async (
+    // P (Params) = {} | ResBody = {} | ReqBody = UpdateProfileBody | ReqQuery = {}
+    req: AuthenticatedRequest<{}, {}, UpdateProfileBody, {}>,
+    res: Response
+  ) => {
     // 1. Lấy userId và dữ liệu cần update
     const userId = req.userId;
     const { name, avatar } = req.body; // avatar là string | null | undefined
+
+    //Khởi tạo updateFields để chỉ cập nhật những trường được gửi
+    const updateFields: Partial<IUser> = {};
+    let isDataProvided = false;
+
+    // 2. Xử lý trường name (Áp dụng trim() để làm sạch)
+    if (name !== undefined) {
+      if (!name.trim()) {
+        return res.status(400).json({ error: "Name cannot be empty." });
+      }
+      // Áp dụng trim() để đảm bảo name không có khoảng trắng thừa
+      updateFields.name = name.trim();
+      isDataProvided = true;
+    }
+
+    // 3. Xử lý trường avatar
+    if (avatar !== undefined) {
+      updateFields.avatar = avatar;
+      isDataProvided = true;
+    }
+
+    // 4. Kiểm tra nếu không có trường nào được gửi
+    if (!isDataProvided) {
+      return res.status(400).json({ error: "No fields provided for update." });
+    }
 
     // 2. Tìm User
     const user = await User.findById(userId);
@@ -69,32 +79,24 @@ export const updateProfile = async (
       return res.status(404).json({ error: "User not found." });
     }
 
-    // 3. Cập nhật các trường: Chỉ update nếu giá trị mới được cung cấp (dùng || user.name)
-    user.name = name || user.name;
-    // 1. Kiểm tra nếu 'avatar' được gửi đến (không phải undefined)
-    if (avatar !== undefined) {
-      // 2. Gán giá trị mới. Giá trị mới có thể là string (URL) hoặc null (để xóa).
-      user.avatar = avatar;
+    // 5. Tìm và Cập nhật trực tiếp
+    const updatedUser = await User.findByIdAndUpdate(userId, updateFields, {
+      new: true,
+      runValidators: true,
+    }).select("-password");
+
+    if (!updatedUser) {
+      return res.status(404).json({ error: "User not found." });
     }
     // Nếu avatar là undefined (không gửi trong body), thì giữ nguyên giá trị cũ.
 
     // 4. Lưu DB: Lưu các thay đổi. Mongoose tự động cập nhật 'updatedAt'.
     // Lưu ý: Không cho phép thay đổi email hoặc role tại đây.
-    const updatedUser = await user.save();
 
     // 5. Thành công: Trả về thông tin user đã cập nhật (không bao gồm password).
-    res.json({
-      _id: updatedUser._id,
-      name: updatedUser.name,
-      email: updatedUser.email,
-      avatar: updatedUser.avatar,
-      role: updatedUser.role,
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Server error during profile update." });
+    res.json(updatedUser);
   }
-};
+);
 
 // --- [ Cập nhật Profile bản test] ---
 // export const updateProfile = async (
@@ -146,20 +148,31 @@ export const updateProfile = async (
 // };
 
 // --- [ Cập nhật Mật khẩu ] ---
-export const updatePassword = async (
-  req: AuthenticatedRequest<{}, {}, UpdatePasswordBody>,
-  res: Response
-) => {
-  try {
+export const updatePassword = asyncHandler(
+  async (
+    req: AuthenticatedRequest<{}, {}, UpdatePasswordBody>,
+    res: Response
+  ) => {
     // 1. Lấy userId và hai mật khẩu từ body
     const userId = req.userId;
     const { oldPassword, newPassword } = req.body;
 
+    // Trim() mật khẩu để loại bỏ khoảng trắng (Fix lỗi 401)
+    const trimmedOldPassword = oldPassword ? oldPassword.trim() : "";
+    const trimmedNewPassword = newPassword ? newPassword.trim() : "";
+
     // 2. Kiểm tra thiếu trường: Đảm bảo cả hai mật khẩu đều được cung cấp
-    if (!oldPassword || !newPassword) {
+    if (!trimmedOldPassword || !trimmedNewPassword) {
       return res
         .status(400)
         .json({ error: "Please provide both old and new passwords." });
+    }
+
+    // Kiểm tra mật khẩu mới không trùng mật khẩu cũ
+    if (trimmedOldPassword === trimmedNewPassword) {
+      return res.status(400).json({
+        error: "New password must be different from the old password.",
+      });
     }
 
     // 3. Tìm User & Mật khẩu cũ: Phải dùng .select("+password") để lấy được mật khẩu hash
@@ -169,34 +182,34 @@ export const updatePassword = async (
     }
 
     // 4. So sánh Mật khẩu Cũ: Kiểm tra tính hợp lệ của mật khẩu cũ
-    const isMatch = await bcrypt.compare(oldPassword, user.password);
+    const isMatch = await bcrypt.compare(trimmedOldPassword, user.password);
     if (!isMatch) {
       return res.status(401).json({ error: "Invalid old password." });
     }
 
     // 5. Hash Mật khẩu Mới: Hash mật khẩu mới trước khi lưu vào DB
-    const salt = await bcrypt.genSalt(10);
-    user.password = await bcrypt.hash(newPassword, salt);
+    const salt = await bcrypt.genSalt(BCRYPT_SALT_ROUNDS);
+    user.password = await bcrypt.hash(trimmedNewPassword, salt);
 
     // 6. Lưu DB: Lưu lại user với mật khẩu mới.
     await user.save();
 
     // 7. Thành công
     res.json({ message: "Password updated successfully." });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Server error during password update." });
   }
-};
+);
 
 // --- [ Lấy thông tin User theo ID (Cho mọi người xem) ] ---
 // Không cần AuthenticatedRequest vì không dùng req.userId
-export const getUserById = async (
-  req: Request<GetUserParams>,
-  res: Response
-) => {
-  try {
+export const getUserById = asyncHandler(
+  async (req: Request<GetUserParams>, res: Response) => {
     const userId = req.params.id; // Lấy ID từ URL parameter
+
+    // BỔ SUNG: Kiểm tra ID hợp lệ (Fix lỗi 500 khi ID sai format)
+    if (!userId || userId.length < 24) {
+      // Kiểm tra nhanh format
+      return res.status(400).json({ error: "Invalid user ID format." });
+    }
 
     // 1. Tìm User, chỉ chọn các trường công khai (name, avatar, role)
     const user = await User.findById(userId).select(
@@ -205,24 +218,16 @@ export const getUserById = async (
 
     if (!user) {
       return res.status(404).json({ error: "User not found." });
-    }
+    } // 2. Trả về thông tin công khai
 
-    // 2. Trả về thông tin công khai
     res.json(user);
-  } catch (error) {
-    // Xử lý lỗi nếu ID không hợp lệ (ví dụ: không đúng format của ObjectId)
-    console.error(error);
-    res.status(500).json({ error: "Server error or invalid user ID format." });
   }
-};
+);
 
 // Admin
 // --- [ ADMIN: Lấy chi tiết User (Email, Status) ] ---
-export const getUserDetails = async (
-  req: AuthenticatedRequest<GetUserParams>,
-  res: Response
-) => {
-  try {
+export const getUserDetails = asyncHandler(
+  async (req: AuthenticatedRequest<GetUserParams>, res: Response) => {
     // Việc kiểm tra quyền admin đã diễn ra ở tầng route
     // Lấy ID của người bị tác động từ URL params
     const userId = req.params.id;
@@ -236,11 +241,8 @@ export const getUserDetails = async (
 
     // 2. Trả về chi tiết (bao gồm email, status, isVerified, v.v.)
     res.json(user);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Server error or invalid user ID format." });
   }
-};
+);
 
 // --- [ ADMIN: Cập nhật Trạng thái User (Ban/Unban) ] ---
 export const updateUserStatus = async (

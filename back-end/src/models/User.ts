@@ -4,14 +4,16 @@
 
 import { Schema, model } from "mongoose"; // Import(thêm) Types để dùng cho TypeScript Interface
 
+export type UserRole = "user" | "admin";
+export type UserStatus = "active" | "banned";
 // Định nghĩa kiểu dữ liệu TypeScript
 export interface IUser {
   name: string;
   email: string;
   password: string;
-  role: "user" | "admin"; // Phân quyền người dùng
+  role: UserRole; // Phân quyền người dùng
   avatar?: string | null; // URL ảnh đại diện
-  status: "active" | "banned"; // Trạng thái tài khoản
+  status: UserStatus; // Trạng thái tài khoản
   createdAt: Date; // Mongoose tự động thêm với timestamps: true
   updatedAt: Date; // Mongoose tự động thêm với timestamps: true
   // isVerified: boolean;

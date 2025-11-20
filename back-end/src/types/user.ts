@@ -1,0 +1,43 @@
+// Định nghĩa Cốt lõi (Base Type): Tạo một Interface chứa các trường cơ bản, chung nhất, được sử dụng trong nhiều API khác nhau
+
+import { UserRole, UserStatus } from "../models/User";
+
+// Interface chứa các trường dữ liệu người dùng cơ bản (Base)
+interface UserBaseData {
+  name: string;
+  email: string;
+  password: string;
+  avatar: string | null | undefined;
+}
+
+// Sử dụng Pick: Dùng Pick<BaseType, 'field1' | 'field2'> để chọn ra các trường cần thiết
+// 1. Dùng cho POST /register (Bắt buộc tất cả các trường)
+// Loại bỏ avatar vì nó có giá trị default trong Model
+export interface RegisterBody
+  extends Pick<UserBaseData, "name" | "email" | "password"> {}
+
+// Dùng cho POST /login
+export interface LoginBody extends Pick<UserBaseData, "email" | "password"> {}
+
+// Sử dụng Partial: Dùng Partial<T> để chỉ ra rằng các trường đó là tùy chọn (optional), điều này là cần thiết cho các thao tác UPDATE
+// 2. Dùng cho PUT /profile (Tất cả đều optional và chỉ chọn name, avatar)
+// Sử dụng Partial để làm cho tất cả các trường là optional (?)
+export interface UpdateProfileBody
+  extends Partial<Pick<UserBaseData, "name" | "avatar">> {}
+
+// 3. Dùng cho PUT /password
+export interface UpdatePasswordBody {
+  oldPassword: string;
+  newPassword: string;
+}
+
+// 3. Dùng cho GET /:id (Params)
+export interface GetUserParams {
+  id: string;
+}
+
+// 4. Dùng cho PUT /:id/status (Admin)
+export interface UpdateUserStatusBody {
+  status?: UserStatus; // Role chỉ là tùy chọn
+  role?: UserRole;
+}
