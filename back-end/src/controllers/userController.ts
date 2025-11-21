@@ -1,7 +1,7 @@
 // src/controllers/userController.ts
 
 import { Request, Response } from "express";
-import User, { IUser, UserStatus } from "../models/User";
+import User, { IUser } from "../models/User";
 import Post from "../models/Post";
 import Comment from "../models/Comment";
 import Like from "../models/Like";
@@ -245,11 +245,11 @@ export const getUserDetails = asyncHandler(
 );
 
 // --- [ ADMIN: Cập nhật Trạng thái User (Ban/Unban) ] ---
-export const updateUserStatus = async (
-  req: AuthenticatedRequest<GetUserParams, {}, UpdateUserStatusBody>,
-  res: Response
-) => {
-  try {
+export const updateUserStatus = asyncHandler(
+  async (
+    req: AuthenticatedRequest<GetUserParams, {}, UpdateUserStatusBody>,
+    res: Response
+  ) => {
     const targetUserId = req.params.id; // ID của user bị tác động
     const adminId = req.userId; // ID của admin thực hiện hành động
     const { status, role } = req.body; // 1. KIỂM TRA QUYỀN HẠN: Admin không được tự tác động đến tài khoản của mình
@@ -261,8 +261,9 @@ export const updateUserStatus = async (
     }
 
     // KHẮC PHỤC LỖI ANY: Sử dụng Partial<IUser> để TypeScript kiểm soát các trường
-    const updateFields: Partial<IUser> = {}; // 2. LỌC và KIỂM TRA GIÁ TRỊ status
+    const updateFields: Partial<IUser> = {};
 
+    // 2. LỌC và KIỂM TRA GIÁ TRỊ status
     if (status) {
       if (status !== "active" && status !== "banned") {
         return res
@@ -270,8 +271,9 @@ export const updateUserStatus = async (
           .json({ error: "Invalid status value (must be active or banned)." });
       }
       updateFields.status = status;
-    } // 3. LỌC và KIỂM TRA GIÁ TRỊ role
+    }
 
+    // 3. LỌC và KIỂM TRA GIÁ TRỊ role
     if (role) {
       if (role !== "user" && role !== "admin") {
         return res
@@ -299,17 +301,9 @@ export const updateUserStatus = async (
       return res.status(404).json({ error: "User not found." });
     } // 6. Thành công
 
-    res.json({
-      message: `User ${updatedUser.name} updated. New Status: ${updatedUser.status}, New Role: ${updatedUser.role}.`,
-      user: updatedUser,
-    });
-  } catch (error) {
-    console.error(error);
-    res
-      .status(500)
-      .json({ error: "Server error during user status/role update." });
+    res.json(updatedUser);
   }
-};
+);
 
 // // --- [ ADMIN: Xóa User ] ---
 // export const deleteUser = async (
@@ -347,11 +341,8 @@ export const updateUserStatus = async (
 
 // --- [ USER/ADMIN: Xóa User ] ---
 // Hàm này được dùng cho cả: DELETE /me (tự xóa) và DELETE /:id (Admin xóa người khác)
-export const deleteUser = async (
-  req: AuthenticatedRequest<GetUserParams>,
-  res: Response
-) => {
-  try {
+export const deleteUser = asyncHandler(
+  async (req: AuthenticatedRequest<GetUserParams>, res: Response) => {
     const callerId = req.userId; // ID người thực hiện hành động (User hoặc Admin)
     const targetUserIdInParams = req.params.id; // ID người bị tác động (Chỉ có trong DELETE /:id)
     const isAdmin = req.userRole === "admin";
@@ -382,8 +373,9 @@ export const deleteUser = async (
     // Đảm bảo có ID để xóa
     if (!userIdToDelete) {
       return res.status(400).json({ error: "User ID to delete is missing." });
-    } // 3. Tìm và Xóa User (Hard Delete)
+    }
 
+    // 3. Tìm và Xóa User (Hard Delete)
     const user = await User.findByIdAndDelete(userIdToDelete);
 
     if (!user) {
@@ -392,7 +384,6 @@ export const deleteUser = async (
 
     // 4. XÓA DỮ LIỆU LIÊN QUAN (Data Integrity)
     // Khi người dùng bị xóa, tất cả nội dung do họ tạo ra cũng phải bị xóa theo.
-
     // 4a. Xóa tất cả Bài viết, Comments, và Likes do User này tạo ra
     await Post.deleteMany({ userId: userIdToDelete });
     await Comment.deleteMany({ userId: userIdToDelete });
@@ -404,8 +395,5 @@ export const deleteUser = async (
     res.json({
       message: `User ${user.name} and all associated data have been successfully deleted.`,
     });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Server error during user deletion." });
   }
-};
+);

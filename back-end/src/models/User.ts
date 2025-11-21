@@ -62,4 +62,11 @@ const userSchema = new Schema<IUser>(
   }
 );
 
+// CHỈNH SỬA: ÁP DỤNG COLLATION TRÊN INDEX EMAIL ĐỂ BỎ QUA CHỮ HOA/THƯỜNG
+// Nếu muốn đảm bảo tính duy nhất không phân biệt chữ hoa/thường (case-insensitive uniqueness)
+userSchema.index(
+  { email: 1 },
+  { unique: true, collation: { locale: "en", strength: 2 } }
+);
+
 export default model<IUser>("User", userSchema);

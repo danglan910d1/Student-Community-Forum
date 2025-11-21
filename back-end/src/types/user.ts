@@ -7,14 +7,17 @@ interface UserBaseData {
   name: string;
   email: string;
   password: string;
-  avatar: string | null | undefined;
+  avatar?: string | null;
 }
 
+// --- AUTH CONTROLLER PAYLOADS ---
 // Sử dụng Pick: Dùng Pick<BaseType, 'field1' | 'field2'> để chọn ra các trường cần thiết
 // 1. Dùng cho POST /register (Bắt buộc tất cả các trường)
 // Loại bỏ avatar vì nó có giá trị default trong Model
 export interface RegisterBody
-  extends Pick<UserBaseData, "name" | "email" | "password"> {}
+  extends Pick<UserBaseData, "name" | "email" | "password"> {
+  avatar?: string;
+}
 
 // Dùng cho POST /login
 export interface LoginBody extends Pick<UserBaseData, "email" | "password"> {}

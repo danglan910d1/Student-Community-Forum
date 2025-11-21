@@ -56,14 +56,14 @@ import { LoginBody, RegisterBody } from "../types/user";
 // Update sử dụng asyncHandler đã định nghĩa
 export const register = asyncHandler(
   async (req: Request<{}, {}, RegisterBody>, res: Response) => {
-    const { name, email, password } = req.body;
+    const { name, email, password, avatar } = req.body;
 
     // 1. Kiểm tra thiếu trường
     if (!name || !email || !password) {
       return res.status(400).json({ error: "Please enter all fields." });
     }
 
-    // BỔ SUNG: XỬ LÝ DỮ LIỆU ĐỊNH DANH (BẮT BUỘC)
+    // XỬ LÝ DỮ LIỆU ĐỊNH DANH (BẮT BUỘC)
     const processedEmail = email.trim().toLowerCase();
     const processedName = name.trim();
 
@@ -81,7 +81,9 @@ export const register = asyncHandler(
     const newUser = await User.create({
       name: processedName,
       email: processedEmail,
-      password: hashedPassword, // Mặc định role: "user", status: "active" (đã định nghĩa trong Schema)
+      password: hashedPassword,
+      // Whitelist các trường khác nếu có (ví dụ: avatar)
+      ...(avatar && avatar.trim() ? { avatar: avatar.trim() } : {}), // Mongoose sẽ tự động gán role: "user", status: "active", timestamps.
     });
 
     // 5. Trả về thông tin và token
@@ -90,6 +92,7 @@ export const register = asyncHandler(
       name: newUser.name,
       email: newUser.email,
       role: newUser.role,
+      avatar: newUser.avatar,
       token: generateToken(newUser._id.toString(), newUser.role),
     });
   }
