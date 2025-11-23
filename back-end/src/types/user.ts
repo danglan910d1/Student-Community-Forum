@@ -44,3 +44,12 @@ export interface UpdateUserStatusBody {
   status?: UserStatus; // Role chỉ là tùy chọn
   role?: UserRole;
 }
+
+// Vừa search vừa lọc
+export interface GetAllUsersQuery {
+  page?: string;
+  limit?: string;
+  status?: UserStatus;
+  role?: UserRole;
+  search?: string; // Tìm kiếm theo tên/email
+}

@@ -1,5 +1,3 @@
-// src/routes/postRoutes.ts (Prefix: /api/posts)
-
 import { Router, RequestHandler } from "express";
 import {
   createPost,
@@ -9,20 +7,17 @@ import {
   deletePost,
   getPostByIdForAdmin,
 } from "../controllers/postController";
-import { authMiddleware } from "../middleware/auth";
+import { authMiddleware } from "../middleware/auth"; // auth.ts
 import { adminMiddleware } from "../middleware/admin"; // Dùng để kiểm tra vai trò
 
 const router = Router();
 
 // --- [ PUBLIC / USER ACCESS ] ---
 // GET /api/posts (Lấy danh sách, phân trang, lọc theo topic/tag, và giờ là status)
-// Admin có thể truy cập route này để xem tất cả status (Pending, Rejected)
 // User thường mặc định chỉ xem được "approved"
 router.get(
-  "/",
-  // authMiddleware, // Cho phép gán userId/userRole cho Admin
-  // adminMiddleware, // Kiểm tra và gán req.userRole = 'admin' nếu hợp lệ
-  getPosts as unknown as RequestHandler // Dùng as unknown as RequestHandler vì đã thêm middleware
+  "/", // KHÔNG CẦN authMiddleware bắt buộc (Optional Auth)
+  getPosts as unknown as RequestHandler
 );
 
 // GET /api/posts/:id (Lấy chi tiết và tăng view)

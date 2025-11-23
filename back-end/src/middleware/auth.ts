@@ -1,4 +1,8 @@
-// Xác thực JWT từ header, trích xuất userId, và gán nó vào đối tượng req để các controllers sử dụng an toàn.
+/**
+ * MIDDLEWARE: authMiddleware
+ * * Trách nhiệm: Xác thực token JWT, trích xuất userId và userRole, gán vào req.
+ * * Nguyên tắc JWT: Zero-Lookup (Không truy vấn DB để lấy role).
+ */
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken"; // Thư viện đã có định nghĩa kiểu (@types/jsonwebtoken)
 import { AuthenticatedRequest } from "../types/express";
@@ -28,13 +32,9 @@ export const authMiddleware = (
 
   try {
     // 2. Xác thực token và giải mã payload
-    // Tối ưu: Đảm bảo payload là một object có thuộc tính 'id' kiểu string
     const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload;
 
     // 3. Gán ID người dùng đã xác thực vào request object
-    // KHÔNG cần @ts-ignore nữa vì đã có:
-    // a) Cài đặt @types/jsonwebtoken
-    // b) Giả định: Đã mở rộng interface Request (thêm file types/express.d.ts)
     (req as AuthenticatedRequest).userId = decoded.id;
 
     // 4. Gán VAI TRÒ (ROLE) người dùng vào request object (Tối ưu hiệu suất!)
@@ -43,8 +43,7 @@ export const authMiddleware = (
     // Chuyển sang middleware hoặc controller tiếp theo
     next();
   } catch (error) {
-    // Tối ưu: Bắt biến lỗi để debug nếu cần
-    // 4. Xử lý lỗi token không hợp lệ (hết hạn, sai chữ ký,...)
+    // 5. Xử lý lỗi token không hợp lệ (hết hạn, sai chữ ký,...)
     return res.status(401).json({ error: "Invalid token" });
   }
 };

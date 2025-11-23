@@ -1,6 +1,11 @@
+/**
+ * MIDDLEWARE: adminMiddleware
+ * * Trách nhiệm: Kiểm tra quyền Admin (Sử dụng Zero-Lookup từ JWT payload).
+ * * Nguyên tắc RBAC: Quyền 403 (Forbidden) nếu user không phải Admin.
+ */
 import { Request, Response, NextFunction } from "express";
 import { AuthenticatedRequest } from "../types/express";
-// KHÔNG cần import Users, KHÔNG cần truy vấn DB
+// KHÔNG cần import Users, KHÔNG cần truy vấn DB (Zero-Lookup)
 
 // Middleware kiểm tra quyền Admin (Zero-Lookup)
 export const adminMiddleware = async (
@@ -11,6 +16,7 @@ export const adminMiddleware = async (
   // Giả định: authMiddleware đã chạy trước và gán userId/userRole
   const userRole = (req as AuthenticatedRequest).userRole; // 1. Kiểm tra quyền Admin
 
+  // Kiểm tra quyền admin
   if (userRole === "admin") {
     // Nếu là Admin, cho phép đi tiếp
     next();

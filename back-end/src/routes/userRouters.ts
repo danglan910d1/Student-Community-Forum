@@ -9,6 +9,7 @@ import {
   getUserDetails,
   updateUserStatus,
   deleteUser,
+  getUsersList,
 } from "../controllers/userController";
 import { authMiddleware } from "../middleware/auth"; // auth.ts
 import { adminMiddleware } from "../middleware/admin";
@@ -26,6 +27,10 @@ router.put("/profile", authMiddleware, updateProfile as RequestHandler);
 // PUT /api/users/password (Đổi mật khẩu)
 router.put("/password", authMiddleware, updatePassword as RequestHandler);
 
+// GET /api/users (Tìm kiếm users công khai theo tên)
+// Áp dụng authMiddleware TÙY CHỌN để kiểm tra role Admin nếu token có sẵn
+router.get("/", authMiddleware, getUsersList as RequestHandler);
+
 // GET /api/users/:id (Xem hồ sơ công khai của người khác)
 router.get("/:id", getUserById);
 
@@ -41,6 +46,15 @@ router.get(
   // Xóa bỏ hoàn toàn mối quan hệ phức tạp giữa kiểu hàm và RequestHandler
   // Sau khi giá trị đã là unknown, có thể ép kiểu nó thành bất kỳ kiểu nào khác (trong trường hợp này là RequestHandler), bởi vì unknown cho phép ép kiểu.Sau khi giá trị đã là unknown, bạn có thể ép kiểu nó thành bất kỳ kiểu nào khác (trong trường hợp này là RequestHandler), bởi vì unknown cho phép ép kiểu.
   getUserDetails as unknown as RequestHandler
+);
+
+// GET /api/users/admin (Lấy danh sách tất cả Users)
+// KHÔNG CẦN adminMiddleware vì đã kiểm tra role bên trong Controller.
+// Tuy nhiên, ta vẫn giữ authMiddleware để gán userId/userRole.
+router.get(
+  "/admin",
+  authMiddleware, // Bắt buộc đăng nhập để thấy endpoint này rõ ràng hơn
+  getUsersList as unknown as RequestHandler
 );
 
 // PUT /api/users/:id/status (Cấm/Mở khóa tài khoản VÀ THAY ĐỔI ROLE)

@@ -1,5 +1,9 @@
 // src/controllers/userController.ts
-
+/**
+ * CONTROLLER: userController
+ * * Trách nhiệm: Xử lý Business Logic (Logic Nghiệp vụ) liên quan đến tài khoản người dùng (Profile, Mật khẩu, Admin Controls).
+ * * Nguyên tắc áp dụng: HOF, Type Safety, RBAC Logic, Data Cleaning.
+ */
 import { Request, Response } from "express";
 import User, { IUser } from "../models/User";
 import Post from "../models/Post";
@@ -14,14 +18,15 @@ import {
   UpdatePasswordBody,
   GetUserParams,
   UpdateUserStatusBody,
+  GetAllUsersQuery,
 } from "../types/user";
+import { paginate } from "../utils/pagination";
 
 // --- [ Lấy thông tin User hiện tại ] ---
 // Hàm này chạy sau authMiddleware, đảm bảo người dùng đã xác thực.
 export const getMe = asyncHandler(
   async (req: AuthenticatedRequest, res: Response) => {
     // 1. Lấy userId: Đã được gán bởi authMiddleware.
-    //    TypeScript đảm bảo req.userId là string (nhờ AuthenticatedRequest).
     const userId = req.userId;
 
     // 2. Tìm User: Truy vấn DB theo ID. Loại bỏ mật khẩu khỏi kết quả trả về.
@@ -48,7 +53,7 @@ export const updateProfile = asyncHandler(
     const userId = req.userId;
     const { name, avatar } = req.body; // avatar là string | null | undefined
 
-    //Khởi tạo updateFields để chỉ cập nhật những trường được gửi
+    // Khởi tạo updateFields để chỉ cập nhật những trường được gửi
     const updateFields: Partial<IUser> = {};
     let isDataProvided = false;
 
@@ -64,7 +69,7 @@ export const updateProfile = asyncHandler(
 
     // 3. Xử lý trường avatar
     if (avatar !== undefined) {
-      updateFields.avatar = avatar;
+      updateFields.avatar = avatar; // Cho phép là null để xóa
       isDataProvided = true;
     }
 
@@ -73,81 +78,23 @@ export const updateProfile = asyncHandler(
       return res.status(400).json({ error: "No fields provided for update." });
     }
 
-    // 2. Tìm User
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({ error: "User not found." });
-    }
-
     // 5. Tìm và Cập nhật trực tiếp
     const updatedUser = await User.findByIdAndUpdate(userId, updateFields, {
       new: true,
       runValidators: true,
-    }).select("-password");
+      // new: trả về mới, runValidators: kiểm tra Schema
+    }).select("-password"); // Lấy hết ngoại trừ password
 
     if (!updatedUser) {
       return res.status(404).json({ error: "User not found." });
     }
-    // Nếu avatar là undefined (không gửi trong body), thì giữ nguyên giá trị cũ.
-
-    // 4. Lưu DB: Lưu các thay đổi. Mongoose tự động cập nhật 'updatedAt'.
-    // Lưu ý: Không cho phép thay đổi email hoặc role tại đây.
 
     // 5. Thành công: Trả về thông tin user đã cập nhật (không bao gồm password).
     res.json(updatedUser);
   }
 );
 
-// --- [ Cập nhật Profile bản test] ---
-// export const updateProfile = async (
-//   req: AuthenticatedRequest<{}, {}, UpdateProfileBody, {}>,
-//   res: Response
-// ) => {
-//   try {
-//     const userId = req.userId;
-//     const updateFields: UpdateProfileBody = {}; // Khởi tạo object rỗng để lưu trữ các trường cần cập nhật
-
-//     // 1. Chỉ thêm 'name' vào object cập nhật nếu nó tồn tại trong body
-//     if (req.body.name !== undefined) {
-//       updateFields.name = req.body.name;
-//     }
-
-//     // 2. Chỉ thêm 'avatar' vào object cập nhật nếu nó tồn tại trong body (có thể là null)
-//     if (req.body.avatar !== undefined) {
-//       updateFields.avatar = req.body.avatar;
-//     }
-
-//     // Kiểm tra nếu không có trường nào được gửi
-//     if (Object.keys(updateFields).length === 0) {
-//       return res.status(400).json({ error: "No fields provided for update." });
-//     }
-
-//     // 3. Tìm và Cập nhật trực tiếp
-//     const updatedUser = await User.findByIdAndUpdate(
-//       userId,
-//       updateFields,
-//       { new: true, runValidators: true } // new: trả về tài liệu mới, runValidators: đảm bảo các quy tắc Schema được áp dụng
-//     ).select("-password"); // Loại bỏ mật khẩu khỏi kết quả
-
-//     if (!updatedUser) {
-//       return res.status(404).json({ error: "User not found." });
-//     }
-
-//     // 4. Thành công
-//     res.json({
-//       _id: updatedUser._id,
-//       name: updatedUser.name,
-//       email: updatedUser.email,
-//       avatar: updatedUser.avatar,
-//       role: updatedUser.role,
-//     });
-//   } catch (error) {
-//     console.error(error);
-//     res.status(500).json({ error: "Server error during profile update." });
-//   }
-// };
-
-// --- [ Cập nhật Mật khẩu ] ---
+// --- [ Cập nhật Password ] ---
 export const updatePassword = asyncHandler(
   async (
     req: AuthenticatedRequest<{}, {}, UpdatePasswordBody>,
@@ -200,12 +147,11 @@ export const updatePassword = asyncHandler(
 );
 
 // --- [ Lấy thông tin User theo ID (Cho mọi người xem) ] ---
-// Không cần AuthenticatedRequest vì không dùng req.userId
 export const getUserById = asyncHandler(
   async (req: Request<GetUserParams>, res: Response) => {
     const userId = req.params.id; // Lấy ID từ URL parameter
 
-    // BỔ SUNG: Kiểm tra ID hợp lệ (Fix lỗi 500 khi ID sai format)
+    // Kiểm tra ID hợp lệ (Fix lỗi 500 khi ID sai format)
     if (!userId || userId.length < 24) {
       // Kiểm tra nhanh format
       return res.status(400).json({ error: "Invalid user ID format." });
@@ -218,13 +164,14 @@ export const getUserById = asyncHandler(
 
     if (!user) {
       return res.status(404).json({ error: "User not found." });
-    } // 2. Trả về thông tin công khai
+    }
 
+    // 2. Trả về thông tin công khai
     res.json(user);
   }
 );
 
-// Admin
+// ADMIN
 // --- [ ADMIN: Lấy chi tiết User (Email, Status) ] ---
 export const getUserDetails = asyncHandler(
   async (req: AuthenticatedRequest<GetUserParams>, res: Response) => {
@@ -260,7 +207,7 @@ export const updateUserStatus = asyncHandler(
       });
     }
 
-    // KHẮC PHỤC LỖI ANY: Sử dụng Partial<IUser> để TypeScript kiểm soát các trường
+    // Sử dụng Partial<IUser> để TypeScript kiểm soát các trường
     const updateFields: Partial<IUser> = {};
 
     // 2. LỌC và KIỂM TRA GIÁ TRỊ status
@@ -304,40 +251,6 @@ export const updateUserStatus = asyncHandler(
     res.json(updatedUser);
   }
 );
-
-// // --- [ ADMIN: Xóa User ] ---
-// export const deleteUser = async (
-//   req: AuthenticatedRequest<GetUserParams>,
-//   res: Response
-// ) => {
-//   try {
-//     // ID người hành động (Admin)
-//     const adminId = req.userId; // ID người bị tác động
-//     const targetUserId = req.params.id;
-
-//     // Admin không được tự xóa tài khoản của mình
-//     if (adminId === targetUserId) {
-//       return res
-//         .status(403)
-//         .json({ error: "Administrators cannot delete their own account." });
-//     }
-
-//     // 1. Tìm và Xóa User
-//     const user = await User.findByIdAndDelete(targetUserId);
-
-//     if (!user) {
-//       return res.status(404).json({ error: "User not found." });
-//     }
-
-//     // 2. Thành công
-//     res.json({
-//       message: `User ${user.name} and their data have been deleted.`,
-//     });
-//   } catch (error) {
-//     console.error(error);
-//     res.status(500).json({ error: "Server error during user deletion." });
-//   }
-// };
 
 // --- [ USER/ADMIN: Xóa User ] ---
 // Hàm này được dùng cho cả: DELETE /me (tự xóa) và DELETE /:id (Admin xóa người khác)
@@ -389,11 +302,84 @@ export const deleteUser = asyncHandler(
     await Comment.deleteMany({ userId: userIdToDelete });
     await Like.deleteMany({ userId: userIdToDelete });
 
-    // 4b. Xóa Likes nhắm vào Post và Comment của User này (đã được xử lý ở 4a nếu chúng ta dùng deleteMany trên Post/Comment)
-
     // 5. Thành công
     res.json({
       message: `User ${user.name} and all associated data have been successfully deleted.`,
+    });
+  }
+);
+
+// --- [ PUBLIC/ADMIN: Lấy danh sách Users (Gộp tìm kiếm & lọc) ] ---
+// Endpoint: GET /api/users/admin?status=...&role=... (Admin)
+// Endpoint: GET /api/users?search=... (Public/Optional Auth)
+export const getUsersList = asyncHandler(
+  async (
+    // Sử dụng AuthenticatedRequest để lấy userId/userRole nếu có (Optional Auth)
+    // Cần đảm bảo rằng route Public sẽ không có authMiddleware bắt buộc.
+    req:
+      | AuthenticatedRequest<{}, {}, {}, GetAllUsersQuery>
+      | Request<{}, {}, {}, GetAllUsersQuery>,
+    res: Response
+  ) => {
+    // 1. Lấy tham số query và xác định quyền hạn
+    const { page, limit, status, role, search } = req.query;
+    const isPublic = !("userId" in req); // Nếu userId không tồn tại, thì đây là request Public
+
+    // 2. Thiết lập bộ lọc (Business Logic)
+    const filter: any = {};
+    let selectFields = "name avatar role createdAt"; // Mặc định cho Public
+    let searchFields: string[] = ["name"]; // Mặc định Public chỉ tìm kiếm theo Tên
+
+    if (isPublic) {
+      // QUY TẮC PUBLIC: Chỉ thấy tài khoản đang ACTIVE
+      filter.status = "active";
+    } else {
+      // QUY TẮC ADMIN/AUTHENTICATED:
+      selectFields = "-password"; // Admin được phép thấy tất cả trừ password
+      searchFields = ["name", "email"]; // Admin được phép tìm kiếm theo Tên VÀ Email
+
+      // Thêm lọc theo Status (Chỉ khi Admin cung cấp query param)
+      if (status && (status === "active" || status === "banned")) {
+        filter.status = status;
+      }
+      // Thêm lọc theo Role (Chỉ khi Admin cung cấp query param)
+      if (role && (role === "user" || role === "admin")) {
+        filter.role = role;
+      }
+    }
+
+    // 3. Xử lý Tìm kiếm chung
+    if (search) {
+      const regex = new RegExp(search as string, "i"); // 'i' cho case-insensitive
+
+      // Tạo điều kiện tìm kiếm $or
+      const orConditions = searchFields.map((field) => ({
+        [field]: { $regex: regex },
+      }));
+
+      // Chỉ áp dụng $or nếu có điều kiện khác, hoặc nếu đó là tìm kiếm duy nhất
+      if (orConditions.length > 0) {
+        filter.$or = orConditions;
+      }
+    }
+
+    // 4. GỌI HÀM TIỆN ÍCH PHÂN TRANG (Loại bỏ logic tính toán lặp lại)
+    const result = await paginate(
+      User,
+      filter,
+      { createdAt: -1 }, // Sắp xếp
+      page,
+      limit,
+      selectFields
+    );
+
+    // 5. Phản hồi kèm thông tin phân trang
+    res.json({
+      users: result.items,
+      currentPage: result.currentPage,
+      totalPages: result.totalPages,
+      totalItems: result.totalItems,
+      limit: result.limit,
     });
   }
 );

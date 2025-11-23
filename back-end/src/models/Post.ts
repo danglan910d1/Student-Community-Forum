@@ -1,9 +1,9 @@
 // src/models/Post.ts
 
-import { Schema, model, Types } from "mongoose";
+import { Schema, model, Types, Document } from "mongoose";
 
 // Định nghĩa kiểu dữ liệu TypeScript cho Post
-export interface IPost {
+export interface IPost extends Document {
   userId: Types.ObjectId;
   topicId: Types.ObjectId; // BẮT BUỘC
   tags: Types.ObjectId[]; // Chỉ chứa tag đã approved

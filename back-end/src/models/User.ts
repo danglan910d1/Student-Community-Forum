@@ -2,12 +2,12 @@
 // Lưu trữ thông tin cơ bản: name, email (duy nhất), password (hashed).
 // Là trung tâm xác thực (Authentication).
 
-import { Schema, model } from "mongoose"; // Import(thêm) Types để dùng cho TypeScript Interface
+import { Schema, model, Document } from "mongoose"; // Import(thêm) Types để dùng cho TypeScript Interface
 
 export type UserRole = "user" | "admin";
 export type UserStatus = "active" | "banned";
 // Định nghĩa kiểu dữ liệu TypeScript
-export interface IUser {
+export interface IUser extends Document {
   name: string;
   email: string;
   password: string;
@@ -16,9 +16,6 @@ export interface IUser {
   status: UserStatus; // Trạng thái tài khoản
   createdAt: Date; // Mongoose tự động thêm với timestamps: true
   updatedAt: Date; // Mongoose tự động thêm với timestamps: true
-  // isVerified: boolean;
-  // otpCode?: string;
-  // otpExpires?: Date;
 }
 
 // Định nghĩa Schema Mongoose (Quy tắc Cơ sở dữ liệu)
@@ -51,9 +48,6 @@ const userSchema = new Schema<IUser>(
     // Loại bỏ định nghĩa thủ công
     // createdAt: { type: Date, default: Date.now },
     // updatedAt: { type: Date, default: Date.now },
-    // isVerified: { type: Boolean }, // Mặc định là FALSE
-    // otpCode: { type: String },
-    // otpExpires: { type: Date },
   },
   {
     // Tham số 2: Các tùy chọn cấu hình Schema tổng thể
@@ -62,7 +56,7 @@ const userSchema = new Schema<IUser>(
   }
 );
 
-// CHỈNH SỬA: ÁP DỤNG COLLATION TRÊN INDEX EMAIL ĐỂ BỎ QUA CHỮ HOA/THƯỜNG
+// ÁP DỤNG COLLATION TRÊN INDEX EMAIL ĐỂ BỎ QUA CHỮ HOA/THƯỜNG
 // Nếu muốn đảm bảo tính duy nhất không phân biệt chữ hoa/thường (case-insensitive uniqueness)
 userSchema.index(
   { email: 1 },
