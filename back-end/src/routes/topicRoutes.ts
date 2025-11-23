@@ -1,12 +1,9 @@
-// src/routes/topicRoutes.ts (Prefix: /api/topics)
-
 import { Router, RequestHandler } from "express";
 import {
-  getApprovedTopics,
+  getTopicsList, // <-- Hàm mới thay thế cho cả hai
   createTopic,
-  getAllTopicsForAdmin,
-  updateTopic,
   getTopicById,
+  updateTopic,
 } from "../controllers/topicController";
 import { authMiddleware } from "../middleware/auth";
 import { adminMiddleware } from "../middleware/admin";
@@ -15,7 +12,7 @@ const router = Router();
 
 // --- [ PUBLIC ] ---
 // GET /api/topics (Lấy tất cả topics đã được duyệt)
-router.get("/", getApprovedTopics);
+router.get("/", getTopicsList as RequestHandler); // Gọi hàm gộp chung
 
 // --- [ ADMIN ONLY ] ---
 // Tất cả các route admin đều cần authMiddleware và adminMiddleware
@@ -27,15 +24,15 @@ router.post(
   createTopic as unknown as RequestHandler
 );
 
-// GET /api/topics/admin (Lấy tất cả topics, bao gồm cả pending/rejected)
+// GET /api/topics/admin (Lấy tất cả topics, bao gồm cả pending/rejected) <-- Dùng lại hàm gộp
 router.get(
   "/admin",
   authMiddleware,
   adminMiddleware,
-  getAllTopicsForAdmin as unknown as RequestHandler
+  getTopicsList as unknown as RequestHandler
 );
 
-// GET /api/topics/admin/:id (Lấy chi tiết Topic bằng ID bất kể chi tiết)
+// GET /api/topics/admin/:id (Lấy chi tiết Topic bằng ID)
 router.get(
   "/admin/:id",
   authMiddleware,
@@ -50,7 +47,5 @@ router.put(
   adminMiddleware,
   updateTopic as unknown as RequestHandler
 );
-
-// Để xoá topics thì dùng PUT /api/topics/admin/:id, sửa status thành rejected
 
 export default router;

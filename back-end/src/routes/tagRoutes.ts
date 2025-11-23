@@ -1,10 +1,7 @@
-// src/routes/tagRoutes.ts (Prefix: /api/tags)
-
 import { Router, RequestHandler } from "express";
 import {
-  getApprovedTags,
+  getTagsList, // <-- Hàm mới thay thế cho cả hai
   suggestTag,
-  getAllTagsForAdmin,
   updateTag,
   getTagById,
   deleteTag,
@@ -16,7 +13,7 @@ const router = Router();
 
 // --- [ PUBLIC/USER ] ---
 // GET /api/tags (Lấy tất cả tags đã được duyệt, có thể lọc theo topicId)
-router.get("/", getApprovedTags);
+router.get("/", getTagsList as RequestHandler); // Gọi hàm gộp chung (Public)
 
 // POST /api/tags (User gợi ý tag mới)
 router.post(
@@ -26,12 +23,12 @@ router.post(
 );
 
 // --- [ ADMIN ONLY ] ---
-// GET /api/tags/admin (Lấy tất cả tags, bao gồm cả pending)
+// GET /api/tags/admin (Lấy tất cả tags, bao gồm cả pending) <-- Dùng lại hàm gộp
 router.get(
   "/admin",
   authMiddleware,
   adminMiddleware,
-  getAllTagsForAdmin as unknown as RequestHandler
+  getTagsList as unknown as RequestHandler
 );
 
 // GET /api/tags/admin/:id (Lấy chi tiết Tag bằng ID)

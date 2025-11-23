@@ -16,6 +16,7 @@ export interface IPost extends Document {
   comments_count: number;
   createdAt: Date;
   updatedAt: Date;
+  is_deleted: boolean;
 }
 
 const postSchema = new Schema<IPost>(
@@ -54,6 +55,7 @@ const postSchema = new Schema<IPost>(
     views_count: { type: Number, default: 0 },
     likes_count: { type: Number, default: 0 },
     comments_count: { type: Number, default: 0 },
+    is_deleted: { type: Boolean, default: false },
   },
   {
     timestamps: true,

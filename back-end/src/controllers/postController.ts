@@ -58,7 +58,7 @@ export const createPost = asyncHandler(
         status: "approved",
       }).select("_id");
 
-      validTagIds = approvedTags.map((tag) => tag._id);
+      validTagIds = approvedTags.map((tag) => tag._id as Types.ObjectId);
     }
 
     // 5. Tạo bài viết
@@ -275,7 +275,9 @@ export const updatePost = asyncHandler(
           _id: { $in: cleanTagIds },
           status: "approved",
         }).select("_id");
-        updateFields.tags = approvedTags.map((tag) => tag._id);
+        updateFields.tags = approvedTags.map(
+          (tag) => tag._id as Types.ObjectId
+        );
       }
     }
 

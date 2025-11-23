@@ -1,12 +1,14 @@
 // src/models/Tag.ts
 
-import { Schema, model, Types } from "mongoose";
+import { Schema, model, Types, Document } from "mongoose";
 
-export interface ITag {
+// Định nghĩa các loại Status có thể áp dụng cho Tag (Phải khớp với Tag Model)
+export type TagStatus = "pending" | "approved" | "rejected";
+export interface ITag extends Document {
   name: string;
-  topicId?: Types.ObjectId; // Tag có thể thuộc về một Topic cụ thể (Optional)
+  topicId?: Types.ObjectId | null; // Tag có thể thuộc về một Topic cụ thể (Optional)
   createdBy: Types.ObjectId; // ID của User/Admin gợi ý Tag
-  status: "pending" | "approved" | "rejected";
+  status: TagStatus;
   createdAt: Date;
   updatedAt: Date;
 }
