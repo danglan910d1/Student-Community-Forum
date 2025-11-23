@@ -4,7 +4,7 @@ import User from "../models/User";
 import bcrypt from "bcrypt";
 import { generateToken } from "../utils/jwt";
 import { asyncHandler } from "../utils/asyncHandler";
-import { BCRYPT_SALT_ROUNDS } from "../config/constants";
+import { BCRYPT_SALT_ROUNDS, MIN_PASSWORD_LENGTH } from "../config/constants";
 import { LoginBody, RegisterBody } from "../types/user";
 import { Types } from "mongoose";
 
@@ -16,6 +16,15 @@ export const register = asyncHandler(
     // 1. Kiểm tra thiếu trường (BẮT BUỘC)
     if (!name || !email || !password) {
       return res.status(400).json({ error: "Please enter all fields." });
+    }
+
+    // KIỂM TRA MẬT KHẨU: Đảm bảo mật khẩu đủ dài
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      return res
+        .status(400)
+        .json({
+          error: `Password must be at least ${MIN_PASSWORD_LENGTH} characters long.`,
+        });
     }
 
     // XỬ LÝ DỮ LIỆU ĐỊNH DANH (BẮT BUỘC)

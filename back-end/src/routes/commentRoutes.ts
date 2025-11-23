@@ -47,7 +47,7 @@ router.get(
   "/admin",
   authMiddleware,
   adminMiddleware,
-  getAllCommentsForAdmin as unknown as RequestHandler // <-- Route Admin bị thiếu đã được thêm
+  getAllCommentsForAdmin as unknown as RequestHandler // <-- Route Admin đã được thêm
 );
 
 export default router;

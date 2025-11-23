@@ -6,16 +6,14 @@
 import { Response, Request } from "express";
 import { Types, Model, Document } from "mongoose";
 import Like, { TargetType } from "../models/Like";
-import Post from "../models/Post";
-import Comment from "../models/Comment";
+import Post, { IPost } from "../models/Post"; // Import IPost
+import Comment, { IComment } from "../models/Comment"; // Import IComment
 import { AuthenticatedRequest } from "../types/express";
 import { asyncHandler } from "../utils/asyncHandler";
 // BỔ SUNG: Import Interfaces từ file Types API
-import { ToggleLikeParams, GetLikeStatusQuery } from "../types/like.api";
+import { ToggleLikeParams, GetLikeStatusQuery } from "../types/like";
 
 // INTERFACE NỘI BỘ: Định nghĩa một kiểu dữ liệu chung (Base) mà Post và Comment đều tuân thủ.
-// SỬA LỖI: Loại bỏ 'any' bằng cách định nghĩa kiểu cơ sở chung.
-// Cần tất cả các thuộc tính này để Controller hoạt động
 type BaseLikableDocument = Document & {
   status: string;
   is_deleted: boolean;
@@ -23,10 +21,11 @@ type BaseLikableDocument = Document & {
 };
 
 // Map TargetType sang Model Mongoose tương ứng
-// KHÔNG CẦN AS ANY NỮA VÌ CÁC MODELS ĐÃ ĐƯỢC ĐỒNG BỘ HÓA
+// SỬA LỖI: Định nghĩa LikableModels bằng kiểu cụ thể
 interface LikableModels {
-  post: Model<BaseLikableDocument>;
-  comment: Model<BaseLikableDocument>;
+  // TypeSafe: Model<T> phải tuân thủ cả IPost/IComment VÀ BaseLikableDocument
+  post: Model<IPost | BaseLikableDocument>;
+  comment: Model<IComment | BaseLikableDocument>;
 }
 
 const likableModels: LikableModels = {
@@ -36,8 +35,10 @@ const likableModels: LikableModels = {
 
 // Hàm trợ giúp để kiểm tra sự tồn tại của đối tượng mục tiêu
 const checkTargetExists = async (targetType: TargetType, targetId: string) => {
-  // Ép kiểu targetType thành key hợp lệ của LikableModels
-  const Model = likableModels[targetType as keyof LikableModels];
+  // Lấy Model và ÉP KIỂU SANG BASE TYPE để truy cập các thuộc tính chung
+  const Model = likableModels[
+    targetType as keyof LikableModels
+  ] as Model<BaseLikableDocument>;
 
   if (!Model) {
     throw new Error("Invalid target type.");
@@ -74,7 +75,11 @@ export const toggleLike = asyncHandler(
 
     const targetIdObj = new Types.ObjectId(targetId);
     const userIdObj = new Types.ObjectId(userId);
-    const Model = likableModels[targetType as keyof LikableModels]; // 2. Tìm kiếm nếu người dùng đã thích đối tượng này chưa
+
+    // TẠI ĐÂY BẮT BUỘC ÉP KIỂU SANG Model<BaseLikableDocument> để $inc hoạt động an toàn
+    const Model = likableModels[
+      targetType as keyof LikableModels
+    ] as Model<BaseLikableDocument>; // 2. Tìm kiếm nếu người dùng đã thích đối tượng này chưa
 
     const existingLike = await Like.findOne({
       userId: userIdObj,
@@ -147,7 +152,9 @@ export const getLikeStatus = asyncHandler(
     let likes_count = 0;
     let isLiked = false; // 2. Lấy tổng số likes (Luôn chạy)
 
-    const Model = likableModels[validTargetType];
+    // TẠI ĐÂY CẦN ÉP KIỂU SANG Model<BaseLikableDocument> để select("likes_count") hoạt động an toàn
+    const Model = likableModels[validTargetType] as Model<BaseLikableDocument>;
+
     const target = await Model.findById(targetId as string).select(
       "likes_count"
     );

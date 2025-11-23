@@ -12,7 +12,7 @@ import Like from "../models/Like";
 import bcrypt from "bcrypt";
 import { AuthenticatedRequest } from "../types/express"; // Sử dụng cho các route bảo vệ
 import { asyncHandler } from "../utils/asyncHandler";
-import { BCRYPT_SALT_ROUNDS } from "../config/constants";
+import { BCRYPT_SALT_ROUNDS, MIN_PASSWORD_LENGTH } from "../config/constants";
 import {
   UpdateProfileBody,
   UpdatePasswordBody,
@@ -113,6 +113,13 @@ export const updatePassword = asyncHandler(
       return res
         .status(400)
         .json({ error: "Please provide both old and new passwords." });
+    }
+
+    // KIỂM TRA BẢO MẬT: Mật khẩu mới phải đủ dài
+    if (trimmedNewPassword.length < MIN_PASSWORD_LENGTH) {
+      return res.status(400).json({
+        error: `New password must be at least ${MIN_PASSWORD_LENGTH} characters long.`,
+      });
     }
 
     // Kiểm tra mật khẩu mới không trùng mật khẩu cũ

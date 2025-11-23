@@ -18,7 +18,7 @@ router.post(
 );
 
 // GET /api/likes?targetType=...&targetId=...
-// Lấy trạng thái Like của người dùng hiện tại (cần đăng nhập) và tổng số Like
+// Lấy trạng thái Like của người dùng hiện tại (Optional Auth) và tổng số Like
 router.get("/", getLikeStatus as unknown as RequestHandler);
 
 export default router;
