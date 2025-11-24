@@ -53,6 +53,22 @@ const userSchema = new Schema<IUser>(
     // Tham số 2: Các tùy chọn cấu hình Schema tổng thể
     // Sử dụng timestamps để tự động quản lý
     timestamps: true, // Tuỳ chọn này áp dụng cho tất cả các field
+    toJSON: {
+      // Không phép các Virtuals (userId) được bao gồm trong phản hồi JSON
+      virtuals: false,
+      // Loại bỏ các trường MongoDB nội bộ khỏi phản hồi JSON
+      transform: function (doc: Document, ret: any) {
+        // 1. Đảm bảo 'id' được tạo ra từ '_id'
+        const id = ret._id;
+        delete ret._id; // Loại bỏ _id
+        delete ret.__v; // Loại bỏ __v
+        const newRet: any = {
+          userId: id,
+          ...ret,
+        };
+        return newRet;
+      },
+    },
   }
 );
 

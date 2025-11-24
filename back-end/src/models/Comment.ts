@@ -59,6 +59,22 @@ const CommentSchema: Schema = new Schema(
   },
   {
     timestamps: true,
+    toJSON: {
+      // Cho phép các Virtuals (commentId) được bao gồm trong phản hồi JSON
+      virtuals: false,
+      // Loại bỏ các trường MongoDB nội bộ khỏi phản hồi JSON
+      transform: function (doc: Document, ret: any) {
+        // 1. Đảm bảo 'id' được tạo ra từ '_id'
+        const id = ret._id;
+        delete ret._id; // Loại bỏ _id
+        delete ret.__v; // Loại bỏ __v
+        const newRet: any = {
+          commentId: id,
+          ...ret,
+        };
+        return newRet;
+      },
+    },
   }
 );
 
