@@ -273,7 +273,7 @@ export const updatePost = asyncHandler(
     }
 
     // 4.2. USER (AUTHOR) ACTIONS
-    if (isAuthor) {
+    if (isAuthor && !isAdmin) {
       // User KHÔNG CÓ quyền thay đổi status hoặc is_sticky
       if (status || is_sticky !== undefined) {
         return res.status(403).json({
