@@ -4,9 +4,8 @@
  * * Nguyên tắc áp dụng: HOF, Type Safety, RBAC Logic, Data Integrity.
  */
 import { Request, Response } from "express";
-import Post, { IPost } from "../models/Post";
+import Post, { IPost, PostStatus } from "../models/Post";
 import Topic from "../models/Topic";
-import Tag from "../models/Tag";
 import Comment from "../models/Comment";
 import Like from "../models/Like";
 import { AuthenticatedRequest } from "../types/express";
@@ -16,10 +15,12 @@ import {
   CreatePostBody,
   GetPostsQuery,
   UpdatePostBody,
-  PostStatus,
 } from "../types/post";
 import { asyncHandler } from "../utils/asyncHandler";
 import { paginate } from "../utils/pagination";
+import { processTags } from "../services/tagLayer";
+import { generateSlug } from "../utils/text";
+import { buildPostFilter } from "../services/postFilter";
 
 // --- [ USER: Tạo Bài Viết Mới ] ---
 // Cần authMiddleware
@@ -29,6 +30,7 @@ export const createPost = asyncHandler(
     // 1. Lấy dữ liệu
     const { topicId, tags, title, content } = req.body;
     const userId = req.userId;
+    const userObjectId = new Types.ObjectId(userId);
 
     // 2. Kiểm tra tính hợp lệ cơ bản
     if (!topicId || !title || !content) {
@@ -45,28 +47,25 @@ export const createPost = asyncHandler(
     if (!topic) {
       return res.status(404).json({ error: "Invalid or unapproved Topic." });
     }
+    const topicObjectId = topic._id as Types.ObjectId;
 
-    // 4. Xác minh và lọc Tags (chỉ chấp nhận tags đã Approved)
-    let validTagIds: Types.ObjectId[] = [];
-    if (tags && tags.length > 0) {
-      // Lọc bỏ các ID không hợp lệ về mặt định dạng
-      const cleanTagIds = tags.filter((id) => Types.ObjectId.isValid(id));
+    // --- 3. PHÂN LOẠI INPUTS VÀ XỬ LÝ TAGS (GỌI SERVICE) ---
+    const { validTagIds, pendingTagIds } = await processTags(
+      tags || [],
+      userId,
+      topicObjectId
+    );
 
-      // Tìm các Tag tồn tại VÀ có status là "approved"
-      const approvedTags = await Tag.find({
-        _id: { $in: cleanTagIds },
-        status: "approved",
-      }).select("_id");
-
-      validTagIds = approvedTags.map((tag) => tag._id as Types.ObjectId);
-    }
+    const slug = generateSlug(title);
 
     // 5. Tạo bài viết
     const newPost = await Post.create({
-      userId: new Types.ObjectId(userId),
-      topicId: topic._id,
+      userId: userObjectId,
+      topicId: topicObjectId,
       tags: validTagIds,
+      pending_tags: pendingTagIds,
       title,
+      slug,
       content,
       status: "pending", // QUY TẮC: Mặc định chờ duyệt
       is_sticky: false,
@@ -86,62 +85,31 @@ export const getPosts = asyncHandler(
       | AuthenticatedRequest<{}, {}, {}, GetPostsQuery>,
     res: Response
   ) => {
-    // 1. Lấy tham số query
-    const { topicId, tagId, page, limit, status, search } = req.query;
-
-    // Sử dụng userRole để xác định quyền hạn (Zero-Lookup)
+    // 1. Lấy tham số query và quyền hạn (Zero-Lookup)
+    const { page, limit } = req.query;
+    const userId = "userId" in req ? req.userId : undefined;
     const isAdmin = "userRole" in req ? req.userRole === "admin" : false;
 
-    // 2. Thiết lập bộ lọc STATUS (Quan trọng!)
-    const filter: any = {};
+    // 2. XÂY DỰNG BỘ LỌC (Ủy quyền cho Service Layer)
+    const filter = buildPostFilter(req.query, { userId, isAdmin });
 
-    if (status && isAdmin) {
-      // Admin có thể lọc theo status bất kỳ
-      const validStatuses: PostStatus[] = ["pending", "approved", "rejected"];
-      if (validStatuses.includes(status)) {
-        filter.status = status;
-      } else {
-        return res.status(400).json({ error: "Invalid status value." });
-      }
-    } else {
-      // User thường (hoặc request không truyền status) MẶC ĐỊNH chỉ thấy "approved"
-      filter.status = "approved";
-    }
-
-    // 3. Thêm lọc theo Topic và Tag (Kiểm tra ID)
-    if (topicId && Types.ObjectId.isValid(topicId)) {
-      filter.topicId = new Types.ObjectId(topicId);
-    }
-    if (tagId && Types.ObjectId.isValid(tagId)) {
-      filter.tags = new Types.ObjectId(tagId); // Mongoose tìm kiếm trong mảng tags
-    }
-
-    // 4. Thêm tìm kiếm theo tiêu đề/nội dung
-    if (search) {
-      const regex = new RegExp(search as string, "i");
-      filter.$or = [
-        { title: { $regex: regex } },
-        { content: { $regex: regex } },
-      ];
-    }
-
-    // 5. GỌI HÀM TIỆN ÍCH PHÂN TRANG (Loại bỏ logic tính toán lặp lại)
+    // 3. GỌI HÀM TIỆN ÍCH PHÂN TRANG (Loại bỏ logic tính toán lặp lại)
     const result = await paginate(
       Post,
       filter,
       { is_sticky: -1, createdAt: -1 }, // Ưu tiên bài ghim, sau đó là bài mới nhất
-      page, // Truyền trực tiếp query param
-      limit, // Truyền trực tiếp query param
-      null, // Không loại trừ trường nào mặc định
+      page,
+      limit,
+      null,
       [
         // Populate fields
-        { path: "userId", select: "name avatar" },
-        { path: "topicId", select: "name slug" },
-        { path: "tags", select: "name" },
+        // { path: "userId", select: "username avatarUrl" },
+        // { path: "topic", select: "name slug" },
+        // { path: "tags", select: "name" },
       ]
     );
 
-    // 6. Phản hồi kèm thông tin phân trang
+    // 4. Phản hồi kèm thông tin phân trang
     res.json({
       posts: result.items,
       currentPage: result.currentPage,
@@ -220,7 +188,6 @@ export const updatePost = asyncHandler(
     const userId = req.userId;
     const { topicId, tags, title, content, status, is_sticky } = req.body;
 
-    // BỔ SUNG: Kiểm tra ID hợp lệ
     if (!Types.ObjectId.isValid(postId)) {
       return res.status(400).json({ error: "Invalid Post ID format." });
     }
@@ -235,65 +202,95 @@ export const updatePost = asyncHandler(
     const isAuthor = post.userId.toString() === userId;
     const isAdmin = req.userRole === "admin";
 
-    // Nếu không phải tác giả VÀ không phải admin -> Từ chối
     if (!isAuthor && !isAdmin) {
       return res.status(403).json({
         error: "Access denied. Only author or admin can update this post.",
       });
     }
 
-    const updateFields: Partial<IPost> = {}; // Sử dụng Partial<IPost> để Type Safety
+    const updateFields: Partial<IPost> = {};
+    let finalTopicId: Types.ObjectId = post.topicId; // Khởi tạo bằng ID hiện tại
+    let shouldSetStatusToPending = false;
 
-    // 3. Cập nhật các trường cho TÁC GIẢ (Chỉ được sửa nội dung/topic/tags)
-    if (isAuthor) {
-      if (title) updateFields.title = title.trim();
-      if (content) updateFields.content = content.trim();
+    // 3. LOGIC XỬ LÝ NỘI DUNG (Content, Title, Topic)
 
-      // Nếu tác giả sửa bài, status luôn trở về pending để Admin duyệt lại
-      if (title || content || tags || topicId) {
-        updateFields.status = "pending";
+    // 3.1. Xử lý Tiêu đề & Nội dung
+    if (title && title.trim() !== post.title) {
+      updateFields.title = title.trim();
+      shouldSetStatusToPending = true;
+      // SỬA LỖI SLUG: Buộc Controller tạo slug nếu title thay đổi
+      // Lý do: đảm bảo slug được cập nhật ngay lập tức và tránh lỗi bị bỏ qua hook findByIdAndUpdate
+      updateFields.slug = generateSlug(title.trim());
+    }
+    if (content && content.trim() !== post.content) {
+      updateFields.content = content.trim();
+      shouldSetStatusToPending = true;
+    }
+
+    // 3.2. Xử lý Topic (Nếu có)
+    if (topicId) {
+      if (!Types.ObjectId.isValid(topicId)) {
+        return res.status(400).json({ error: "Invalid Topic ID format." });
+      }
+      const topic = await Topic.findOne({ _id: topicId, status: "approved" });
+      if (!topic) {
+        return res
+          .status(400)
+          .json({ error: "Invalid or unapproved Topic ID." });
       }
 
-      // Xử lý Topic (Cần xác minh Topic tồn tại và approved)
-      if (topicId) {
-        if (!Types.ObjectId.isValid(topicId)) {
-          return res.status(400).json({ error: "Invalid Topic ID format." });
-        }
-        const topic = await Topic.findOne({ _id: topicId, status: "approved" });
-        if (!topic) {
-          return res
-            .status(400)
-            .json({ error: "Invalid or unapproved Topic ID." });
-        }
-        updateFields.topicId = topic._id;
-      }
+      const topicObjectId = topic._id as Types.ObjectId;
 
-      // Xử lý Tags (Chỉ chấp nhận tags đã Approved)
-      if (tags) {
-        const cleanTagIds = tags.filter((id) => Types.ObjectId.isValid(id));
-        const approvedTags = await Tag.find({
-          _id: { $in: cleanTagIds },
-          status: "approved",
-        }).select("_id");
-        updateFields.tags = approvedTags.map(
-          (tag) => tag._id as Types.ObjectId
-        );
+      // SỬA LỖI MONGODB: Dùng .equals() để so sánh ObjectId
+      if (!post.topicId.equals(topicObjectId)) {
+        finalTopicId = topicObjectId;
+        shouldSetStatusToPending = true;
       }
     }
 
-    // 4. Cập nhật các trường cho ADMIN (Chỉ Admin mới được thay đổi status, is_sticky, hoặc sửa chữa nội dung)
+    // 3.3. Xử lý Tags (Tái sử dụng Service Tag Đề xuất)
+    if (tags) {
+      const { validTagIds, pendingTagIds } = await processTags(
+        tags,
+        userId,
+        finalTopicId
+      );
+      updateFields.tags = validTagIds;
+      updateFields.pending_tags = pendingTagIds;
+      shouldSetStatusToPending = true;
+    }
+
+    // 4. KIỂM TRA QUYỀN VÀ XÁC LẬP STATUS CUỐI CÙNG
+
+    // 4.1. ADMIN ACTIONS (Quyền lực tối cao)
     if (isAdmin) {
       if (status) updateFields.status = status;
       if (is_sticky !== undefined) updateFields.is_sticky = is_sticky;
 
-      // Admin có thể sửa title/content/topicId/tags của người khác
-      if (!isAuthor) {
-        if (title) updateFields.title = title.trim();
-        if (content) updateFields.content = content.trim();
-        if (topicId && Types.ObjectId.isValid(topicId))
-          updateFields.topicId = new Types.ObjectId(topicId);
-        // Tags logic phức tạp hơn, có thể xử lý trong service nếu cần
+      if (status === "approved" || status === "rejected") {
+        shouldSetStatusToPending = false; // Admin đã quyết định status thủ công
       }
+    }
+
+    // 4.2. USER (AUTHOR) ACTIONS
+    if (isAuthor) {
+      // User KHÔNG CÓ quyền thay đổi status hoặc is_sticky
+      if (status || is_sticky !== undefined) {
+        return res.status(403).json({
+          error: "Users cannot directly change post status or stickiness.",
+        });
+      }
+
+      // Nếu User thay đổi bất kỳ trường nào cần duyệt lại VÀ Admin chưa quyết định status
+      if (shouldSetStatusToPending) {
+        updateFields.status = "pending";
+      }
+    }
+
+    // 4.3. HOÀN THIỆN PAYLOAD
+    // SỬA LỖI MONGODB: Dùng .equals() để so sánh ObjectId
+    if (!post.topicId.equals(finalTopicId)) {
+      updateFields.topicId = finalTopicId;
     }
 
     if (Object.keys(updateFields).length === 0) {
@@ -303,13 +300,14 @@ export const updatePost = asyncHandler(
     }
 
     // 5. Thực hiện cập nhật
-    const updatedPost = await Post.findByIdAndUpdate(postId, updateFields, {
-      new: true,
-      runValidators: true,
-    })
-      .populate("userId", "name avatar")
-      .populate("topicId", "name slug")
-      .populate("tags", "name");
+    const updatedPost = await Post.findByIdAndUpdate(
+      postId,
+      { $set: updateFields },
+      {
+        new: true,
+        runValidators: true,
+      }
+    ).populate("tags", "name");
 
     if (!updatedPost) {
       return res.status(404).json({ error: "Post not found after update." });

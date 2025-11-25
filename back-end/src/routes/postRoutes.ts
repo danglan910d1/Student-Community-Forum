@@ -12,11 +12,22 @@ import { adminMiddleware } from "../middleware/admin"; // Dùng để kiểm tra
 
 const router = Router();
 
+// --- [ ADMIN ONLY ACCESS ] ---
+// LƯU Ý: Đặt route có tiền tố Admin lên trước route Public/User để tránh xung đột
+// Vì Express sẽ hiểu '/admin' là tham số ':id'
+router.get(
+  "/admin/:id", // GET /api/posts/admin/:id (Lấy chi tiết Bài viết bất kể status)
+  authMiddleware,
+  adminMiddleware,
+  getPostByIdForAdmin as unknown as RequestHandler
+);
+
 // --- [ PUBLIC / USER ACCESS ] ---
 // GET /api/posts (Lấy danh sách, phân trang, lọc theo topic/tag, và giờ là status)
-// User thường mặc định chỉ xem được "approved"
 router.get(
   "/", // KHÔNG CẦN authMiddleware bắt buộc (Optional Auth)
+  authMiddleware,
+  adminMiddleware,
   getPosts as unknown as RequestHandler
 );
 
@@ -35,14 +46,5 @@ router.put(
 
 // DELETE /api/posts/:id (User xóa bài của mình, Admin xóa bất kỳ)
 router.delete("/:id", authMiddleware, deletePost as unknown as RequestHandler);
-
-// --- [ ADMIN ONLY ACCESS ] ---
-// GET /api/posts/admin/:id (Lấy chi tiết Bài viết bất kể status)
-router.get(
-  "/admin/:id",
-  authMiddleware,
-  adminMiddleware,
-  getPostByIdForAdmin as unknown as RequestHandler
-);
 
 export default router;

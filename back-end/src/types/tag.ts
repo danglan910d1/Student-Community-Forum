@@ -1,5 +1,3 @@
-import { Types } from "mongoose";
-import { UserRole, UserStatus } from "../models/User"; // Import các Type cốt lõi
 import { TagStatus } from "../models/Tag"; // <-- Import TagStatus từ Model
 
 // Định nghĩa các loại Status có thể áp dụng cho Post

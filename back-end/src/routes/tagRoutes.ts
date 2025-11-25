@@ -1,7 +1,6 @@
 import { Router, RequestHandler } from "express";
 import {
-  getTagsList, // <-- Hàm mới thay thế cho cả hai
-  suggestTag,
+  getTagsList,
   updateTag,
   getTagById,
   deleteTag,
@@ -15,12 +14,12 @@ const router = Router();
 // GET /api/tags (Lấy tất cả tags đã được duyệt, có thể lọc theo topicId)
 router.get("/", getTagsList as RequestHandler); // Gọi hàm gộp chung (Public)
 
-// POST /api/tags (User gợi ý tag mới)
-router.post(
-  "/",
-  authMiddleware, // Cần xác thực để biết ai là người gợi ý (createdBy)
-  suggestTag as unknown as RequestHandler
-);
+// POST /api/tags (User gợi ý tag mới được chuyển sang createPost)
+// router.post(
+//   "/",
+//   authMiddleware, // Cần xác thực để biết ai là người gợi ý (createdBy)
+//   suggestTag as unknown as RequestHandler
+// );
 
 // --- [ ADMIN ONLY ] ---
 // GET /api/tags/admin (Lấy tất cả tags, bao gồm cả pending) <-- Dùng lại hàm gộp

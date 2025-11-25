@@ -4,12 +4,12 @@
  * * Nguyên tắc áp dụng: HOF, Type Safety, RBAC Logic, Data Cleaning.
  */
 import { Request, Response } from "express";
-import Topic, { ITopic, TopicStatus } from "../models/Topic"; // <-- Cần import ITopic
-import slugify from "slugify";
+import Topic, { ITopic } from "../models/Topic"; // <-- Cần import ITopic
 import { AuthenticatedRequest } from "../types/express";
 import { Types } from "mongoose";
 import { asyncHandler } from "../utils/asyncHandler"; // HOF
 import { TopicParams, CreateTopicBody, UpdateTopicBody } from "../types/topic";
+import { generateSlug } from "../utils/text";
 
 // --- [ PUBLIC/ADMIN: Lấy danh sách Topics (Gộp) ] ---
 // Endpoint: GET /api/topics (Public) HOẶC GET /api/topics/admin (Admin)
@@ -89,10 +89,12 @@ export const createTopic = asyncHandler(
       return res
         .status(400)
         .json({ error: "Topic with this name already exists." });
-    } // 4. Tạo slug từ tên Topic để sử dụng cho URL
+    }
 
-    const slug = slugify(trimmedName, { lower: true, locale: "vi" }); // 5. Tạo Topic trong Database
+    // 4. Tạo slug từ tên Topic để sử dụng cho URL
+    const slug = generateSlug(trimmedName);
 
+    // 5. Tạo Topic trong Database
     const newTopic = await Topic.create({
       name: trimmedName,
       slug,
@@ -127,7 +129,7 @@ export const updateTopic = asyncHandler(
         return res.status(400).json({ error: "Topic name cannot be empty." });
       }
       updateFields.name = trimmedName;
-      updateFields.slug = slugify(trimmedName, { lower: true, locale: "vi" });
+      updateFields.slug = generateSlug(trimmedName);
     } // 3. Xử lý trường description (chấp nhận cả undefined/null)
 
     if (description !== undefined) {

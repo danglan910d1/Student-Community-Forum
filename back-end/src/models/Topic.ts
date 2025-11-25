@@ -1,12 +1,13 @@
 // src/models/Topic.ts
 
 import { Schema, model, Types, Document } from "mongoose";
+import { generateSlug } from "../utils/text";
 
 // Định nghĩa các loại Status có thể áp dụng cho Topic (Phải khớp với Topic Model)
 export type TopicStatus = "pending" | "approved" | "rejected";
 
 // Định nghĩa kiểu dữ liệu TypeScript cho Topic
-export interface ITopic {
+export interface ITopic extends Document {
   name: string;
   slug: string;
   description?: string | null;
@@ -19,7 +20,7 @@ export interface ITopic {
 const topicSchema = new Schema<ITopic>(
   {
     name: { type: String, required: true, unique: true },
-    slug: { type: String, required: true, unique: true }, // Dùng cho URL thân thiện
+    slug: { type: String, required: true, unique: true, index: true }, // Dùng cho URL thân thiện
     description: { type: String, default: null },
     // Tham chiếu đến UserSchema
     createdBy: {
@@ -53,5 +54,14 @@ const topicSchema = new Schema<ITopic>(
     },
   }
 );
+
+// PRE-SAVE HOOK: Tự động tạo slug trước khi lưu
+topicSchema.pre<ITopic>("save", function (next) {
+  if (this.isModified("name") || !this.slug) {
+    // Sử dụng hàm tiện ích đã tách ra
+    this.slug = generateSlug(this.name);
+  }
+  next();
+});
 
 export default model<ITopic>("Topic", topicSchema);

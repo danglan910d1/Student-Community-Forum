@@ -1,22 +1,27 @@
 // src/models/Post.ts
 
 import { Schema, model, Types, Document } from "mongoose";
+import { generateSlug } from "../utils/text";
 
+// Định nghĩa các loại Status có thể áp dụng cho Post
+export type PostStatus = "pending" | "approved" | "rejected";
 // Định nghĩa kiểu dữ liệu TypeScript cho Post
 export interface IPost extends Document {
   userId: Types.ObjectId;
   topicId: Types.ObjectId; // BẮT BUỘC
   tags: Types.ObjectId[]; // Chỉ chứa tag đã approved
   title: string;
+  slug: string;
   content: string;
-  status: "pending" | "approved" | "rejected"; // Trạng thái duyệt bài
+  status: PostStatus; // Trạng thái duyệt bài
   is_sticky: boolean; // Ghim bài viết
   views_count: number;
   likes_count: number;
   comments_count: number;
+  is_deleted: boolean;
+  pending_tags: Types.ObjectId[]; // TAGS ĐANG CHỜ DUYỆT (Tham chiếu đến Tag Model, status: pending/rejected)
   createdAt: Date;
   updatedAt: Date;
-  is_deleted: boolean;
 }
 
 const postSchema = new Schema<IPost>(
@@ -38,6 +43,9 @@ const postSchema = new Schema<IPost>(
         required: false, // tags là optional, nhưng nếu có thì phải là ObjectId hợp lệ
       },
     ],
+    pending_tags: [
+      { type: Schema.Types.ObjectId, ref: "Tag", required: false },
+    ],
     title: {
       type: String,
       required: true,
@@ -45,6 +53,7 @@ const postSchema = new Schema<IPost>(
       minlength: 5,
       maxlength: 100,
     },
+    slug: { type: String, required: true, unique: true, index: true }, // Dùng cho URL thân thiện
     content: { type: String, required: true, minlength: 10 },
     status: {
       type: String,
@@ -78,8 +87,18 @@ const postSchema = new Schema<IPost>(
   }
 );
 
+// PRE-SAVE HOOK: Tự động tạo slug trước khi lưu
+postSchema.pre<IPost & Document>("save", function (next) {
+  if (this.isModified("title") || !this.slug) {
+    // Sử dụng hàm tiện ích đã tách ra
+    this.slug = generateSlug(this.title);
+  }
+  next();
+});
+
 // Tạo Index cho các trường thường dùng để truy vấn/lọc
 postSchema.index({ topicId: 1, status: 1 });
 postSchema.index({ tags: 1, status: 1 });
+postSchema.index({ title: "text", content: "text" });
 
 export default model<IPost>("Post", postSchema);

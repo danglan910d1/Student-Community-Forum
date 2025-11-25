@@ -9,13 +9,7 @@ import { AuthenticatedRequest } from "../types/express";
 import { Types } from "mongoose";
 import { asyncHandler } from "../utils/asyncHandler";
 import { paginate } from "../utils/pagination";
-// SỬA: Chỉ import Payload Interfaces từ file Types
-import {
-  GetTagsQuery,
-  TagParams,
-  CreateTagBody,
-  UpdateTagBody,
-} from "../types/tag";
+import { GetTagsQuery, TagParams, UpdateTagBody } from "../types/tag";
 
 // --- [ PUBLIC/ADMIN: Lấy danh sách Tags (Gộp) ] ---
 // Endpoint: GET /api/tags (Public) HOẶC GET /api/tags/admin (Admin)
@@ -34,7 +28,8 @@ export const getTagsList = asyncHandler(
     const { topicId, page, limit, status } = query; // <-- LẤY THAM SỐ TỪ BIẾN ĐÃ ÉP KIỂU // 2. Thiết lập bộ lọc cơ bản
 
     const filter: any = {};
-    let selectFields = "name topicId"; // Mặc định cho Public
+    let selectFields = "name topicId";
+    // Mặc định cho Public
     let populateFields: { path: string; select: string }[] = [];
 
     if (!isAdmin) {
@@ -46,8 +41,9 @@ export const getTagsList = asyncHandler(
       populateFields = [
         { path: "topicId", select: "name slug" },
         { path: "createdBy", select: "name" },
-      ]; // Admin có thể lọc theo status cụ thể
+      ];
 
+      // Admin có thể lọc theo status cụ thể
       if (status) {
         const validStatuses: TagStatus[] = ["pending", "approved", "rejected"];
         if (validStatuses.includes(status)) {
@@ -56,16 +52,18 @@ export const getTagsList = asyncHandler(
           return res.status(400).json({ error: "Invalid status value." });
         }
       }
-    } // 3. Lọc theo Topic ID (Áp dụng cho cả Public và Admin)
+    }
 
+    // 3. Lọc theo Topic ID (Áp dụng cho cả Public và Admin)
     if (
       topicId &&
       typeof topicId === "string" &&
       Types.ObjectId.isValid(topicId)
     ) {
       filter.topicId = new Types.ObjectId(topicId);
-    } // 4. GỌI HÀM TIỆN ÍCH PHÂN TRANG (Loại bỏ logic tính toán lặp lại)
+    }
 
+    // 4. GỌI HÀM TIỆN ÍCH PHÂN TRANG (Loại bỏ logic tính toán lặp lại)
     const result = await paginate(
       Tag,
       filter,
@@ -74,8 +72,9 @@ export const getTagsList = asyncHandler(
       limit, // Truyền trực tiếp query param
       selectFields,
       populateFields
-    ); // 5. Phản hồi
+    );
 
+    // 5. Phản hồi
     res.json({
       tags: result.items,
       currentPage: result.currentPage,
@@ -88,41 +87,41 @@ export const getTagsList = asyncHandler(
 
 // --- [ USER: Gợi ý/Tạo Tag mới (Mặc định status: pending) ] ---
 // Endpoint: POST /api/tags
-export const suggestTag = asyncHandler(
-  async (req: AuthenticatedRequest<{}, {}, CreateTagBody>, res: Response) => {
-    // 1. Lấy dữ liệu từ body và userId từ request (đã xác thực)
-    const { name, topicId } = req.body;
-    const userId = req.userId; // 2. Kiểm tra tính hợp lệ cơ bản của name
+// export const suggestTag = asyncHandler(
+//   async (req: AuthenticatedRequest<{}, {}, CreateTagBody>, res: Response) => {
+//     // 1. Lấy dữ liệu từ body và userId từ request (đã xác thực)
+//     const { name, topicId } = req.body;
+//     const userId = req.userId; // 2. Kiểm tra tính hợp lệ cơ bản của name
 
-    if (!name) {
-      return res.status(400).json({ error: "Tag name is required." });
-    }
+//     if (!name) {
+//       return res.status(400).json({ error: "Tag name is required." });
+//     }
 
-    const trimmedName = name.trim(); // 3. Kiểm tra trùng lặp tên Tag (Dùng tên đã làm sạch)
+//     const trimmedName = name.trim(); // 3. Kiểm tra trùng lặp tên Tag (Dùng tên đã làm sạch)
 
-    const tagExists = await Tag.findOne({ name: trimmedName });
-    if (tagExists) {
-      return res
-        .status(400)
-        .json({ error: "Tag with this name already exists." });
-    } // 4. Chuẩn bị dữ liệu cho Tag mới
+//     const tagExists = await Tag.findOne({ name: trimmedName });
+//     if (tagExists) {
+//       return res
+//         .status(400)
+//         .json({ error: "Tag with this name already exists." });
+//     } // 4. Chuẩn bị dữ liệu cho Tag mới
 
-    const tagData: Partial<ITag> = {
-      name: trimmedName,
-      createdBy: new Types.ObjectId(userId),
-      status: "pending", // QUY TẮC: User tạo -> Mặc định chờ Admin duyệt
-    }; // 5. Xử lý topicId (chỉ thêm nếu nó được cung cấp và hợp lệ)
+//     const tagData: Partial<ITag> = {
+//       name: trimmedName,
+//       createdBy: new Types.ObjectId(userId),
+//       status: "pending", // QUY TẮC: User tạo -> Mặc định chờ Admin duyệt
+//     }; // 5. Xử lý topicId (chỉ thêm nếu nó được cung cấp và hợp lệ)
 
-    if (topicId && Types.ObjectId.isValid(topicId)) {
-      // Tùy chọn: Thêm kiểm tra Topic status = approved nếu muốn nghiêm ngặt
-      tagData.topicId = new Types.ObjectId(topicId);
-    } // 6. Tạo Tag trong Database
+//     if (topicId && Types.ObjectId.isValid(topicId)) {
+//       // Tùy chọn: Thêm kiểm tra Topic status = approved nếu muốn nghiêm ngặt
+//       tagData.topicId = new Types.ObjectId(topicId);
+//     } // 6. Tạo Tag trong Database
 
-    const newTag = await Tag.create(tagData); // 7. Phản hồi thành công
+//     const newTag = await Tag.create(tagData); // 7. Phản hồi thành công
 
-    res.status(201).json(newTag);
-  }
-);
+//     res.status(201).json(newTag);
+//   }
+// );
 
 // --- [ ADMIN: Cập nhật Tag và Duyệt Status ] ---
 // Endpoint: PUT /api/tags/admin/:id
