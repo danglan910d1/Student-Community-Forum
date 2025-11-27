@@ -1,4 +1,4 @@
-import { Router, RequestHandler } from "express";
+import { Router } from "express";
 import {
   createPost,
   getPosts,
@@ -6,6 +6,7 @@ import {
   updatePost,
   deletePost,
   getPostByIdForAdmin,
+  adminApprovePostController,
 } from "../controllers/postController";
 import { authMiddleware } from "../middleware/auth"; // auth.ts
 import { adminMiddleware } from "../middleware/admin"; // Dùng để kiểm tra vai trò
@@ -19,7 +20,14 @@ router.get(
   "/admin/:id", // GET /api/posts/admin/:id (Lấy chi tiết Bài viết bất kể status)
   authMiddleware,
   adminMiddleware,
-  getPostByIdForAdmin as unknown as RequestHandler
+  getPostByIdForAdmin
+);
+// POST /api/posts/admin/approve/:id (DUYỆT BÀI VÀ PENDING TAGS - GIAI ĐOẠN 3)
+router.post(
+  "/admin/approve/:id",
+  authMiddleware,
+  adminMiddleware,
+  adminApprovePostController
 );
 
 // --- [ PUBLIC / USER ACCESS ] ---
@@ -28,23 +36,23 @@ router.get(
   "/", // KHÔNG CẦN authMiddleware bắt buộc (Optional Auth)
   authMiddleware,
   adminMiddleware,
-  getPosts as unknown as RequestHandler
+  getPosts
 );
 
 // GET /api/posts/:id (Lấy chi tiết và tăng view)
 router.get("/:id", getPostById);
 
 // POST /api/posts (User tạo bài viết mới)
-router.post("/", authMiddleware, createPost as unknown as RequestHandler);
+router.post("/", authMiddleware, createPost);
 
 // PUT /api/posts/:id (User sửa bài của mình, Admin sửa bất kỳ)
 router.put(
   "/:id",
   authMiddleware, // Cần xác thực để kiểm tra quyền hạn (isAuthor/isAdmin)
-  updatePost as unknown as RequestHandler
+  updatePost
 );
 
 // DELETE /api/posts/:id (User xóa bài của mình, Admin xóa bất kỳ)
-router.delete("/:id", authMiddleware, deletePost as unknown as RequestHandler);
+router.delete("/:id", authMiddleware, deletePost);
 
 export default router;

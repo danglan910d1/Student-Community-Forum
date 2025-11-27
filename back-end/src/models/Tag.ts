@@ -1,5 +1,4 @@
 // src/models/Tag.ts
-
 import { Schema, model, Types, Document } from "mongoose";
 import { generateSlug } from "../utils/text";
 
@@ -8,7 +7,7 @@ export type TagStatus = "pending" | "approved" | "rejected";
 export interface ITag extends Document {
   name: string;
   slug: string;
-  topicId?: Types.ObjectId | null; // Tag có thể thuộc về một Topic cụ thể (Optional)
+  topicId?: Types.ObjectId | null; // Tag có thể thuộc về một Topic cụ thể (null = freeTag)
   createdBy: Types.ObjectId; // ID của User/Admin gợi ý Tag
   status: TagStatus;
   createdAt: Date;

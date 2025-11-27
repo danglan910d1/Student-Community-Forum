@@ -10,7 +10,7 @@ export interface TagParams {
 // 2. Dùng cho POST /tags (Tạo tag)
 export interface CreateTagBody {
   name: string;
-  topicId?: string; // Mảng ID Tags (string)
+  topicId: string; // Mảng ID Tags (string)
 }
 
 // 3. Dùng cho GET /tags (Danh sách, lọc, phân trang)

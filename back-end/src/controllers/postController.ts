@@ -4,7 +4,7 @@
  * * Nguyên tắc áp dụng: HOF, Type Safety, RBAC Logic, Data Integrity.
  */
 import { Request, Response } from "express";
-import Post, { IPost, PostStatus } from "../models/Post";
+import Post, { IPost } from "../models/Post";
 import Topic from "../models/Topic";
 import Comment from "../models/Comment";
 import Like from "../models/Like";
@@ -15,12 +15,15 @@ import {
   CreatePostBody,
   GetPostsQuery,
   UpdatePostBody,
+  AdminApprovePostBody,
 } from "../types/post";
 import { asyncHandler } from "../utils/asyncHandler";
 import { paginate } from "../utils/pagination";
 import { processTags } from "../services/tagLayer";
 import { generateSlug } from "../utils/text";
 import { buildPostFilter } from "../services/postFilter";
+import Tag from "../models/Tag";
+import { adminApprovePost } from "../services/adminApprovePost";
 
 // --- [ USER: Tạo Bài Viết Mới ] ---
 // Cần authMiddleware
@@ -103,9 +106,9 @@ export const getPosts = asyncHandler(
       null,
       [
         // Populate fields
-        // { path: "userId", select: "username avatarUrl" },
-        // { path: "topic", select: "name slug" },
-        // { path: "tags", select: "name" },
+        { path: "userId", select: "username avatarUrl" },
+        { path: "topic", select: "name slug" },
+        { path: "tags", select: "name" },
       ]
     );
 
@@ -356,5 +359,50 @@ export const deletePost = asyncHandler(
     await Like.deleteMany({ targetId: postId, targetType: "post" });
 
     res.json({ message: "Post deleted successfully." });
+  }
+);
+
+// --- [ ADMIN: Duyệt Bài Viết và Pending Tags (GIAI ĐOẠN 3) ] ---
+// Endpoint: POST /api/posts/admin/approve/:id
+export const adminApprovePostController = asyncHandler(
+  async (
+    req: AuthenticatedRequest<PostParams, {}, AdminApprovePostBody>,
+    res: Response
+  ) => {
+    const postId = req.params.id;
+    const adminId = req.userId;
+    const { pendingTagActions, newPostStatus } = req.body;
+
+    if (!Types.ObjectId.isValid(postId)) {
+      return res.status(400).json({ error: "Invalid Post ID format." });
+    }
+
+    if (!pendingTagActions || !newPostStatus) {
+      return res.status(400).json({
+        error: "Missing pendingTagActions or newPostStatus in request body.",
+      });
+    }
+
+    if (newPostStatus !== "approved" && newPostStatus !== "rejected") {
+      return res
+        .status(400)
+        .json({ error: "newPostStatus must be 'approved' or 'rejected'." });
+    }
+
+    // GỌI DỊCH VỤ TRANSACTIONAL ĐỂ XỬ LÝ LOGIC PHỨC TẠP
+    const updatedPost = await adminApprovePost(
+      postId,
+      adminId,
+      pendingTagActions,
+      newPostStatus
+    );
+
+    // Populate thêm các trường cần thiết cho phản hồi
+    const finalPost = await Post.findById(updatedPost._id)
+      .populate("userId", "name avatar")
+      .populate("topicId", "name slug")
+      .populate("tags", "name");
+
+    res.json(finalPost);
   }
 );

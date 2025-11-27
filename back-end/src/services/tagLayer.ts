@@ -90,9 +90,24 @@ export const processTags = async (
         continue;
       }
 
+      // Luật ràng buộc hard rules (topic constraint)
       if (foundTag.status === "approved") {
-        validTagIds.push(tagObjectId);
+        // Luật Ràng buộc Topic: Tag hợp lệ nếu topicId == null (Free Tag) HOẶC topicId == Post.topicId
+        // Kiểm tra `foundTag.topicId` phải tồn tại (không null/undefined) trước khi gọi .equals()
+        const isTopicValid =
+          !foundTag.topicId || foundTag.topicId.equals(topicId);
+        // GIẢI THÍCH:
+        // 1. `!foundTag.topicId` trả về true nếu nó là null hoặc undefined (Tag Tự do -> Hợp lệ).
+        // 2. Nếu nó là ObjectId, logic chuyển sang `foundTag.topicId.equals(topicId)`.
+        if (isTopicValid) {
+          // Giai đoạn 1: Tag Approved VÀ Hợp lệ theo Topic -> Gắn ngay (validTagIds)
+          validTagIds.push(tagObjectId);
+        } else {
+          // Giai đoạn 1: Tag Approved nhưng Topic Mismatch -> pending_tags
+          pendingTagIds.push(tagObjectId);
+        }
       } else {
+        // Giai đoạn 1: Tag Pending/Rejected Global -> pending_tags
         pendingTagIds.push(tagObjectId);
       }
     } else if (!isObjectId && !existingSlugSet.has(itemSlug)) {
@@ -102,7 +117,7 @@ export const processTags = async (
         slug: itemSlug,
         createdBy: userObjectId,
         status: "pending",
-        topicId: topicId,
+        topicId: topicId, // Tag mới được gán Topic ID của Post này (để Admin dễ duyệt)
       } as any);
       existingSlugSet.add(itemSlug); // Khóa slug tạm thời cho bulk insert
     }
