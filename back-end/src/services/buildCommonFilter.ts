@@ -75,7 +75,7 @@ export interface AuthContext {
 export const buildCommonFilter = (
   queryParams: CommonQuery,
   authContext: AuthContext,
-  modelType: "post" | "topic" | "tag"
+  modelType: "post" | "topic" | "tag" | "user"
 ) => {
   const { status, search, myPosts } = queryParams;
   const { userId, isAdmin } = authContext;
@@ -90,9 +90,15 @@ export const buildCommonFilter = (
 
   if (isViewingOwnContent) {
     // TRƯỜNG HỢP 1: XEM BÀI CỦA CHÍNH MÌNH (ADMIN HOẶC USER)
-    filter[modelType === "post" ? "userId" : "createdBy"] = new Types.ObjectId(
-      userId
-    ); // Cho phép xem TẤT CẢ trạng thái (pending, approved, rejected)
+    if (modelType !== "user") {
+      // Chỉ áp dụng lọc theo người tạo nếu model không phải là chính User Model
+      const creatorField = modelType === "post" ? "userId" : "createdBy";
+      filter[creatorField] = new Types.ObjectId(userId);
+    } else {
+      // Nếu modelType là user, thì chỉ lọc chính user đó
+      filter._id = new Types.ObjectId(userId);
+    }
+    // Cho phép xem TẤT CẢ trạng thái (pending, approved, rejected)
     filter.status = { $in: ["pending", "approved", "rejected"] };
   } else if (isAdmin) {
     // TRƯỜNG HỢP 2: ADMIN XEM BÀI CỦA NGƯỜI KHÁC HOẶC TẤT CẢ HỆ THỐNG

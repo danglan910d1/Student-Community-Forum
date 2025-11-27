@@ -1,4 +1,4 @@
-import { Router, RequestHandler } from "express";
+import { Router } from "express";
 import {
   createComment,
   getComments,
@@ -16,30 +16,20 @@ const router = Router();
 // --- [ PUBLIC ] ---
 // GET /api/comments?postId=...&parentId=...
 // Lấy danh sách bình luận (cấp 1 HOẶC replies) cho một bài viết (không cần đăng nhập)
-router.get("/", getComments as unknown as RequestHandler);
+router.get("/", getComments);
 
 // --- [ USER/ADMIN ACCESS - Cần Đăng nhập ] ---
 // POST /api/comments (Tạo bình luận mới hoặc trả lời/reply)
 // Cần authMiddleware để lấy userId
-router.post("/", authMiddleware, createComment as unknown as RequestHandler);
+router.post("/", authMiddleware, createComment);
 
 // PUT /api/comments/:commentId (Cập nhật bình luận)
 // Cần authMiddleware để lấy userId và adminMiddleware để gán userRole
-router.put(
-  "/:commentId",
-  authMiddleware,
-  adminMiddleware,
-  updateComment as unknown as RequestHandler
-);
+router.put("/:commentId", authMiddleware, adminMiddleware, updateComment);
 
 // DELETE /api/comments/:commentId (Xóa bình luận - Soft Delete)
 // Cần authMiddleware để lấy userId và adminMiddleware để gán userRole
-router.delete(
-  "/:commentId",
-  authMiddleware,
-  adminMiddleware,
-  deleteComment as unknown as RequestHandler
-);
+router.delete("/:commentId", authMiddleware, adminMiddleware, deleteComment);
 
 // --- [ ADMIN ONLY ACCESS ] ---
 // GET /api/comments/admin (Lấy tất cả comments, kể cả pending và đã xóa)
@@ -47,7 +37,7 @@ router.get(
   "/admin",
   authMiddleware,
   adminMiddleware,
-  getAllCommentsForAdmin as unknown as RequestHandler // <-- Route Admin đã được thêm
+  getAllCommentsForAdmin // <-- Route Admin đã được thêm
 );
 
 export default router;

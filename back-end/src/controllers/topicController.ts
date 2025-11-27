@@ -10,40 +10,47 @@ import { Types } from "mongoose";
 import { asyncHandler } from "../utils/asyncHandler"; // HOF
 import { TopicParams, CreateTopicBody, UpdateTopicBody } from "../types/topic";
 import { generateSlug } from "../utils/text";
+import { buildTopicFilter, GetTopicsQuery } from "../services/topicFilter";
+import { buildTopicAggregationPipeline } from "../services/topicPipeline";
+import { paginateAggregation } from "../utils/pagination";
 
 // --- [ PUBLIC/ADMIN: Lấy danh sách Topics (Gộp) ] ---
+// FIX N+1: Sử dụng Aggregation Pipeline và buildTopicFilter
 // Endpoint: GET /api/topics (Public) HOẶC GET /api/topics/admin (Admin)
 export const getTopicsList = asyncHandler(
   async (
     // Sử dụng Request gốc và AuthenticatedRequest để hàm này hoạt động trên cả hai route
-    req: Request | AuthenticatedRequest,
+    req:
+      | Request<{}, {}, {}, GetTopicsQuery>
+      | AuthenticatedRequest<{}, {}, {}, GetTopicsQuery>,
     res: Response
   ) => {
-    // 1. Xác định quyền hạn
+    // 1. Lấy tham số query và quyền hạn
+    const { page, limit } = req.query;
+    const userId = "userId" in req ? req.userId : undefined;
     const isAdmin = "userRole" in req ? req.userRole === "admin" : false;
 
-    const filter: any = {};
-    let selectFields = "name slug description"; // Mặc định cho Public
+    const authContext = { userId, isAdmin };
 
-    if (!isAdmin) {
-      // QUY TẮC PUBLIC: Chỉ lấy topics đã APPROVED
-      filter.status = "approved";
-    } else {
-      // QUY TẮC ADMIN: Lấy tất cả topics (không cần lọc status) và populate người tạo
-      selectFields += " createdBy status";
-    }
+    // 2. XÂY DỰNG BỘ LỌC (Ủy quyền cho Service Layer)
+    const filter = buildTopicFilter(req.query, authContext);
 
-    // 2. Thực hiện truy vấn
-    let query = Topic.find(filter).select(selectFields).sort({ createdAt: 1 });
+    // 3. TẠO AGGREGATION PIPELINE (FIX N+1)
+    let pipeline = buildTopicAggregationPipeline(filter, {
+      includeCreator: isAdmin, // Chỉ cần populate creator nếu là Admin
+      includeProjection: true,
+    });
 
-    // Populate createdBy chỉ khi có trong selectFields (Admin)
-    if (selectFields.includes("createdBy")) {
-      query = query.populate("createdBy", "username email");
-    }
+    // 4. GỌI HÀM AGGREGATION PHÂN TRANG (Tái sử dụng tiện ích Post)
+    const result = await paginateAggregation(Topic, pipeline, page, limit);
 
-    const topics = await query;
-
-    res.json(topics);
+    res.json({
+      topics: result.items,
+      currentPage: result.currentPage,
+      totalPages: result.totalPages,
+      totalItems: result.totalItems,
+      limit: result.limit,
+    });
   }
 );
 
@@ -51,17 +58,27 @@ export const getTopicsList = asyncHandler(
 // Endpoint: GET /api/topics/admin/:id
 export const getTopicById = asyncHandler(
   async (req: AuthenticatedRequest<TopicParams>, res: Response) => {
-    const { id } = req.params; // 1: Kiểm tra tính hợp lệ của ID
+    const { id } = req.params;
 
+    // 1: Kiểm tra tính hợp lệ của ID
     if (!Types.ObjectId.isValid(id)) {
       return res.status(400).json({ error: "Invalid Topic ID format." });
-    } // 2: Thực hiện tìm kiếm và Populate
+    }
 
-    const topic = await Topic.findById(id).populate(
-      "createdBy",
-      "username email"
-    ); // 3: Kiểm tra Topic có tồn tại không
+    // 2. TÌM TOPIC BẰNG AGGREGATION (FIX N+1)
+    const topicArray = await Topic.aggregate([
+      ...buildTopicAggregationPipeline(
+        { _id: new Types.ObjectId(id) },
+        {
+          includeCreator: true,
+          includeProjection: true,
+        }
+      ),
+    ]).exec();
 
+    const topic = topicArray[0];
+
+    // 3: Kiểm tra Topic có tồn tại không
     if (!topic) {
       return res.status(404).json({ error: "Topic not found." });
     }
@@ -76,14 +93,16 @@ export const createTopic = asyncHandler(
   async (req: AuthenticatedRequest<{}, {}, CreateTopicBody>, res: Response) => {
     // 1. Lấy dữ liệu từ body và adminId từ request (đã xác thực)
     const { name, description } = req.body;
-    const adminId = req.userId; // 2. Kiểm tra tính hợp lệ cơ bản
+    const adminId = req.userId;
 
+    // 2. Kiểm tra tính hợp lệ cơ bản
     if (!name) {
       return res.status(400).json({ error: "Topic name is required." });
     }
 
-    const trimmedName = name.trim(); // 3. Kiểm tra trùng lặp tên Topic (Dùng trimmedName)
+    const trimmedName = name.trim();
 
+    // 3. Kiểm tra trùng lặp tên Topic (Dùng trimmedName)
     const topicExists = await Topic.findOne({ name: trimmedName });
     if (topicExists) {
       return res

@@ -21,6 +21,7 @@ import {
   GetAllUsersQuery,
 } from "../types/user";
 import { paginate } from "../utils/pagination";
+import { buildUserFilter } from "../services/userFilter";
 
 // --- [ Lấy thông tin User hiện tại ] ---
 // Hàm này chạy sau authMiddleware, đảm bảo người dùng đã xác thực.
@@ -316,6 +317,81 @@ export const deleteUser = asyncHandler(
   }
 );
 
+// // --- [ PUBLIC/ADMIN: Lấy danh sách Users (Gộp tìm kiếm & lọc) ] ---
+// // Endpoint: GET /api/users/admin?status=...&role=... (Admin)
+// // Endpoint: GET /api/users?search=... (Public/Optional Auth)
+// export const getUsersList = asyncHandler(
+//   async (
+//     // Sử dụng AuthenticatedRequest để lấy userId/userRole nếu có (Optional Auth)
+//     // Cần đảm bảo rằng route Public sẽ không có authMiddleware bắt buộc.
+//     req:
+//       | AuthenticatedRequest<{}, {}, {}, GetAllUsersQuery>
+//       | Request<{}, {}, {}, GetAllUsersQuery>,
+//     res: Response
+//   ) => {
+//     // 1. Lấy tham số query và xác định quyền hạn
+//     const { page, limit, status, role, search } = req.query;
+//     const isPublic = !("userId" in req); // Nếu userId không tồn tại, thì đây là request Public
+
+//     // 2. Thiết lập bộ lọc (Business Logic)
+//     const filter: any = {};
+//     let selectFields = "name avatar role createdAt"; // Mặc định cho Public
+//     let searchFields: string[] = ["name"]; // Mặc định Public chỉ tìm kiếm theo Tên
+
+//     if (isPublic) {
+//       // QUY TẮC PUBLIC: Chỉ thấy tài khoản đang ACTIVE
+//       filter.status = "active";
+//     } else {
+//       // QUY TẮC ADMIN/AUTHENTICATED:
+//       selectFields = "-password"; // Admin được phép thấy tất cả trừ password
+//       searchFields = ["name", "email"]; // Admin được phép tìm kiếm theo Tên VÀ Email
+
+//       // Thêm lọc theo Status (Chỉ khi Admin cung cấp query param)
+//       if (status && (status === "active" || status === "banned")) {
+//         filter.status = status;
+//       }
+//       // Thêm lọc theo Role (Chỉ khi Admin cung cấp query param)
+//       if (role && (role === "user" || role === "admin")) {
+//         filter.role = role;
+//       }
+//     }
+
+//     // 3. Xử lý Tìm kiếm chung
+//     if (search) {
+//       const regex = new RegExp(search as string, "i"); // 'i' cho case-insensitive
+
+//       // Tạo điều kiện tìm kiếm $or
+//       const orConditions = searchFields.map((field) => ({
+//         [field]: { $regex: regex },
+//       }));
+
+//       // Chỉ áp dụng $or nếu có điều kiện khác, hoặc nếu đó là tìm kiếm duy nhất
+//       if (orConditions.length > 0) {
+//         filter.$or = orConditions;
+//       }
+//     }
+
+//     // 4. GỌI HÀM TIỆN ÍCH PHÂN TRANG (Loại bỏ logic tính toán lặp lại)
+//     const result = await paginate(
+//       User,
+//       filter,
+//       { createdAt: -1 }, // Sắp xếp
+//       page,
+//       limit,
+//       selectFields
+//     );
+
+//     // 5. Phản hồi kèm thông tin phân trang
+//     res.json({
+//       users: result.items,
+//       currentPage: result.currentPage,
+//       totalPages: result.totalPages,
+//       totalItems: result.totalItems,
+//       limit: result.limit,
+//     });
+//   }
+// );
+
 // --- [ PUBLIC/ADMIN: Lấy danh sách Users (Gộp tìm kiếm & lọc) ] ---
 // Endpoint: GET /api/users/admin?status=...&role=... (Admin)
 // Endpoint: GET /api/users?search=... (Public/Optional Auth)
@@ -329,48 +405,23 @@ export const getUsersList = asyncHandler(
     res: Response
   ) => {
     // 1. Lấy tham số query và xác định quyền hạn
-    const { page, limit, status, role, search } = req.query;
-    const isPublic = !("userId" in req); // Nếu userId không tồn tại, thì đây là request Public
+    const { page, limit } = req.query;
+    // Logic xác định quyền hạn đã được chuyển vào Service Layer
+    const authContext = {
+      userId: "userId" in req ? req.userId : undefined,
+      isAdmin: "userRole" in req ? req.userRole === "admin" : false,
+    };
 
-    // 2. Thiết lập bộ lọc (Business Logic)
-    const filter: any = {};
-    let selectFields = "name avatar role createdAt"; // Mặc định cho Public
-    let searchFields: string[] = ["name"]; // Mặc định Public chỉ tìm kiếm theo Tên
+    // 2. XÂY DỰNG BỘ LỌC (Ủy quyền cho Service Layer)
+    const filter = buildUserFilter(req.query, authContext); // <--- SỬ DỤNG BUILDER MỚI
 
-    if (isPublic) {
-      // QUY TẮC PUBLIC: Chỉ thấy tài khoản đang ACTIVE
-      filter.status = "active";
-    } else {
-      // QUY TẮC ADMIN/AUTHENTICATED:
-      selectFields = "-password"; // Admin được phép thấy tất cả trừ password
-      searchFields = ["name", "email"]; // Admin được phép tìm kiếm theo Tên VÀ Email
+    // 3. XÁC ĐỊNH FIELDS CẦN CHỌN
+    // Dựa trên bối cảnh: nếu là Admin (Authenticated) thì lấy đầy đủ, nếu không thì lấy public fields.
+    const selectFields = authContext.isAdmin
+      ? "-password"
+      : "name avatar role createdAt";
 
-      // Thêm lọc theo Status (Chỉ khi Admin cung cấp query param)
-      if (status && (status === "active" || status === "banned")) {
-        filter.status = status;
-      }
-      // Thêm lọc theo Role (Chỉ khi Admin cung cấp query param)
-      if (role && (role === "user" || role === "admin")) {
-        filter.role = role;
-      }
-    }
-
-    // 3. Xử lý Tìm kiếm chung
-    if (search) {
-      const regex = new RegExp(search as string, "i"); // 'i' cho case-insensitive
-
-      // Tạo điều kiện tìm kiếm $or
-      const orConditions = searchFields.map((field) => ({
-        [field]: { $regex: regex },
-      }));
-
-      // Chỉ áp dụng $or nếu có điều kiện khác, hoặc nếu đó là tìm kiếm duy nhất
-      if (orConditions.length > 0) {
-        filter.$or = orConditions;
-      }
-    }
-
-    // 4. GỌI HÀM TIỆN ÍCH PHÂN TRANG (Loại bỏ logic tính toán lặp lại)
+    // 4. GỌI HÀM TIỆN ÍCH PHÂN TRANG
     const result = await paginate(
       User,
       filter,

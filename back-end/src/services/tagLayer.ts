@@ -2,10 +2,14 @@ import { Types, Document } from "mongoose";
 import Tag, { ITag } from "../models/Tag";
 import { generateSlug } from "../utils/text";
 
+// --- HẰNG SỐ GIỚI HẠN (HARD RULE) ---
+const MAX_TAG_INPUT = 5;
+
 // Định nghĩa kiểu trả về của Service
 export interface ProcessedTagsResult {
   validTagIds: Types.ObjectId[]; // Tags đã approved (Master)
   pendingTagIds: Types.ObjectId[]; // Tags đang chờ duyệt/đề xuất (Pending/Rejected)
+  warning?: string; // Cảnh bảo vượt giới hạn thì lược bỏ
 }
 
 /**
@@ -23,13 +27,23 @@ export const processTags = async (
 ): Promise<ProcessedTagsResult> => {
   let validTagIds: Types.ObjectId[] = [];
   let pendingTagIds: Types.ObjectId[] = [];
+  let warning: string | undefined;
 
   if (!tags || tags.length === 0) {
     return { validTagIds, pendingTagIds };
   }
 
+  // --- 1. KIỂM TRA VÀ CẮT BỎ GIỚI HẠN (ENFORCEMENT) ---
+  const rawUniqueTags = Array.from(new Set(tags.map((t) => t.trim())));
+
+  if (rawUniqueTags.length > MAX_TAG_INPUT) {
+    warning = `Input tags were limited from ${rawUniqueTags.length} to the maximum of ${MAX_TAG_INPUT} tags.`;
+  }
+
+  // Chỉ xử lý số lượng tối đa cho phép
+  const uniqueTags = rawUniqueTags.slice(0, MAX_TAG_INPUT);
   const userObjectId = new Types.ObjectId(userId);
-  const uniqueTags = Array.from(new Set(tags.map((t) => t.trim())));
+  // const uniqueTags = Array.from(new Set(tags.map((t) => t.trim())));
 
   const tagIdsFromInput: string[] = [];
   const tagSlugsFromInput: string[] = [];
@@ -90,9 +104,24 @@ export const processTags = async (
         continue;
       }
 
+      // Luật ràng buộc hard rules (topic constraint)
       if (foundTag.status === "approved") {
-        validTagIds.push(tagObjectId);
+        // Luật Ràng buộc Topic: Tag hợp lệ nếu topicId == null (Free Tag) HOẶC topicId == Post.topicId
+        // Kiểm tra `foundTag.topicId` phải tồn tại (không null/undefined) trước khi gọi .equals()
+        const isTopicValid =
+          !foundTag.topicId || foundTag.topicId.equals(topicId);
+        // GIẢI THÍCH:
+        // 1. `!foundTag.topicId` trả về true nếu nó là null hoặc undefined (Tag Tự do -> Hợp lệ).
+        // 2. Nếu nó là ObjectId, logic chuyển sang `foundTag.topicId.equals(topicId)`.
+        if (isTopicValid) {
+          // Giai đoạn 1: Tag Approved VÀ Hợp lệ theo Topic -> Gắn ngay (validTagIds)
+          validTagIds.push(tagObjectId);
+        } else {
+          // Giai đoạn 1: Tag Approved nhưng Topic Mismatch -> pending_tags
+          pendingTagIds.push(tagObjectId);
+        }
       } else {
+        // Giai đoạn 1: Tag Pending/Rejected Global -> pending_tags
         pendingTagIds.push(tagObjectId);
       }
     } else if (!isObjectId && !existingSlugSet.has(itemSlug)) {
@@ -102,7 +131,7 @@ export const processTags = async (
         slug: itemSlug,
         createdBy: userObjectId,
         status: "pending",
-        topicId: topicId,
+        topicId: topicId, // Tag mới được gán Topic ID của Post này (để Admin dễ duyệt)
       } as any);
       existingSlugSet.add(itemSlug); // Khóa slug tạm thời cho bulk insert
     }
@@ -116,5 +145,5 @@ export const processTags = async (
     });
   }
 
-  return { validTagIds, pendingTagIds };
+  return { validTagIds, pendingTagIds, ...(warning && { warning }) };
 };

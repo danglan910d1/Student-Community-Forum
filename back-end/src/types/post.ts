@@ -1,4 +1,5 @@
 import { PostStatus } from "../models/Post";
+import { TagApprovalAction } from "../services/adminApprovePost";
 import { CommonQuery } from "../services/buildCommonFilter";
 
 // 1. Dùng cho Params (Lấy chi tiết, cập nhật, xóa)
@@ -14,17 +15,6 @@ export interface CreatePostBody {
   content: string;
 }
 
-// 3. Dùng cho GET /posts (Danh sách, lọc, phân trang)
-// export interface GetPostsQuery {
-//   topicId?: string;
-//   tagId?: string;
-//   page?: string;
-//   limit?: string;
-//   status?: PostStatus; // Chỉ Admin mới có thể lọc theo status khác 'approved'
-//   search?: string; // Tìm kiếm theo tiêu đề/nội dung
-//   myPosts?: string;
-// }
-
 export interface GetPostsQuery extends CommonQuery {
   topicId?: string; // Trường đặc thù
   tagId?: string; // Trường đặc thù
@@ -37,5 +27,27 @@ export interface UpdatePostBody {
   title?: string;
   content?: string;
   status?: PostStatus; // Dành cho Admin
-  is_sticky?: boolean; // Dành cho Admin
+  // is_sticky?: boolean; // Dành cho Admin
+}
+
+// Định nghĩa Body cho API toggle is_sticky (Mới)
+export interface ToggleStickyBody {
+  is_sticky: boolean; // Bắt buộc phải là boolean
+}
+
+// Định nghĩa hành động cụ thể cho từng Tag
+export interface PendingTagAction {
+  tagId: string; // ID của Tag đang pending
+  action: TagApprovalAction; // Hành động của Admin (ví dụ: "approve_and_mark_free")
+}
+
+/**
+ * Cấu trúc Body cho request duyệt bài của Admin (Giai đoạn 3).
+ */
+export interface AdminApprovePostBody {
+  // Mảng chứa các quyết định của Admin trên TỪNG Tag đang pending.
+  pendingTagActions: PendingTagAction[];
+
+  // Trạng thái cuối cùng của Bài viết sau khi duyệt Tag xong.
+  newPostStatus: "approved" | "rejected";
 }
