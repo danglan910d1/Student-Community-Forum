@@ -53,7 +53,7 @@ const postSchema = new Schema<IPost>(
       minlength: 5,
       maxlength: 100,
     },
-    slug: { type: String, required: true, unique: true, index: true }, // Dùng cho URL thân thiện
+    slug: { type: String, required: true, index: true }, // Dùng cho URL thân thiện
     content: { type: String, required: true, minlength: 10 },
     status: {
       type: String,
@@ -95,6 +95,10 @@ postSchema.pre<IPost & Document>("save", function (next) {
   }
   next();
 });
+
+// --- CẬP NHẬT INDEX ĐỂ CHỐNG DUP LEVEL DB---
+// Thêm Index kép để chống trùng lặp SLUG cho CÙNG một USER
+postSchema.index({ slug: 1, userId: 1 }, { unique: true });
 
 // Tạo Index cho các trường thường dùng để truy vấn/lọc
 postSchema.index({ topicId: 1, status: 1 });

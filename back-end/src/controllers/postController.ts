@@ -16,14 +16,25 @@ import {
   GetPostsQuery,
   UpdatePostBody,
   AdminApprovePostBody,
+  ToggleStickyBody,
 } from "../types/post";
 import { asyncHandler } from "../utils/asyncHandler";
-import { paginate } from "../utils/pagination";
+import { paginateAggregation } from "../utils/pagination";
 import { processTags } from "../services/tagLayer";
 import { generateSlug } from "../utils/text";
 import { buildPostFilter } from "../services/postFilter";
-import Tag from "../models/Tag";
 import { adminApprovePost } from "../services/adminApprovePost";
+import { buildPostAggregationPipeline } from "../services/postPipeline";
+import { addJobToQueue } from "../services/jobQueue";
+
+// --- [ JOB PRODUCER: Thêm Job vào Queue ] ---
+/**
+ * Thêm Job bất đồng bộ để cập nhật các count đơn giản (views, likes, comments).
+ * Đây là logic Producer, sẽ được chuyển đổi sang BullMQ trong Task 5.
+ */
+const addPostCountJob = (postId: string, update: any) => {
+  addJobToQueue("updatePostCounts", { postId, update });
+};
 
 // --- [ USER: Tạo Bài Viết Mới ] ---
 // Cần authMiddleware
@@ -96,22 +107,19 @@ export const getPosts = asyncHandler(
     // 2. XÂY DỰNG BỘ LỌC (Ủy quyền cho Service Layer)
     const filter = buildPostFilter(req.query, { userId, isAdmin });
 
-    // 3. GỌI HÀM TIỆN ÍCH PHÂN TRANG (Loại bỏ logic tính toán lặp lại)
-    const result = await paginate(
-      Post,
-      filter,
-      { is_sticky: -1, createdAt: -1 }, // Ưu tiên bài ghim, sau đó là bài mới nhất
-      page,
-      limit,
-      null,
-      [
-        // Populate fields
-        { path: "userId", select: "username avatarUrl" },
-        { path: "topic", select: "name slug" },
-        { path: "tags", select: "name" },
-      ]
-    );
+    // 2. TẠO AGGREGATION PIPELINE (Tái sử dụng logic $lookup)
+    let pipeline = buildPostAggregationPipeline(filter, {
+      includeUser: true,
+      includeTopic: true,
+      includeTags: true,
+      includeProjection: true,
+    });
 
+    // 2.1 Thêm Stage sắp xếp sau Stage $project
+    pipeline.push({ $sort: { is_sticky: -1, createdAt: -1 } });
+
+    // 3. GỌI HÀM AGGREGATION PHÂN TRANG
+    const result = await paginateAggregation(Post, pipeline, page, limit);
     // 4. Phản hồi kèm thông tin phân trang
     res.json({
       posts: result.items,
@@ -135,20 +143,29 @@ export const getPostById = asyncHandler(
     }
 
     // 1. Tìm Bài viết APPROVED VÀ Tăng views_count
-    const post = await Post.findOneAndUpdate(
-      { _id: id, status: "approved" },
-      { $inc: { views_count: 1 } }, // Tăng views_count lên 1 (atomic update)
-      { new: true } // Trả về tài liệu sau khi cập nhật
-    )
-      .populate("userId", "name avatar")
-      .populate("topicId", "name slug")
-      .populate("tags", "name");
+    // 1. TÌM BÀI VIẾT BẰNG AGGREGATION (FIX N+1)
+    const postArray = await Post.aggregate([
+      ...buildPostAggregationPipeline(
+        { _id: new Types.ObjectId(id), status: "approved" },
+        {
+          includeUser: true,
+          includeTopic: true,
+          includeTags: true,
+          includeProjection: true,
+        }
+      ),
+    ]).exec();
+
+    const post = postArray[0];
 
     if (!post) {
       return res.status(404).json({ error: "Post not found or not approved." });
     }
 
-    // 2. Phản hồi thành công
+    // 2. TÁCH THAO TÁC VIEWS COUNT (FIX Task 3 -> Gửi Job Queue)
+    addPostCountJob(id, { $inc: { views_count: 1 } }); // <-- GỌI HÀM JOB MỚI
+
+    // 3. Phản hồi thành công
     res.json(post);
   }
 );
@@ -165,10 +182,20 @@ export const getPostByIdForAdmin = asyncHandler(
     }
 
     // 2. Tìm Bài viết chỉ bằng ID (KHÔNG lọc theo status)
-    const post = await Post.findById(id)
-      .populate("userId", "name avatar")
-      .populate("topicId", "name slug")
-      .populate("tags", "name");
+    // 1. TÌM BÀI VIẾT BẰNG AGGREGATION (FIX N+1)
+    const postArray = await Post.aggregate([
+      ...buildPostAggregationPipeline(
+        { _id: new Types.ObjectId(id) },
+        {
+          includeUser: true,
+          includeTopic: true,
+          includeTags: true,
+          includeProjection: true,
+        }
+      ),
+    ]).exec();
+
+    const post = postArray[0];
 
     if (!post) {
       return res.status(404).json({ error: "Post not found." });
@@ -176,6 +203,51 @@ export const getPostByIdForAdmin = asyncHandler(
 
     // 3. Phản hồi thành công
     res.json(post);
+  }
+);
+
+// --- [ ADMIN: Toggle is_sticky (Atomic Update) ] ---
+// FIX 4: Tách logic ghim bài ra khỏi updatePost
+// Endpoint: PUT /api/posts/admin/sticky/:id
+export const togglePostStickyController = asyncHandler(
+  async (
+    req: AuthenticatedRequest<PostParams, {}, ToggleStickyBody>,
+    res: Response
+  ) => {
+    const postId = req.params.id;
+    const { is_sticky } = req.body; // Giá trị mới (true/false)
+
+    if (!Types.ObjectId.isValid(postId)) {
+      return res.status(400).json({ error: "Invalid Post ID format." });
+    }
+    if (typeof is_sticky !== "boolean") {
+      return res.status(400).json({ error: "is_sticky must be a boolean." });
+    }
+
+    // SỬ DỤNG ATOMIC UPDATE: Chỉ cập nhật trường này
+    const result = await Post.updateOne(
+      { _id: postId },
+      { $set: { is_sticky } }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ error: "Post not found." });
+    }
+
+    // Lấy lại bài viết đã cập nhật bằng Aggregation cho phản hồi
+    const updatedPostArray = await Post.aggregate([
+      ...buildPostAggregationPipeline(
+        { _id: new Types.ObjectId(postId) },
+        {
+          includeUser: true,
+          includeTopic: true,
+          includeTags: true,
+          includeProjection: true,
+        }
+      ),
+    ]).exec();
+
+    res.json(updatedPostArray[0]);
   }
 );
 
@@ -189,7 +261,7 @@ export const updatePost = asyncHandler(
   ) => {
     const postId = req.params.id;
     const userId = req.userId;
-    const { topicId, tags, title, content, status, is_sticky } = req.body;
+    const { topicId, tags, title, content, status } = req.body;
 
     if (!Types.ObjectId.isValid(postId)) {
       return res.status(400).json({ error: "Invalid Post ID format." });
@@ -268,8 +340,6 @@ export const updatePost = asyncHandler(
     // 4.1. ADMIN ACTIONS (Quyền lực tối cao)
     if (isAdmin) {
       if (status) updateFields.status = status;
-      if (is_sticky !== undefined) updateFields.is_sticky = is_sticky;
-
       if (status === "approved" || status === "rejected") {
         shouldSetStatusToPending = false; // Admin đã quyết định status thủ công
       }
@@ -277,10 +347,11 @@ export const updatePost = asyncHandler(
 
     // 4.2. USER (AUTHOR) ACTIONS
     if (isAuthor && !isAdmin) {
-      // User KHÔNG CÓ quyền thay đổi status hoặc is_sticky
-      if (status || is_sticky !== undefined) {
+      // User KHÔNG CÓ quyền thay đổi status hoặc is_sticky (is_sticky đã được loại bỏ)
+      if (status) {
+        // Chỉ cần check status
         return res.status(403).json({
-          error: "Users cannot directly change post status or stickiness.",
+          error: "Users cannot directly change post status.",
         });
       }
 
@@ -397,12 +468,19 @@ export const adminApprovePostController = asyncHandler(
       newPostStatus
     );
 
-    // Populate thêm các trường cần thiết cho phản hồi
-    const finalPost = await Post.findById(updatedPost._id)
-      .populate("userId", "name avatar")
-      .populate("topicId", "name slug")
-      .populate("tags", "name");
+    // FIX N+1: Sử dụng Aggregation cho phản hồi
+    const finalPostArray = await Post.aggregate([
+      ...buildPostAggregationPipeline(
+        { _id: updatedPost._id },
+        {
+          includeUser: true,
+          includeTopic: true,
+          includeTags: true,
+          includeProjection: true,
+        }
+      ),
+    ]).exec();
 
-    res.json(finalPost);
+    res.json(finalPostArray[0]);
   }
 );

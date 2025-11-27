@@ -27,7 +27,12 @@ export interface UpdatePostBody {
   title?: string;
   content?: string;
   status?: PostStatus; // Dành cho Admin
-  is_sticky?: boolean; // Dành cho Admin
+  // is_sticky?: boolean; // Dành cho Admin
+}
+
+// Định nghĩa Body cho API toggle is_sticky (Mới)
+export interface ToggleStickyBody {
+  is_sticky: boolean; // Bắt buộc phải là boolean
 }
 
 // Định nghĩa hành động cụ thể cho từng Tag
