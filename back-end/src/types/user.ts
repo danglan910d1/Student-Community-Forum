@@ -1,6 +1,7 @@
 // Định nghĩa Cốt lõi (Base Type): Tạo một Interface chứa các trường cơ bản, chung nhất, được sử dụng trong nhiều API khác nhau
 
 import { UserRole, UserStatus } from "../models/User";
+import { CommonQuery } from "../services/buildCommonFilter";
 
 // Interface chứa các trường dữ liệu người dùng cơ bản (Base)
 interface UserBaseData {
@@ -46,10 +47,6 @@ export interface UpdateUserStatusBody {
 }
 
 // Vừa search vừa lọc
-export interface GetAllUsersQuery {
-  page?: string;
-  limit?: string;
-  status?: UserStatus;
+export interface GetAllUsersQuery extends CommonQuery {
   role?: UserRole;
-  search?: string; // Tìm kiếm theo tên/email
 }

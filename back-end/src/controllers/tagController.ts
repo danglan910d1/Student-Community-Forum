@@ -8,10 +8,15 @@ import Tag, { ITag, TagStatus } from "../models/Tag"; // <-- SỬA: Import Model
 import { AuthenticatedRequest } from "../types/express";
 import { Types } from "mongoose";
 import { asyncHandler } from "../utils/asyncHandler";
-import { paginate } from "../utils/pagination";
+import { paginate, paginateAggregation } from "../utils/pagination";
 import { GetTagsQuery, TagParams, UpdateTagBody } from "../types/tag";
+import { buildTagFilter } from "../services/tagFilter";
+import { buildTagAggregationPipeline } from "../services/tagPipeline";
+import { generateSlug } from "../utils/text";
 
 // --- [ PUBLIC/ADMIN: Lấy danh sách Tags (Gộp) ] ---
+// Endpoint: GET /api/tags (Public) HOẶC GET /api/tags/admin (Admin)
+// FIX N+1: Sử dụng Aggregation Pipeline và buildTagFilter
 // Endpoint: GET /api/tags (Public) HOẶC GET /api/tags/admin (Admin)
 export const getTagsList = asyncHandler(
   async (
@@ -20,59 +25,26 @@ export const getTagsList = asyncHandler(
       | AuthenticatedRequest<{}, {}, {}, GetTagsQuery>,
     res: Response
   ) => {
-    // 1. Xác định quyền hạn
+    // 1. Lấy tham số query và quyền hạn
+    const { page, limit } = req.query;
+    const userId = "userId" in req ? req.userId : undefined;
     const isAdmin = "userRole" in req ? req.userRole === "admin" : false;
 
-    // SỬA LỖI: ÉP KIỂU req.query thành GetTagsQuery
+    const authContext = { userId, isAdmin };
     const query = req.query as GetTagsQuery;
-    const { topicId, page, limit, status } = query; // <-- LẤY THAM SỐ TỪ BIẾN ĐÃ ÉP KIỂU // 2. Thiết lập bộ lọc cơ bản
 
-    const filter: any = {};
-    let selectFields = "name topicId";
-    // Mặc định cho Public
-    let populateFields: { path: string; select: string }[] = [];
+    // 2. XÂY DỰNG BỘ LỌC (Ủy quyền cho Service Layer)
+    const filter = buildTagFilter(query, authContext);
 
-    if (!isAdmin) {
-      // QUY TẮC PUBLIC: Chỉ lấy tags đã APPROVED
-      filter.status = "approved";
-    } else {
-      // QUY TẮC ADMIN: Lấy tất cả statuses, và populate createdBy/topic
-      selectFields += " status createdBy";
-      populateFields = [
-        { path: "topicId", select: "name slug" },
-        { path: "createdBy", select: "name" },
-      ];
+    // 3. TẠO AGGREGATION PIPELINE (FIX N+1)
+    let pipeline = buildTagAggregationPipeline(filter, {
+      includeTopic: isAdmin, // Chỉ populate Topic nếu là Admin
+      includeCreator: isAdmin, // Chỉ populate Creator nếu là Admin
+      includeProjection: true,
+    });
 
-      // Admin có thể lọc theo status cụ thể
-      if (status) {
-        const validStatuses: TagStatus[] = ["pending", "approved", "rejected"];
-        if (validStatuses.includes(status)) {
-          filter.status = status;
-        } else {
-          return res.status(400).json({ error: "Invalid status value." });
-        }
-      }
-    }
-
-    // 3. Lọc theo Topic ID (Áp dụng cho cả Public và Admin)
-    if (
-      topicId &&
-      typeof topicId === "string" &&
-      Types.ObjectId.isValid(topicId)
-    ) {
-      filter.topicId = new Types.ObjectId(topicId);
-    }
-
-    // 4. GỌI HÀM TIỆN ÍCH PHÂN TRANG (Loại bỏ logic tính toán lặp lại)
-    const result = await paginate(
-      Tag,
-      filter,
-      { createdAt: -1 }, // Sắp xếp theo thời gian mới nhất
-      page, // Truyền trực tiếp query param
-      limit, // Truyền trực tiếp query param
-      selectFields,
-      populateFields
-    );
+    // 4. GỌI HÀM AGGREGATION PHÂN TRANG
+    const result = await paginateAggregation(Tag, pipeline, page, limit);
 
     // 5. Phản hồi
     res.json({
@@ -84,44 +56,6 @@ export const getTagsList = asyncHandler(
     });
   }
 );
-
-// --- [ USER: Gợi ý/Tạo Tag mới (Mặc định status: pending) ] ---
-// Endpoint: POST /api/tags
-// export const suggestTag = asyncHandler(
-//   async (req: AuthenticatedRequest<{}, {}, CreateTagBody>, res: Response) => {
-//     // 1. Lấy dữ liệu từ body và userId từ request (đã xác thực)
-//     const { name, topicId } = req.body;
-//     const userId = req.userId; // 2. Kiểm tra tính hợp lệ cơ bản của name
-
-//     if (!name) {
-//       return res.status(400).json({ error: "Tag name is required." });
-//     }
-
-//     const trimmedName = name.trim(); // 3. Kiểm tra trùng lặp tên Tag (Dùng tên đã làm sạch)
-
-//     const tagExists = await Tag.findOne({ name: trimmedName });
-//     if (tagExists) {
-//       return res
-//         .status(400)
-//         .json({ error: "Tag with this name already exists." });
-//     } // 4. Chuẩn bị dữ liệu cho Tag mới
-
-//     const tagData: Partial<ITag> = {
-//       name: trimmedName,
-//       createdBy: new Types.ObjectId(userId),
-//       status: "pending", // QUY TẮC: User tạo -> Mặc định chờ Admin duyệt
-//     }; // 5. Xử lý topicId (chỉ thêm nếu nó được cung cấp và hợp lệ)
-
-//     if (topicId && Types.ObjectId.isValid(topicId)) {
-//       // Tùy chọn: Thêm kiểm tra Topic status = approved nếu muốn nghiêm ngặt
-//       tagData.topicId = new Types.ObjectId(topicId);
-//     } // 6. Tạo Tag trong Database
-
-//     const newTag = await Tag.create(tagData); // 7. Phản hồi thành công
-
-//     res.status(201).json(newTag);
-//   }
-// );
 
 // --- [ ADMIN: Cập nhật Tag và Duyệt Status ] ---
 // Endpoint: PUT /api/tags/admin/:id
@@ -144,11 +78,14 @@ export const updateTag = asyncHandler(
         return res.status(400).json({ error: "Tag name cannot be empty." });
       }
       updateFields.name = trimmedName;
-    } // BỔ SUNG FIX LỖI: topicId cần là Types.ObjectId | null
+      // Update Slug nếu tên thay đổi (đảm bảo tính nhất quán)
+      updateFields.slug = generateSlug(trimmedName);
+    }
 
+    // topicId cần là Types.ObjectId | null
     if (topicId !== undefined) {
       if (topicId === null) {
-        updateFields.topicId = null; // <-- FIX: Gán null
+        updateFields.topicId = null;
       } else if (Types.ObjectId.isValid(topicId)) {
         updateFields.topicId = new Types.ObjectId(topicId);
       } else {
@@ -176,6 +113,7 @@ export const updateTag = asyncHandler(
 );
 
 // --- [ ADMIN: Lấy chi tiết Tag ] ---
+// FIX N+1: Sử dụng Aggregation
 // Endpoint: GET /api/tags/admin/:id
 export const getTagById = asyncHandler(
   async (req: AuthenticatedRequest<TagParams>, res: Response) => {
@@ -185,9 +123,19 @@ export const getTagById = asyncHandler(
       return res.status(400).json({ error: "Invalid Tag ID format." });
     }
 
-    const tag = await Tag.findById(id)
-      .populate("topicId", "name slug")
-      .populate("createdBy", "name username");
+    // 1. TÌM TAG BẰNG AGGREGATION (FIX N+1)
+    const tagArray = await Tag.aggregate([
+      ...buildTagAggregationPipeline(
+        { _id: new Types.ObjectId(id) },
+        {
+          includeTopic: true,
+          includeCreator: true,
+          includeProjection: true,
+        }
+      ),
+    ]).exec();
+
+    const tag = tagArray[0];
 
     if (!tag) {
       return res.status(404).json({ error: "Tag not found." });
@@ -211,8 +159,9 @@ export const deleteTag = asyncHandler(
 
     if (!deletedTag) {
       return res.status(404).json({ error: "Tag not found." });
-    } // LƯU Ý: Không cần xóa liên đới trong Posts vì Post chỉ giữ ID và Mongoose tự bỏ qua ID không tồn tại.
+    }
 
+    // LƯU Ý: Không cần xóa liên đới trong Posts vì Post chỉ giữ ID và Mongoose tự bỏ qua ID không tồn tại.
     res.json({ message: "Tag deleted successfully." });
   }
 );
