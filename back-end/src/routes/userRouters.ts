@@ -43,7 +43,13 @@ router.put(
 );
 
 // DELETE /api/users/me (XÓA TÀI KHOẢN CỦA CHÍNH MÌNH)
-router.delete("/me", generalRateLimiter, authMiddleware, deleteUser);
+router.delete(
+  "/me",
+  generalRateLimiter,
+  authMiddleware,
+  preventDuplicateRequest,
+  deleteUser
+);
 
 // PUBLIC
 // GET /api/users (Tìm kiếm users công khai theo tên)
@@ -89,6 +95,7 @@ router.delete(
   generalRateLimiter,
   authMiddleware,
   adminMiddleware,
+  preventDuplicateRequest,
   deleteUser
 );
 

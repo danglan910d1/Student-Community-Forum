@@ -5,19 +5,48 @@
  */
 import { Request, Response } from "express";
 import { Types } from "mongoose";
-import Comment, { IComment } from "../models/Comment"; // Import IComment
+import Comment, { IComment } from "../models/Comment";
 import Post from "../models/Post";
 import Like from "../models/Like";
 import { AuthenticatedRequest } from "../types/express";
-import { asyncHandler } from "../utils/asyncHandler"; // HOF
-import { paginate } from "../utils/pagination"; // Tiện ích phân trang
-import { DEFAULT_PAGE, DEFAULT_LIMIT } from "../config/constants"; // Hằng số
-// Import Interfaces từ file Types API
+import { asyncHandler } from "../utils/asyncHandler";
+import { paginate, paginateAggregation } from "../utils/pagination";
+import { buildCommentAggregationPipeline } from "../services/commentPipeline";
+import { buildCommentFilter } from "../services/commentFilter";
+import { addJobToQueue } from "../services/jobQueue"; // IMPORT JOB QUEUE
 import {
   CommentParams,
   CreateCommentBody,
   GetCommentsQuery,
 } from "../types/comment";
+
+// --- [ JOB PRODUCER: Thêm Job đếm Comments/Replies ] ---
+// Tên model được truyền vào là 'Post' hoặc 'Comment'
+const addCountJob = (
+  ModelType: "Post" | "Comment",
+  targetId: string,
+  increment: 1 | -1
+) => {
+  let jobName = "";
+  let update: any = {};
+  let targetModelName: "Post" | "Comment" = ModelType;
+
+  if (ModelType === "Post") {
+    jobName = "updatePostCommentCount";
+    update = { $inc: { comments_count: increment } };
+  } else if (ModelType === "Comment") {
+    jobName = "updateCommentReplyCount";
+    update = { $inc: { replies_count: increment } };
+  }
+
+  if (jobName) {
+    addJobToQueue(jobName, {
+      targetId: targetId,
+      targetModelName: targetModelName, // <-- TRUYỀN TÊN MODEL
+      update: update,
+    });
+  }
+};
 
 // --- [ USER: Tạo Bình Luận Mới ] ---
 export const createComment = asyncHandler(
@@ -28,8 +57,7 @@ export const createComment = asyncHandler(
     const { postId, parentId, content } = req.body;
     const userId = req.userId;
 
-    // BỔ SUNG: Làm sạch nội dung
-    const trimmedContent = content ? content.trim() : ""; // 1. Kiểm tra tính hợp lệ cơ bản
+    const trimmedContent = content ? content.trim() : "";
 
     if (!postId || !trimmedContent) {
       return res
@@ -38,9 +66,9 @@ export const createComment = asyncHandler(
     }
     if (!Types.ObjectId.isValid(postId)) {
       return res.status(400).json({ error: "Invalid Post ID format." });
-    } // 2. Xác minh Post tồn tại
+    }
 
-    const post = await Post.findById(postId); // LƯU Ý: Post có is_deleted nên cần kiểm tra ở đây để tránh lỗi like controller
+    const post = await Post.findById(postId);
     if (!post || post.status !== "approved" || post.is_deleted) {
       return res
         .status(404)
@@ -48,7 +76,7 @@ export const createComment = asyncHandler(
     }
 
     let parentComment: IComment | null = null;
-    let parentIdObj: Types.ObjectId | null = null; // 3. Xử lý Reply (Bình luận đa cấp)
+    let parentIdObj: Types.ObjectId | null = null;
 
     if (parentId) {
       if (!Types.ObjectId.isValid(parentId)) {
@@ -60,7 +88,7 @@ export const createComment = asyncHandler(
         return res
           .status(404)
           .json({ error: "Parent comment not found or has been deleted." });
-      } // Đảm bảo bình luận con phải cùng một bài viết
+      }
 
       if (parentComment.postId.toString() !== postId) {
         return res
@@ -68,7 +96,7 @@ export const createComment = asyncHandler(
           .json({ error: "Reply must belong to the same post as the parent." });
       }
       parentIdObj = parentComment._id as Types.ObjectId;
-    } // 4. Tạo bình luận
+    }
 
     const newComment = await Comment.create({
       userId: new Types.ObjectId(userId),
@@ -76,16 +104,18 @@ export const createComment = asyncHandler(
       parentId: parentIdObj,
       content: trimmedContent,
       status: "approved",
-    }); // 5. Cập nhật số lượng replies cho bình luận cha (nếu có)
+    });
 
     if (parentComment) {
-      await Comment.findByIdAndUpdate(parentComment._id, {
-        $inc: { replies_count: 1 },
-      });
-    } // 6. Chỉ tăng comments_count cho Post nếu là ROOT comment.
+      addCountJob(
+        "Comment",
+        (parentComment._id as Types.ObjectId).toString(),
+        1
+      );
+    }
 
     if (!parentId) {
-      await Post.findByIdAndUpdate(postId, { $inc: { comments_count: 1 } });
+      addCountJob("Post", postId, 1);
     }
 
     res.status(201).json(newComment);
@@ -93,40 +123,29 @@ export const createComment = asyncHandler(
 );
 
 // --- [ PUBLIC: Lấy danh sách Bình Luận ] ---
-// API này được thiết kế để lấy bình luận cấp 1 (parentId=null) HOẶC replies (parentId=ID)
+// FIX N+1 & Tách Filter
 export const getComments = asyncHandler(
   async (req: Request<{}, {}, {}, GetCommentsQuery>, res: Response) => {
-    const { postId, parentId, page, limit } = req.query;
+    const { page, limit } = req.query;
+    // Logic xác định quyền hạn đã được chuyển vào Service Layer
+    const authContext = { userId: undefined, isAdmin: false };
 
-    if (!postId || !Types.ObjectId.isValid(postId)) {
-      return res.status(400).json({ error: "Valid Post ID is required." });
-    } // 1. Thiết lập bộ lọc (Business Logic)
+    // 1. XÂY DỰNG BỘ LỌC (Sử dụng Service mới)
+    const filter = buildCommentFilter(req.query, authContext);
+    if (filter.error) {
+      return res.status(400).json({ error: filter.error });
+    }
 
-    const filter: any = {
-      postId: new Types.ObjectId(postId),
-      is_deleted: false,
-      status: "approved", // Chỉ lấy bình luận đã duyệt
-    }; // 2. Lọc theo cấp độ (parentId)
+    // 2. TẠO AGGREGATION PIPELINE (FIX N+1)
+    let pipeline = buildCommentAggregationPipeline(filter, {
+      includeUser: true,
+      includePost: false,
+      includeParent: false,
+      includeProjection: true,
+    });
 
-    if (parentId) {
-      if (!Types.ObjectId.isValid(parentId)) {
-        return res.status(400).json({ error: "Invalid Parent ID format." });
-      } // Lấy replies
-      filter.parentId = new Types.ObjectId(parentId);
-    } else {
-      // Lấy bình luận cấp 1 (root comments)
-      filter.parentId = null;
-    } // 3. GỌI HÀM TIỆN ÍCH PHÂN TRANG (Loại bỏ logic tính toán lặp lại)
-
-    const result = await paginate(
-      Comment,
-      filter,
-      { createdAt: -1 }, // Sắp xếp bình luận mới nhất
-      page,
-      limit,
-      null, // Select fields
-      [{ path: "userId", select: "name avatar" }] // Populate userId
-    ); // 4. Phản hồi
+    // 3. GỌI HÀM AGGREGATION PHÂN TRANG
+    const result = await paginateAggregation(Comment, pipeline, page, limit);
 
     res.json({
       comments: result.items,
@@ -152,12 +171,12 @@ export const updateComment = asyncHandler(
 
     if (!trimmedContent) {
       return res.status(400).json({ error: "Content is required for update." });
-    } // 1. Tìm bình luận
+    }
 
     const comment = await Comment.findById(commentId);
     if (!comment || comment.is_deleted) {
       return res.status(404).json({ error: "Comment not found." });
-    } // 2. KIỂM TRA QUYỀN HẠN
+    }
 
     const isAuthor = comment.userId.toString() === userId;
     const isAdmin = req.userRole === "admin";
@@ -166,10 +185,10 @@ export const updateComment = asyncHandler(
       return res.status(403).json({
         error: "Access denied. Only author or admin can update this comment.",
       });
-    } // 3. Thực hiện cập nhật
+    }
 
     comment.content = trimmedContent;
-    comment.status = "approved"; // Có thể thiết lập lại pending nếu cần kiểm duyệt lại
+    comment.status = "approved";
     await comment.save();
 
     res.json(comment);
@@ -180,12 +199,12 @@ export const updateComment = asyncHandler(
 export const deleteComment = asyncHandler(
   async (req: AuthenticatedRequest<CommentParams>, res: Response) => {
     const commentId = req.params.commentId;
-    const userId = req.userId; // 1. Tìm bình luận
+    const userId = req.userId;
 
     const comment = await Comment.findById(commentId);
     if (!comment || comment.is_deleted) {
       return res.status(404).json({ error: "Comment not found." });
-    } // 2. KIỂM TRA QUYỀN HẠN
+    }
 
     const isAuthor = comment.userId.toString() === userId;
     const isAdmin = req.userRole === "admin";
@@ -194,22 +213,18 @@ export const deleteComment = asyncHandler(
       return res.status(403).json({
         error: "Access denied. Only author or admin can delete this comment.",
       });
-    } // 3. Thực hiện Soft Delete
+    }
 
     comment.is_deleted = true;
-    comment.content = "[Bình luận này đã bị xóa.]"; // Thay thế nội dung
-    await comment.save(); // 4. Giảm replies_count của bình luận cha nếu đây là reply
+    comment.content = "[Bình luận này đã bị xóa.]";
+    await comment.save();
 
     if (comment.parentId) {
-      await Comment.findByIdAndUpdate(comment.parentId, {
-        $inc: { replies_count: -1 },
-      });
-    } // 5. Giảm comments_count của Post nếu đây là bình luận cấp 1 (ROOT comment).
+      addCountJob("Comment", comment.parentId.toString(), -1);
+    }
 
     if (!comment.parentId) {
-      await Post.findByIdAndUpdate(comment.postId, {
-        $inc: { comments_count: -1 },
-      });
+      addCountJob("Post", comment.postId.toString(), -1);
     }
 
     res.json({ message: "Comment deleted successfully." });
@@ -217,38 +232,35 @@ export const deleteComment = asyncHandler(
 );
 
 // --- [ ADMIN: Lấy tất cả Comments (kể cả pending/deleted) ] ---
+// FIX N+1 & Tách Filter
 export const getAllCommentsForAdmin = asyncHandler(
   async (
     req: AuthenticatedRequest<{}, {}, {}, GetCommentsQuery>,
     res: Response
   ) => {
-    const { postId, page, limit } = req.query;
+    const { page, limit } = req.query;
+    // Logic xác định quyền hạn
+    const authContext = {
+      userId: req.userId,
+      isAdmin: req.userRole === "admin",
+    };
 
-    const filter: any = {};
-    let populateFields: { path: string; select: string }[] = []; // Lọc theo Post ID (nếu cần)
-
-    if (postId && Types.ObjectId.isValid(postId)) {
-      filter.postId = new Types.ObjectId(postId);
+    // 1. XÂY DỰNG BỘ LỌC (isAdmin: true)
+    const filter = buildCommentFilter(req.query, authContext);
+    if (filter.error) {
+      return res.status(400).json({ error: filter.error });
     }
 
-    // Admin có thể xem tất cả trạng thái, bao gồm cả is_deleted: true, nên không cần lọc is_deleted: false
+    // 2. TẠO AGGREGATION PIPELINE (FIX N+1)
+    let pipeline = buildCommentAggregationPipeline(filter, {
+      includeUser: true,
+      includePost: true,
+      includeParent: true,
+      includeProjection: true,
+    });
 
-    // Tạo populate fields
-    populateFields = [
-      { path: "userId", select: "name avatar" },
-      { path: "postId", select: "title" },
-      { path: "parentId", select: "content" },
-    ]; // GỌI HÀM TIỆN ÍCH PHÂN TRANG
-
-    const result = await paginate(
-      Comment,
-      filter,
-      { createdAt: -1 }, // Sắp xếp bình luận mới nhất
-      page,
-      limit,
-      null,
-      populateFields
-    ); // 4. Phản hồi
+    // 3. GỌI HÀM AGGREGATION PHÂN TRANG
+    const result = await paginateAggregation(Comment, pipeline, page, limit);
 
     res.json({
       comments: result.items,

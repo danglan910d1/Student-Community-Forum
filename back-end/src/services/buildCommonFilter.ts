@@ -75,13 +75,14 @@ export interface AuthContext {
 export const buildCommonFilter = (
   queryParams: CommonQuery,
   authContext: AuthContext,
-  modelType: "post" | "topic" | "tag" | "user"
+  modelType: "post" | "topic" | "tag" | "user" | "comment"
 ) => {
   const { status, search, myPosts } = queryParams;
   const { userId, isAdmin } = authContext;
 
-  const filter: any = { is_deleted: false }; // --- 1. LOGIC TRUY CẬP STATUS & USER ID ---
+  const filter: any = { is_deleted: false };
 
+  // --- 1. LOGIC TRUY CẬP STATUS & USER ID ---
   const isViewingOwnContent = myPosts === "true" && userId;
   // Thêm vào đầu buildCommonFilter
   console.log("AuthContext:", authContext);
@@ -92,7 +93,10 @@ export const buildCommonFilter = (
     // TRƯỜNG HỢP 1: XEM BÀI CỦA CHÍNH MÌNH (ADMIN HOẶC USER)
     if (modelType !== "user") {
       // Chỉ áp dụng lọc theo người tạo nếu model không phải là chính User Model
-      const creatorField = modelType === "post" ? "userId" : "createdBy";
+      const creatorField =
+        modelType === "post" || modelType === "comment"
+          ? "userId"
+          : "createdBy";
       filter[creatorField] = new Types.ObjectId(userId);
     } else {
       // Nếu modelType là user, thì chỉ lọc chính user đó
