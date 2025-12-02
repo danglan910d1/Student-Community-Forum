@@ -27,51 +27,7 @@ export interface AuthContext {
  * @param modelType - Loại Model đang được lọc (để biết cách xử lý status, ví dụ: 'post' hoặc 'topic')
  * @returns Object filter MongoDB
  */
-// export const buildCommonFilter = (
-//   queryParams: CommonQuery,
-//   authContext: AuthContext,
-//   modelType: "post" | "topic" | "tag" // Cần biết loại model
-// ) => {
-//   const { status, search, myPosts } = queryParams;
-//   const { userId, isAdmin } = authContext;
 
-//   const filter: any = { is_deleted: false }; // Giả định tất cả đều có is_deleted
-
-//   // --- 1. LOGIC TRUY CẬP STATUS & USER ID ---
-
-//   const isViewingOwnContent = myPosts === "true" && userId;
-
-//   if (isViewingOwnContent) {
-//     // NOTE: Giả định trường người tạo là 'createdBy' cho Topic/Tag và 'userId' cho Post (Logic sẽ phức tạp nếu tên trường khác nhau)
-//     filter[modelType === "post" ? "userId" : "createdBy"] = new Types.ObjectId(
-//       userId
-//     );
-
-//     // Cho phép xem tất cả trạng thái của nội dung mình tạo ra (pending, approved, rejected)
-//     filter.status = { $in: ["pending", "approved", "rejected"] };
-//   } else if (isAdmin) {
-//     // ADMIN: Lọc tất cả nội dung trên hệ thống theo Status bất kỳ
-//     // Nếu không truyền status, Admin được xem tất cả status, không cần thêm filter.status
-//     if (status) {
-//       const validStatuses: GlobalStatus[] = ["pending", "approved", "rejected"];
-//       if (validStatuses.includes(status as GlobalStatus)) {
-//         filter.status = status;
-//       } else {
-//         throw new Error("Invalid status value.");
-//       }
-//     }
-//   } else {
-//     // PUBLIC: Mặc định chỉ thấy nội dung đã "approved"
-//     filter.status = "approved";
-//   }
-
-//   // --- 2. TÌM KIẾM TỪ KHÓA (CHUNG CHO TẤT CẢ MODEL) ---
-//   if (search) {
-//     filter.$text = { $search: search as string };
-//   }
-
-//   return filter;
-// };
 export const buildCommonFilter = (
   queryParams: CommonQuery,
   authContext: AuthContext,
@@ -83,45 +39,56 @@ export const buildCommonFilter = (
   const filter: any = { is_deleted: false };
 
   // --- 1. LOGIC TRUY CẬP STATUS & USER ID ---
+
   const isViewingOwnContent = myPosts === "true" && userId;
-  // Thêm vào đầu buildCommonFilter
-  console.log("AuthContext:", authContext);
-  console.log("myPosts query:", myPosts);
-  console.log("isViewingOwnContent:", myPosts === "true" && userId);
 
   if (isViewingOwnContent) {
-    // TRƯỜNG HỢP 1: XEM BÀI CỦA CHÍNH MÌNH (ADMIN HOẶC USER)
-    if (modelType !== "user") {
-      // Chỉ áp dụng lọc theo người tạo nếu model không phải là chính User Model
+    // TRƯỜNG HỢP 1: XEM NỘI DUNG CỦA CHÍNH MÌNH (Lọc theo ID)
+
+    // 1a. Lọc theo ID người tạo/người dùng
+    if (modelType === "user") {
+      // Nếu là User Model, chỉ lọc chính user đó
+      filter._id = new Types.ObjectId(userId);
+    } else {
+      // Áp dụng lọc theo người tạo cho các model nội dung khác
       const creatorField =
         modelType === "post" || modelType === "comment"
-          ? "userId"
-          : "createdBy";
+          ? "userId" // Dùng userId cho Post/Comment
+          : "createdBy"; // Dùng createdBy cho Topic/Tag
       filter[creatorField] = new Types.ObjectId(userId);
-    } else {
-      // Nếu modelType là user, thì chỉ lọc chính user đó
-      filter._id = new Types.ObjectId(userId);
     }
-    // Cho phép xem TẤT CẢ trạng thái (pending, approved, rejected)
-    filter.status = { $in: ["pending", "approved", "rejected"] };
-  } else if (isAdmin) {
-    // TRƯỜNG HỢP 2: ADMIN XEM BÀI CỦA NGƯỜI KHÁC HOẶC TẤT CẢ HỆ THỐNG
-    // Nếu Admin không truyền status, Admin xem TẤT CẢ status (không cần thêm filter.status)
-    if (status) {
-      // Nếu có status, Admin lọc theo status đó
-      const validStatuses: GlobalStatus[] = ["pending", "approved", "rejected"];
-      if (validStatuses.includes(status as GlobalStatus)) {
-        filter.status = status;
-      } else {
-        throw new Error("Invalid status value.");
-      }
-    }
-  } else {
-    // TRƯỜNG HỢP 3: PUBLIC / USER XEM BÀI CÔNG KHAI
-    // Chỉ thấy nội dung đã "approved"
-    filter.status = "approved";
-  } // --- 2. TÌM KIẾM TỪ KHÓA ---
 
+    // 1b. Logic Status (chỉ áp dụng cho các model có status GlobalStatus)
+    if (modelType !== "user") {
+      // Cho phép xem TẤT CẢ trạng thái (pending, approved, rejected)
+      filter.status = { $in: ["pending", "approved", "rejected"] };
+    }
+  } else if (modelType !== "user") {
+    // TRƯỜNG HỢP 2 & 3: Lọc Status cho model nội dung khác (không phải của mình)
+
+    if (isAdmin) {
+      // TRƯỜNG HỢP 2: ADMIN XEM BÀI CỦA NGƯỜI KHÁC HOẶC TẤT CẢ HỆ THỐNG
+      if (status) {
+        const validStatuses: GlobalStatus[] = [
+          "pending",
+          "approved",
+          "rejected",
+        ];
+        if (validStatuses.includes(status as GlobalStatus)) {
+          filter.status = status;
+        } else {
+          throw new Error("Invalid status value.");
+        }
+      }
+    } else {
+      // TRƯỜNG HỢP 3: PUBLIC / USER XEM BÀI CÔNG KHAI
+      // Chỉ thấy nội dung đã "approved"
+      filter.status = "approved";
+    }
+  }
+  // Logic Status bị bỏ qua hoàn toàn nếu modelType === "user" và myPosts !== "true".
+
+  // --- 2. TÌM KIẾM TỪ KHÓA ---
   if (search) {
     filter.$text = { $search: search as string };
   }

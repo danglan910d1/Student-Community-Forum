@@ -1,48 +1,54 @@
-import { Types } from "mongoose";
+import { UserRole, UserStatus } from "../models/User";
 import { GetAllUsersQuery } from "../types/user";
-import {
-  AuthContext,
-  GlobalStatus,
-  CommonQuery,
-  buildCommonFilter,
-} from "./buildCommonFilter"; // Giả định import từ buildCommonFilter
+import { AuthContext, buildCommonFilter } from "./buildCommonFilter";
 
 /**
- * Xây dựng đối tượng filter MongoDB cho User dựa trên quyền hạn và query params.
- * Logic này được tách ra từ getUsersList để tăng tính tái sử dụng và tách biệt trách nhiệm (SoC).
+ * Xây dựng đối tượng filter MongoDB đặc thù cho User.
+ * Logic này xử lý STATUS và ROLE khác biệt so với Post/Topic.
  */
 export const buildUserFilter = (
   queryParams: GetAllUsersQuery,
   authContext: AuthContext
 ): any => {
-  // SỬA LỖI: Lấy TẤT CẢ các tham số cần thiết từ queryParams
-  const { status, role, search, page, limit, myPosts } = queryParams;
-  const { isAdmin, userId } = authContext;
+  const { status, role, search } = queryParams;
+  const { isAdmin } = authContext;
 
-  // 1. TẠO OBJECT CHUNG (CommonQuery) BẰNG CÁCH SỬ DỤNG CONDITIONAL SPREAD
-  const commonQuery: CommonQuery = {
-    // Chỉ thêm các trường nếu chúng không phải undefined
-    ...(status && { status: status as GlobalStatus }), // Ép kiểu status sang GlobalStatus
-    ...(search && { search }),
-    // Giả định GetAllUsersQuery không có myPosts, nhưng vẫn thêm để nhất quán nếu cần
-    // ...(myPosts && { myPosts }),
-    ...(page && { page }),
-    ...(limit && { limit }),
-  };
+  // 1. Khởi tạo bộ lọc cơ bản: Bắt đầu bằng bộ lọc RỖNG.
+  const filter: any = {};
 
-  // 2. Lấy bộ lọc chung (Status, Search) từ buildCommonFilter
-  // LƯU Ý: buildCommonFilter hiện tại không hỗ trợ lọc Role,
-  // nên ta chỉ dùng nó cho Status và Search.
-  const filter = buildCommonFilter(commonQuery, authContext, "user");
+  // 2. LOGIC XÓA MỀM (is_deleted) và QUYỀN HẠN TRUY CẬP
+  if (isAdmin) {
+    // ADMIN: Mặc định không áp dụng is_deleted filter (thấy TẤT CẢ user).
+    // Nếu Admin muốn lọc user chưa xóa, họ sẽ phải thêm query param (chức năng nâng cao).
+
+    // XỬ LÝ LỌC TRẠNG THÁI (STATUS)
+    const validStatuses: UserStatus[] = ["active", "banned"];
+    if (status && validStatuses.includes(status as UserStatus)) {
+      filter.status = status;
+    }
+    // Admin có thể thấy user bị xóa mềm hoặc chưa xóa.
+  } else {
+    // PUBLIC/USER THƯỜNG: BẮT BUỘC chỉ thấy user CHƯA bị xóa (Soft Delete)
+    filter.is_deleted = false;
+    // BẮT BUỘC chỉ thấy trạng thái "active"
+    filter.status = "active";
+  }
 
   // 3. XỬ LÝ LỌC ĐẶC THÙ (ROLE)
-  if (role && (role === "user" || role === "admin")) {
-    // Áp dụng role filter sau khi có filter chung
+  const validRoles: UserRole[] = ["user", "admin"];
+  // Lọc theo Role chỉ có ý nghĩa khi Admin muốn lọc.
+  if (role && validRoles.includes(role as UserRole) && isAdmin) {
     filter.role = role;
   }
 
-  // GHI CHÚ: Logic Public/Admin đã được xử lý trong buildCommonFilter
-  // (ví dụ: Public luôn có filter.status = "active").
+  // 4. XỬ LÝ TÌM KIẾM TỪ KHÓA (CHUNG)
+  if (search) {
+    // TÁI SỬ DỤNG: Lấy logic $text search từ buildCommonFilter
+    const searchFilter = buildCommonFilter({ search }, authContext, "user");
+    if (searchFilter.$text) {
+      filter.$text = searchFilter.$text;
+    }
+  }
 
   return filter;
 };

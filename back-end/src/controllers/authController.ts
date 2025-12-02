@@ -1,12 +1,13 @@
 // src/controllers/authController.ts
 import { Request, Response } from "express";
-import User from "../models/User";
+import User, { IUser } from "../models/User";
 import bcrypt from "bcrypt";
 import { generateToken } from "../utils/jwt";
 import { asyncHandler } from "../utils/asyncHandler";
 import { BCRYPT_SALT_ROUNDS, MIN_PASSWORD_LENGTH } from "../config/constants";
-import { LoginBody, RegisterBody } from "../types/user";
+import { LoginBody, RegisterBody, UserResponseData } from "../types/user";
 import { Types } from "mongoose";
+import { cacheUser } from "../services/redis";
 
 // Đăng ký tài khoản
 export const register = asyncHandler(
@@ -20,11 +21,9 @@ export const register = asyncHandler(
 
     // KIỂM TRA MẬT KHẨU: Đảm bảo mật khẩu đủ dài
     if (password.length < MIN_PASSWORD_LENGTH) {
-      return res
-        .status(400)
-        .json({
-          error: `Password must be at least ${MIN_PASSWORD_LENGTH} characters long.`,
-        });
+      return res.status(400).json({
+        error: `Password must be at least ${MIN_PASSWORD_LENGTH} characters long.`,
+      });
     }
 
     // XỬ LÝ DỮ LIỆU ĐỊNH DANH (BẮT BUỘC)
@@ -42,26 +41,38 @@ export const register = asyncHandler(
     const hashedPassword = await bcrypt.hash(password, salt);
 
     // 4. Tạo User mới
-    const newUser = await User.create({
+    const newUser = (await User.create({
       name: processedName,
       email: processedEmail,
       password: hashedPassword,
       // Whitelist các trường khác nếu có (ví dụ: avatar)
       // Chỉ thêm avatar nếu Client gửi và nó không rỗng
       ...(avatar && avatar.trim() ? { avatar: avatar.trim() } : {}), // Mongoose sẽ tự động gán role: "user", status: "active", timestamps.
+    })) as IUser; // Ép kiểu thành IUser để đảm bảo TS nhận ra method
+
+    // 1. Tạo token
+    const token = generateToken(
+      (newUser.id as Types.ObjectId).toString(),
+      newUser.role
+    );
+
+    // 2. Lấy đối tượng đã được TRANSFORM với kiểu dữ liệu đã định nghĩa rõ
+    const userResponse: UserResponseData = newUser.getUserResponseData();
+
+    // 3. Lưu User Profile vào Redis Cache
+    await cacheUser(userResponse.userId, {
+      id: userResponse.userId,
+      role: userResponse.role,
+      name: userResponse.name,
     });
 
-    // 5. Trả về thông tin và token
     res.status(201).json({
-      userID: newUser._id, // Trả về ID dưới dạng userId
-      name: newUser.name,
-      email: newUser.email,
-      role: newUser.role,
-      avatar: newUser.avatar,
-      token: generateToken(
-        (newUser.id as Types.ObjectId).toString(),
-        newUser.role
-      ),
+      userId: userResponse.userId,
+      name: userResponse.name,
+      email: userResponse.email,
+      role: userResponse.role,
+      avatar: userResponse.avatar,
+      token: token,
     });
   }
 );
@@ -102,16 +113,27 @@ export const login = asyncHandler(
           .json({ error: "Account is banned. Please contact administrator." });
       }
 
-      // 4. Trả về token và thông tin user
+      // 🔑 Lấy đối tượng phản hồi đã được transform
+      const userResponse: UserResponseData = user.getUserResponseData();
+
+      // 3. Tạo token
+      const token = generateToken(userResponse.userId, userResponse.role);
+
+      // 4. Lưu User Profile vào Redis Cache (Dành cho đăng nhập thành công)
+      await cacheUser(userResponse.userId, {
+        id: userResponse.userId,
+        role: userResponse.role,
+        name: userResponse.name,
+      });
+
+      // 5. Trả về token và thông tin user
       res.json({
-        userId: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        token: generateToken(
-          (user._id as Types.ObjectId).toString(),
-          user.role
-        ),
+        userId: userResponse.userId,
+        name: userResponse.name,
+        email: userResponse.email,
+        role: userResponse.role,
+        avatar: userResponse.avatar,
+        token: token,
       });
     } else {
       res.status(401).json({ error: "Invalid credentials." });

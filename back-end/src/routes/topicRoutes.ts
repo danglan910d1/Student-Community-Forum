@@ -7,21 +7,21 @@ import {
 } from "../controllers/topicController";
 import { authMiddleware } from "../middleware/auth";
 import { adminMiddleware } from "../middleware/admin";
-import { generalRateLimiter } from "../config/rateLimit";
+import { generalLimiter, sensitiveLimiter } from "../middleware/reatelimit";
 import { preventDuplicateRequest } from "../middleware/idempotency";
 
 const router = Router();
 
 // --- [ PUBLIC ] ---
 // GET /api/topics (Lấy tất cả topics đã được duyệt)
-router.get("/", generalRateLimiter, getTopicsList); // Gọi hàm gộp chung
+router.get("/", generalLimiter, getTopicsList); // Gọi hàm gộp chung
 
 // --- [ ADMIN ONLY ] ---
 // Tất cả các route admin đều cần authMiddleware và adminMiddleware
 // POST /api/topics/admin (Tạo topic mới)
 router.post(
   "/admin",
-  generalRateLimiter,
+  sensitiveLimiter,
   authMiddleware,
   adminMiddleware,
   preventDuplicateRequest,
@@ -31,7 +31,7 @@ router.post(
 // GET /api/topics/admin (Lấy tất cả topics, bao gồm cả pending/rejected) <-- Dùng lại hàm gộp
 router.get(
   "/admin",
-  generalRateLimiter,
+  generalLimiter,
   authMiddleware,
   adminMiddleware,
   getTopicsList
@@ -41,7 +41,7 @@ router.get(
 router.get(
   "/admin/:id",
   authMiddleware,
-  generalRateLimiter,
+  generalLimiter,
   adminMiddleware,
   getTopicById
 );
@@ -50,7 +50,7 @@ router.get(
 router.put(
   "/admin/:id",
   authMiddleware,
-  generalRateLimiter,
+  sensitiveLimiter,
   adminMiddleware,
   preventDuplicateRequest,
   updateTopic

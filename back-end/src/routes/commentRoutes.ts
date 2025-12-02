@@ -8,7 +8,7 @@ import {
 } from "../controllers/commentController";
 import { authMiddleware } from "../middleware/auth";
 import { adminMiddleware } from "../middleware/admin";
-import { generalRateLimiter } from "../config/rateLimit";
+import { generalLimiter, sensitiveLimiter } from "../middleware/reatelimit";
 import { preventDuplicateRequest } from "../middleware/idempotency";
 
 const router = Router();
@@ -18,14 +18,14 @@ const router = Router();
 // --- [ PUBLIC ] ---
 // GET /api/comments?postId=...&parentId=...
 // Lấy danh sách bình luận (cấp 1 HOẶC replies) cho một bài viết (không cần đăng nhập)
-router.get("/", generalRateLimiter, getComments);
+router.get("/", generalLimiter, getComments);
 
 // --- [ USER/ADMIN ACCESS - Cần Đăng nhập ] ---
 // POST /api/comments (Tạo bình luận mới hoặc trả lời/reply)
 // Cần authMiddleware để lấy userId
 router.post(
   "/",
-  generalRateLimiter,
+  sensitiveLimiter,
   authMiddleware,
   preventDuplicateRequest,
   createComment
@@ -35,7 +35,7 @@ router.post(
 // Cần authMiddleware để lấy userId và adminMiddleware để gán userRole
 router.put(
   "/:commentId",
-  generalRateLimiter,
+  sensitiveLimiter,
   authMiddleware,
   adminMiddleware,
   preventDuplicateRequest,
@@ -46,7 +46,7 @@ router.put(
 // Cần authMiddleware để lấy userId và adminMiddleware để gán userRole
 router.delete(
   "/:commentId",
-  generalRateLimiter,
+  sensitiveLimiter,
   authMiddleware,
   adminMiddleware,
   preventDuplicateRequest,
@@ -57,7 +57,7 @@ router.delete(
 // GET /api/comments/admin (Lấy tất cả comments, kể cả pending và đã xóa)
 router.get(
   "/admin",
-  generalRateLimiter,
+  generalLimiter,
   authMiddleware,
   adminMiddleware,
   getAllCommentsForAdmin // <-- Route Admin đã được thêm

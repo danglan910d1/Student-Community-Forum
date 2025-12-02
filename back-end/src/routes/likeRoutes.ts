@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { toggleLike, getLikeStatus } from "../controllers/likeController";
 import { authMiddleware } from "../middleware/auth";
-import { generalRateLimiter } from "../config/rateLimit";
+import { generalLimiter, sensitiveLimiter } from "../middleware/reatelimit";
 import { preventDuplicateRequest } from "../middleware/idempotency";
 
 const router = Router();
@@ -15,7 +15,7 @@ const router = Router();
 // Cần authMiddleware để lấy userId
 router.post(
   "/:targetType/:targetId",
-  generalRateLimiter,
+  sensitiveLimiter,
   authMiddleware,
   preventDuplicateRequest,
   toggleLike
@@ -23,6 +23,6 @@ router.post(
 
 // GET /api/likes?targetType=...&targetId=...
 // Lấy trạng thái Like của người dùng hiện tại (Optional Auth) và tổng số Like
-router.get("/", generalRateLimiter, getLikeStatus);
+router.get("/", generalLimiter, getLikeStatus);
 
 export default router;

@@ -8,7 +8,7 @@ import Tag, { ITag, TagStatus } from "../models/Tag"; // <-- SỬA: Import Model
 import { AuthenticatedRequest } from "../types/express";
 import { Types } from "mongoose";
 import { asyncHandler } from "../utils/asyncHandler";
-import { paginate, paginateAggregation } from "../utils/pagination";
+import { paginateAggregation } from "../utils/pagination";
 import { GetTagsQuery, TagParams, UpdateTagBody } from "../types/tag";
 import { buildTagFilter } from "../services/tagFilter";
 import { buildTagAggregationPipeline } from "../services/tagPipeline";

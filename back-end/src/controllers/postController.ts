@@ -25,17 +25,11 @@ import { generateSlug } from "../utils/text";
 import { buildPostFilter } from "../services/postFilter";
 import { adminApprovePost } from "../services/adminApprovePost";
 import { buildPostAggregationPipeline } from "../services/postPipeline";
-import { addJobToQueue } from "../services/jobQueue";
+// import { addJobToQueue } from "../services/jobQueue"; // LOẠI BỎ JOB QUEUE MOCK
+import { getCache, setCache, incrementPostView } from "../services/redis"; // Dùng service Redis mới
 
-// --- [ JOB PRODUCER: Thêm Job vào Queue ] ---
-/**
- * Thêm Job bất đồng bộ để cập nhật các count đơn giản (views, likes, comments).
- * Đây là logic Producer, sẽ được chuyển đổi sang BullMQ trong Task 5.
- */
-const addPostCountJob = (postId: string, update: any) => {
-  addJobToQueue("updatePostCounts", { postId, update });
-};
-
+// --- [ JOB PRODUCER: Loại bỏ Job View Count ] ---
+// Logic Views Count đã được chuyển sang Redis INCR.
 // --- [ USER: Tạo Bài Viết Mới ] ---
 // Cần authMiddleware
 // Endpoint: POST /api/posts
@@ -104,30 +98,52 @@ export const getPosts = asyncHandler(
     const userId = "userId" in req ? req.userId : undefined;
     const isAdmin = "userRole" in req ? req.userRole === "admin" : false;
 
+    // Tạo khóa cache dựa trên TẤT CẢ query params và quyền Admin (chỉ public mới cache)
+    const cacheKey = isAdmin ? null : `posts:list:${JSON.stringify(req.query)}`;
+
+    if (cacheKey) {
+      const cachedResult = await getCache(cacheKey);
+      if (cachedResult) {
+        console.log(`Cache hit for ${cacheKey}`);
+        return res.json(cachedResult);
+      }
+    }
+
     // 2. XÂY DỰNG BỘ LỌC (Ủy quyền cho Service Layer)
     const filter = buildPostFilter(req.query, { userId, isAdmin });
 
     // 2. TẠO AGGREGATION PIPELINE (Tái sử dụng logic $lookup)
-    let pipeline = buildPostAggregationPipeline(filter, {
-      includeUser: true,
-      includeTopic: true,
-      includeTags: true,
-      includeProjection: true,
-    });
+    let pipeline = buildPostAggregationPipeline(
+      filter,
+      {
+        includeUser: true,
+        includeTopic: true,
+        includeTags: true,
+        includeProjection: true,
+      },
+      isAdmin,
+      userId
+    );
 
     // 2.1 Thêm Stage sắp xếp sau Stage $project
     pipeline.push({ $sort: { is_sticky: -1, createdAt: -1 } });
 
-    // 3. GỌI HÀM AGGREGATION PHÂN TRANG
     const result = await paginateAggregation(Post, pipeline, page, limit);
     // 4. Phản hồi kèm thông tin phân trang
-    res.json({
+    const responseData = {
       posts: result.items,
       currentPage: result.currentPage,
       totalPages: result.totalPages,
       totalItems: result.totalItems,
       limit: result.limit,
-    });
+    };
+
+    // 5. Lưu vào cache nếu là public view (5 phút TTL)
+    if (cacheKey) {
+      await setCache(cacheKey, responseData, 300);
+    }
+
+    res.json(responseData);
   }
 );
 
@@ -142,7 +158,6 @@ export const getPostById = asyncHandler(
       return res.status(400).json({ error: "Invalid Post ID format." });
     }
 
-    // 1. Tìm Bài viết APPROVED VÀ Tăng views_count
     // 1. TÌM BÀI VIẾT BẰNG AGGREGATION (FIX N+1)
     const postArray = await Post.aggregate([
       ...buildPostAggregationPipeline(
@@ -152,7 +167,9 @@ export const getPostById = asyncHandler(
           includeTopic: true,
           includeTags: true,
           includeProjection: true,
-        }
+        },
+        false,
+        undefined
       ),
     ]).exec();
 
@@ -162,8 +179,8 @@ export const getPostById = asyncHandler(
       return res.status(404).json({ error: "Post not found or not approved." });
     }
 
-    // 2. TÁCH THAO TÁC VIEWS COUNT (FIX Task 3 -> Gửi Job Queue)
-    addPostCountJob(id, { $inc: { views_count: 1 } }); // <-- GỌI HÀM JOB MỚI
+    // 2. TÍCH HỢP REDIS: Tăng views_count bằng Redis INCR
+    await incrementPostView(id); // <-- GỌI REDIS SERVICE MỚI
 
     // 3. Phản hồi thành công
     res.json(post);
@@ -175,6 +192,8 @@ export const getPostById = asyncHandler(
 export const getPostByIdForAdmin = asyncHandler(
   async (req: AuthenticatedRequest<PostParams>, res: Response) => {
     const { id } = req.params;
+    const isAdmin = req.userRole === "admin";
+    const callerId = req.userId;
 
     // 1. Kiểm tra tính hợp lệ của ID
     if (!Types.ObjectId.isValid(id)) {
@@ -191,7 +210,9 @@ export const getPostByIdForAdmin = asyncHandler(
           includeTopic: true,
           includeTags: true,
           includeProjection: true,
-        }
+        },
+        isAdmin,
+        callerId
       ),
     ]).exec();
 

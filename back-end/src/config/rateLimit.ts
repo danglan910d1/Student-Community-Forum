@@ -1,29 +1,48 @@
-// Cấu hình Giới hạn Tốc độ
-// Định nghĩa cấu hình cho middleware Rate Limiting (chặn truy cập quá nhiều lần), thường dùng để bảo vệ các route nhạy cảm như /login và /register
+import { Request, Response, NextFunction } from "express";
+import { checkRateLimit } from "../services/redis"; // Import hàm kiểm tra Redis
+import { asyncHandler } from "../utils/asyncHandler"; // Sử dụng utility này nếu cần
 
-import rateLimit from "express-rate-limit";
+/**
+ * Middleware Rate Limiting tùy chỉnh sử dụng Redis.
+ * @param limit Số lần truy cập tối đa
+ * @param windowInSeconds Khung thời gian
+ * @param keyPrefix Tiền tố khóa (ví dụ: 'rate:ip' hoặc 'rate:user')
+ */
+export const redisRateLimiter = (
+  limit: number,
+  windowInSeconds: number,
+  keyPrefix: string
+) => {
+  // Trả về một RequestHandler sử dụng asyncHandler để bắt lỗi
+  return asyncHandler(
+    async (req: Request, res: Response, next: NextFunction) => {
+      // 1. Xác định định danh: Dùng IP cho General Limiter, dùng User ID cho Sensitive Limiter
+      // LƯU Ý: Nếu authMiddleware đã gán userId, ta ưu tiên dùng userId
+      const identifier = (req as any).userId || req.ip;
 
-// Cấu hình giới hạn tốc độ truy cập cho các route Public/Auth
-export const generalRateLimiter = rateLimit({
-  // Chỉ cho phép 100 request trong 15 phút từ cùng một IP
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100,
-  message: {
-    code: 429,
-    error: "Too many requests from this IP, please try again after 15 minutes.",
-  },
-  standardHeaders: true, // Thêm header RateLimit-Limit và RateLimit-Remaining
-  legacyHeaders: false, // Tắt header X-RateLimit-*
-});
+      if (!identifier) {
+        // Trường hợp không có IP hoặc ID (rất hiếm)
+        return res
+          .status(500)
+          .json({ error: "Rate limit identifier missing." });
+      }
 
-// Cấu hình giới hạn nghiêm ngặt hơn cho các route nhạy cảm (ví dụ: login, register)
-export const sensitiveRateLimiter = rateLimit({
-  windowMs: 5 * 60 * 1000, // 5 minutes
-  max: 10, // Chỉ 10 request trong 5 phút
-  message: {
-    code: 429,
-    error: "Too many authentication attempts. Try again in 5 minutes.",
-  },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
+      const allowed = await checkRateLimit(
+        keyPrefix,
+        identifier,
+        limit,
+        windowInSeconds
+      );
+
+      if (!allowed) {
+        // Trả về lỗi 429 nếu vượt quá giới hạn
+        return res.status(429).json({
+          code: 429,
+          error: `Too many requests. Try again in ${windowInSeconds} seconds.`,
+        });
+      }
+
+      next();
+    }
+  );
+};

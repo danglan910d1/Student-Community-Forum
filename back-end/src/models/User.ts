@@ -3,6 +3,7 @@
 // Là trung tâm xác thực (Authentication).
 
 import { Schema, model, Document } from "mongoose"; // Import(thêm) Types để dùng cho TypeScript Interface
+import { UserResponseData } from "../types/user";
 
 export type UserRole = "user" | "admin";
 export type UserStatus = "active" | "banned";
@@ -16,7 +17,24 @@ export interface IUser extends Document {
   status: UserStatus; // Trạng thái tài khoản
   createdAt: Date; // Mongoose tự động thêm với timestamps: true
   updatedAt: Date; // Mongoose tự động thêm với timestamps: true
+  is_deleted: boolean;
+  // THÊM: Định nghĩa lại phương thức toJSON và toObject để TypeScript biết kiểu trả về
+  toJSON(): Omit<IUser, "password" | "__v" | "_id"> & { userId: string };
+  toObject(): Omit<IUser, "password" | "__v" | "_id"> & { userId: string };
+  getUserResponseData(): UserResponseData;
 }
+
+const transformFunc = function (doc: Document, ret: any) {
+  // 1. Đảm bảo 'id' được tạo ra từ '_id'
+  const id = ret._id;
+  delete ret._id; // Loại bỏ _id
+  delete ret.__v; // Loại bỏ __v
+  const newRet: any = {
+    userId: id,
+    ...ret,
+  };
+  return newRet;
+};
 
 // Định nghĩa Schema Mongoose (Quy tắc Cơ sở dữ liệu)
 /*Cấu trúc new Schema<IUser>({}, {})
@@ -45,6 +63,7 @@ const userSchema = new Schema<IUser>(
       default: "https://placehold.co/100x100/CCCCCC/000000?text=A",
     },
     status: { type: String, enum: ["active", "banned"], default: "active" },
+    is_deleted: { type: Boolean, default: false },
     // Loại bỏ định nghĩa thủ công
     // createdAt: { type: Date, default: Date.now },
     // updatedAt: { type: Date, default: Date.now },
@@ -57,17 +76,12 @@ const userSchema = new Schema<IUser>(
       // Không phép các Virtuals (userId) được bao gồm trong phản hồi JSON
       virtuals: false,
       // Loại bỏ các trường MongoDB nội bộ khỏi phản hồi JSON
-      transform: function (doc: Document, ret: any) {
-        // 1. Đảm bảo 'id' được tạo ra từ '_id'
-        const id = ret._id;
-        delete ret._id; // Loại bỏ _id
-        delete ret.__v; // Loại bỏ __v
-        const newRet: any = {
-          userId: id,
-          ...ret,
-        };
-        return newRet;
-      },
+      transform: transformFunc,
+    },
+    // ÁP DỤNG CƠ CHẾ NỘI BỘ (Đề phòng trường hợp gọi .toObject())
+    toObject: {
+      virtuals: false,
+      transform: transformFunc,
     },
   }
 );
@@ -78,5 +92,11 @@ userSchema.index(
   { email: 1 },
   { unique: true, collation: { locale: "en", strength: 2 } }
 );
+
+userSchema.methods.getUserResponseData = function (): UserResponseData {
+  // Gọi toJSON để áp dụng transformFunc và ép kiểu
+  return this.toJSON() as UserResponseData;
+};
+userSchema.index({ name: "text", email: "text" });
 
 export default model<IUser>("User", userSchema);

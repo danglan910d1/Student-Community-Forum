@@ -50,3 +50,18 @@ export interface UpdateUserStatusBody {
 export interface GetAllUsersQuery extends CommonQuery {
   role?: UserRole;
 }
+
+// -----------------------------------------------------------
+// --- INTERFACE ĐẦU RA (OUTPUT) ---
+// Định nghĩa kiểu dữ liệu cho đối tượng User sau khi đã qua TRANSFORM (.toJSON())
+// Nó không còn _id hay password, mà có userId
+export interface UserResponseData {
+  userId: string; // Đã được đổi từ _id
+  name: string;
+  email: string;
+  role: UserRole;
+  status: UserStatus;
+  avatar?: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}

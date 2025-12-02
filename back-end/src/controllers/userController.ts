@@ -1,4 +1,3 @@
-// src/controllers/userController.ts
 /**
  * CONTROLLER: userController
  * * Trách nhiệm: Xử lý Business Logic (Logic Nghiệp vụ) liên quan đến tài khoản người dùng (Profile, Mật khẩu, Admin Controls).
@@ -21,16 +20,25 @@ import {
   GetAllUsersQuery,
 } from "../types/user";
 import { paginate } from "../utils/pagination";
-import { buildUserFilter } from "../services/userFilter";
+import { buildUserFilter } from "../services/userFilter"; // Đã sửa đường dẫn/tên file
+import { AuthContext } from "../services/buildCommonFilter"; // Thêm import
+import { cacheUser, getCache, getCacheUser, setCache } from "../services/redis";
 
 // --- [ Lấy thông tin User hiện tại ] ---
-// Hàm này chạy sau authMiddleware, đảm bảo người dùng đã xác thực.
 export const getMe = asyncHandler(
   async (req: AuthenticatedRequest, res: Response) => {
     // 1. Lấy userId: Đã được gán bởi authMiddleware.
     const userId = req.userId;
 
-    // 2. Tìm User: Truy vấn DB theo ID. Loại bỏ mật khẩu khỏi kết quả trả về.
+    // 1. KIỂM TRA CACHE
+    const cachedUser = await getCacheUser(userId);
+    if (cachedUser) {
+      // 1.1. Cache hit: Trả về thông tin từ Redis ngay lập tức
+      return res.json(cachedUser);
+    }
+
+    // 2. Cache miss: Truy vấn DB
+    // Tìm User: Truy vấn DB theo ID. Loại bỏ mật khẩu khỏi kết quả trả về.
     const user = await User.findById(userId).select("-password");
 
     // 3. Xử lý Lỗi: Nếu không tìm thấy user (trường hợp user bị xóa sau khi cấp token).
@@ -38,8 +46,12 @@ export const getMe = asyncHandler(
       return res.status(404).json({ error: "User not found." });
     }
 
+    // 3. LƯU CACHE (Sử dụng toJSON() để loại bỏ password, _id, __v, và thêm userId)
+    const userData = user.toJSON();
+    await cacheUser(userId, userData);
+
     // 4. Thành công: Trả về thông tin user.
-    res.json(user);
+    res.json(userData);
   }
 );
 
@@ -90,8 +102,12 @@ export const updateProfile = asyncHandler(
       return res.status(404).json({ error: "User not found." });
     }
 
-    // 5. Thành công: Trả về thông tin user đã cập nhật (không bao gồm password).
-    res.json(updatedUser);
+    // 6. CẬP NHẬT CACHE: Ghi đè cache với dữ liệu mới
+    const userData = updatedUser.toJSON();
+    await cacheUser(userId, userData);
+
+    // 7. Thành công: Trả về thông tin user đã cập nhật (không bao gồm password).
+    res.json(userData);
   }
 );
 
@@ -149,7 +165,11 @@ export const updatePassword = asyncHandler(
     // 6. Lưu DB: Lưu lại user với mật khẩu mới.
     await user.save();
 
-    // 7. Thành công
+    // 7. XÓA CACHE: Xóa profile cache vì mật khẩu đã thay đổi (Profile không đổi nhưng đây là biện pháp phòng ngừa)
+    // Giả định getCacheUser/cacheUser dùng key 'user:profile:<userId>'
+    await cacheUser(userId, null, 0);
+
+    // 8. Thành công
     res.json({ message: "Password updated successfully." });
   }
 );
@@ -165,7 +185,13 @@ export const getUserById = asyncHandler(
       return res.status(400).json({ error: "Invalid user ID format." });
     }
 
-    // 1. Tìm User, chỉ chọn các trường công khai (name, avatar, role)
+    // 1. KIỂM TRA CACHE (Sử dụng hàm getCacheUser chung, mặc dù đây là public)
+    const cachedUser = await getCacheUser(userId);
+    if (cachedUser) {
+      return res.json(cachedUser);
+    }
+    // Cache miss: Tìm User, chỉ chọn các trường công khai (name, avatar, role)
+    // 2. Tìm User, chỉ chọn các trường công khai (name, avatar, role)
     const user = await User.findById(userId).select(
       "name avatar role createdAt"
     );
@@ -173,9 +199,12 @@ export const getUserById = asyncHandler(
     if (!user) {
       return res.status(404).json({ error: "User not found." });
     }
+    // 3. LƯU CACHE
+    const userData = user.toJSON();
+    await cacheUser(userId, userData);
 
-    // 2. Trả về thông tin công khai
-    res.json(user);
+    // 4. Trả về thông tin công khai
+    res.json(userData);
   }
 );
 
@@ -186,6 +215,8 @@ export const getUserDetails = asyncHandler(
     // Việc kiểm tra quyền admin đã diễn ra ở tầng route
     // Lấy ID của người bị tác động từ URL params
     const userId = req.params.id;
+
+    // Không cache Admin Details vì dữ liệu này nhạy cảm và thường chỉ được truy cập một lần.
 
     // 1. Tìm User: Lấy tất cả thông tin (select không cần trừ password vì nó đã select: false)
     const user = await User.findById(userId);
@@ -254,14 +285,17 @@ export const updateUserStatus = asyncHandler(
 
     if (!updatedUser) {
       return res.status(404).json({ error: "User not found." });
-    } // 6. Thành công
+    }
 
+    // 6. XÓA CACHE CỦA USER BỊ TÁC ĐỘNG: Đảm bảo cache cũ không còn hiệu lực
+    await cacheUser(targetUserId, null, 0);
+
+    // 7. Thành công
     res.json(updatedUser);
   }
 );
 
 // --- [ USER/ADMIN: Xóa User ] ---
-// Hàm này được dùng cho cả: DELETE /me (tự xóa) và DELETE /:id (Admin xóa người khác)
 export const deleteUser = asyncHandler(
   async (req: AuthenticatedRequest<GetUserParams>, res: Response) => {
     const callerId = req.userId; // ID người thực hiện hành động (User hoặc Admin)
@@ -296,130 +330,86 @@ export const deleteUser = asyncHandler(
       return res.status(400).json({ error: "User ID to delete is missing." });
     }
 
-    // 3. Tìm và Xóa User (Hard Delete)
-    const user = await User.findByIdAndDelete(userIdToDelete);
+    // 3. Tìm và Xóa User (Soft Delete)
+    const user = await User.findByIdAndUpdate(
+      userIdToDelete, // Cập nhật is_deleted thành true. Mongoose sẽ tự động cập nhật updatedAt.
+      { is_deleted: true },
+      { new: true }
+    );
 
     if (!user) {
       return res.status(404).json({ error: "User not found." });
     }
 
-    // 4. XÓA DỮ LIỆU LIÊN QUAN (Data Integrity)
-    // Khi người dùng bị xóa, tất cả nội dung do họ tạo ra cũng phải bị xóa theo.
-    // 4a. Xóa tất cả Bài viết, Comments, và Likes do User này tạo ra
-    await Post.deleteMany({ userId: userIdToDelete });
-    await Comment.deleteMany({ userId: userIdToDelete });
-    await Like.deleteMany({ userId: userIdToDelete });
+    // 4. XÓA DỮ LIỆU LIÊN QUAN (Soft Delete các tài nguyên liên quan)
+    await Post.updateMany({ userId: userIdToDelete }, { is_deleted: true });
+    await Comment.updateMany({ userId: userIdToDelete }, { is_deleted: true });
+    await Like.updateMany({ userId: userIdToDelete }, { is_deleted: true });
 
-    // 5. Thành công
+    // 5. XÓA CACHE: Xóa cache của user vừa bị xóa
+    await cacheUser(userIdToDelete, null, 0);
+
+    // 6. Thành công
     res.json({
       message: `User ${user.name} and all associated data have been successfully deleted.`,
     });
   }
 );
 
-// // --- [ PUBLIC/ADMIN: Lấy danh sách Users (Gộp tìm kiếm & lọc) ] ---
-// // Endpoint: GET /api/users/admin?status=...&role=... (Admin)
-// // Endpoint: GET /api/users?search=... (Public/Optional Auth)
-// export const getUsersList = asyncHandler(
-//   async (
-//     // Sử dụng AuthenticatedRequest để lấy userId/userRole nếu có (Optional Auth)
-//     // Cần đảm bảo rằng route Public sẽ không có authMiddleware bắt buộc.
-//     req:
-//       | AuthenticatedRequest<{}, {}, {}, GetAllUsersQuery>
-//       | Request<{}, {}, {}, GetAllUsersQuery>,
-//     res: Response
-//   ) => {
-//     // 1. Lấy tham số query và xác định quyền hạn
-//     const { page, limit, status, role, search } = req.query;
-//     const isPublic = !("userId" in req); // Nếu userId không tồn tại, thì đây là request Public
-
-//     // 2. Thiết lập bộ lọc (Business Logic)
-//     const filter: any = {};
-//     let selectFields = "name avatar role createdAt"; // Mặc định cho Public
-//     let searchFields: string[] = ["name"]; // Mặc định Public chỉ tìm kiếm theo Tên
-
-//     if (isPublic) {
-//       // QUY TẮC PUBLIC: Chỉ thấy tài khoản đang ACTIVE
-//       filter.status = "active";
-//     } else {
-//       // QUY TẮC ADMIN/AUTHENTICATED:
-//       selectFields = "-password"; // Admin được phép thấy tất cả trừ password
-//       searchFields = ["name", "email"]; // Admin được phép tìm kiếm theo Tên VÀ Email
-
-//       // Thêm lọc theo Status (Chỉ khi Admin cung cấp query param)
-//       if (status && (status === "active" || status === "banned")) {
-//         filter.status = status;
-//       }
-//       // Thêm lọc theo Role (Chỉ khi Admin cung cấp query param)
-//       if (role && (role === "user" || role === "admin")) {
-//         filter.role = role;
-//       }
-//     }
-
-//     // 3. Xử lý Tìm kiếm chung
-//     if (search) {
-//       const regex = new RegExp(search as string, "i"); // 'i' cho case-insensitive
-
-//       // Tạo điều kiện tìm kiếm $or
-//       const orConditions = searchFields.map((field) => ({
-//         [field]: { $regex: regex },
-//       }));
-
-//       // Chỉ áp dụng $or nếu có điều kiện khác, hoặc nếu đó là tìm kiếm duy nhất
-//       if (orConditions.length > 0) {
-//         filter.$or = orConditions;
-//       }
-//     }
-
-//     // 4. GỌI HÀM TIỆN ÍCH PHÂN TRANG (Loại bỏ logic tính toán lặp lại)
-//     const result = await paginate(
-//       User,
-//       filter,
-//       { createdAt: -1 }, // Sắp xếp
-//       page,
-//       limit,
-//       selectFields
-//     );
-
-//     // 5. Phản hồi kèm thông tin phân trang
-//     res.json({
-//       users: result.items,
-//       currentPage: result.currentPage,
-//       totalPages: result.totalPages,
-//       totalItems: result.totalItems,
-//       limit: result.limit,
-//     });
-//   }
-// );
-
 // --- [ PUBLIC/ADMIN: Lấy danh sách Users (Gộp tìm kiếm & lọc) ] ---
 // Endpoint: GET /api/users/admin?status=...&role=... (Admin)
 // Endpoint: GET /api/users?search=... (Public/Optional Auth)
 export const getUsersList = asyncHandler(
   async (
-    // Sử dụng AuthenticatedRequest để lấy userId/userRole nếu có (Optional Auth)
-    // Cần đảm bảo rằng route Public sẽ không có authMiddleware bắt buộc.
     req:
       | AuthenticatedRequest<{}, {}, {}, GetAllUsersQuery>
       | Request<{}, {}, {}, GetAllUsersQuery>,
     res: Response
   ) => {
     // 1. Lấy tham số query và xác định quyền hạn
-    const { page, limit } = req.query;
-    // Logic xác định quyền hạn đã được chuyển vào Service Layer
-    const authContext = {
+    const query = req.query;
+    const { page, limit } = query;
+    // Logic xác định quyền hạn: Kiểm tra req có được gán userId/userRole từ authMiddleware không.
+    const authContext: AuthContext = {
       userId: "userId" in req ? req.userId : undefined,
       isAdmin: "userRole" in req ? req.userRole === "admin" : false,
     };
 
-    // 2. XÂY DỰNG BỘ LỌC (Ủy quyền cho Service Layer)
-    const filter = buildUserFilter(req.query, authContext); // <--- SỬ DỤNG BUILDER MỚI
+    // 1. TẠO CACHE KEY: Dựa trên quyền hạn (Admin/Public) và tất cả query params
+    // Sắp xếp keys để đảm bảo cache key nhất quán: e.g., 'list:public:limit=10:page=1:search=...'
+    const queryParams = query as Record<string, string | string[] | undefined>;
+    const sortedQuery = Object.keys(query)
+      .sort()
+      .map((key) => `${key}=${queryParams[key]}`)
+      .join(":");
+    const cacheKey = `users:list:${
+      authContext.isAdmin ? "admin" : "public"
+    }:${sortedQuery}`;
+
+    // 2. KIỂM TRA CACHE CHO TOÀN BỘ LIST
+    const cachedList = await getCache(cacheKey);
+    if (cachedList) {
+      return res.json(cachedList);
+    }
+
+    // 2. XÂY DỰNG BỘ LỌC
+    // filter sẽ không còn chứa is_deleted: false mặc định cho Admin.
+    const filter = buildUserFilter(req.query, authContext);
+
+    // --- DEBUG LOG ---
+    console.log(
+      `[USER LIST DEBUG] Is Admin: ${authContext.isAdmin}, User ID: ${
+        authContext.userId || "N/A"
+      }`
+    );
+    // Khi Admin gọi GET /api/users/admin (không query), log sẽ là: { is_deleted: false } nếu code cũ, hoặc {} nếu code mới.
+    console.log("[USER LIST DEBUG] Final Filter:", filter);
 
     // 3. XÁC ĐỊNH FIELDS CẦN CHỌN
-    // Dựa trên bối cảnh: nếu là Admin (Authenticated) thì lấy đầy đủ, nếu không thì lấy public fields.
+    // Admin (Authenticated) thấy đầy đủ trừ password. is_deleted được hiển thị để quản trị
     const selectFields = authContext.isAdmin
-      ? "-password"
-      : "name avatar role createdAt";
+      ? "-password" // Admin thấy tất cả, trừ password. (is_deleted được bao gồm)
+      : "name avatar role createdAt"; // Public chỉ thấy các trường cơ bản (Cần hiển thị is_deleted để dễ debug)
 
     // 4. GỌI HÀM TIỆN ÍCH PHÂN TRANG
     const result = await paginate(
@@ -431,13 +421,19 @@ export const getUsersList = asyncHandler(
       selectFields
     );
 
-    // 5. Phản hồi kèm thông tin phân trang
-    res.json({
+    // 6. XÂY DỰNG RESPONSE VÀ LƯU CACHE (Chỉ lưu khi Cache Miss)
+    const finalResponse = {
       users: result.items,
       currentPage: result.currentPage,
       totalPages: result.totalPages,
       totalItems: result.totalItems,
       limit: result.limit,
-    });
+    };
+    // TTL ngắn hơn cho list (Admin: 1 phút, Public: 5 phút) vì dữ liệu list thay đổi thường xuyên hơn
+    const CACHE_LIST_TTL = authContext.isAdmin ? 60 : 300;
+    await setCache(cacheKey, finalResponse, CACHE_LIST_TTL);
+
+    // 7. Phản hồi kèm thông tin phân trang
+    res.json(finalResponse);
   }
 );
