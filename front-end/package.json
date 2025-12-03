@@ -9,18 +9,15 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "@hookform/resolvers": "^5.2.2",
-    "@tiptap/react": "^3.10.7",
-    "@tiptap/starter-kit": "^3.10.7",
+    "@tanstack/react-query": "^5.90.11",
+    "@uiw/react-md-editor": "^4.0.10",
     "axios": "^1.13.2",
-    "jotai": "^2.15.1",
-    "js-cookie": "^3.0.5",
-    "lucide-react": "^0.553.0",
-    "next": "16.0.3",
+    "lucide-react": "^0.555.0",
+    "next": "16.0.6",
     "react": "19.2.0",
     "react-dom": "19.2.0",
-    "react-hook-form": "^7.66.0",
-    "zod": "^4.1.12"
+    "react-hook-form": "^7.67.0",
+    "zustand": "^5.0.9"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -28,7 +25,10 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.0.3",
+    "eslint-config-next": "16.0.6",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.7.4",
+    "prettier-plugin-tailwindcss": "^0.7.2",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
