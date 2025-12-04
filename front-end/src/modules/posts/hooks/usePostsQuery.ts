@@ -10,6 +10,6 @@ export const usePostsQuery = () => {
     // Hàm thực hiện fetch
     queryFn: postService.getPosts,
     // Tùy chọn: Thời gian dữ liệu được coi là "tươi"
-    staleTime: 1000 * 30, // 30 giây
+    staleTime: 1000 * 10, // 30 giây
   });
 };
