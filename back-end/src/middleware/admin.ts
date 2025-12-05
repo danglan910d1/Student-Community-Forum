@@ -8,14 +8,13 @@ import { AuthenticatedRequest } from "../types/express";
 // KHÔNG cần import Users, KHÔNG cần truy vấn DB (Zero-Lookup)
 
 // Middleware kiểm tra quyền Admin (Zero-Lookup)
-export const adminMiddleware = async (
+export const adminMiddleware = (
   req: Request,
   res: Response,
   next: NextFunction
 ) => {
   // Giả định: authMiddleware đã chạy trước và gán userId/userRole
-  const userRole = (req as AuthenticatedRequest).userRole; // 1. Kiểm tra quyền Admin
-
+  const userRole = (req as AuthenticatedRequest).userRole;
   // Kiểm tra quyền admin
   if (userRole === "admin") {
     // Nếu là Admin, cho phép đi tiếp

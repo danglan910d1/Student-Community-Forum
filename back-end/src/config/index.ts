@@ -1,5 +1,5 @@
 // Khởi tạo Cấu hình Tổng thể
-// à trung tâm, nơi ứng dụng chính (app.ts hoặc server.ts) gọi để khởi tạo tất cả các dịch vụ.
+// Là trung tâm, nơi ứng dụng chính (app.ts hoặc server.ts) gọi để khởi tạo tất cả các dịch vụ.
 
 import * as dotenv from "dotenv";
 import { connectDB } from "./database"; // Import hàm kết nối DB

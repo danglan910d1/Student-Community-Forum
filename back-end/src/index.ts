@@ -7,7 +7,7 @@ import tagRoutes from "./routes/tagRoutes";
 import postRoutes from "./routes/postRoutes";
 import commentRoutes from "./routes/commentRoutes";
 import likeRoutes from "./routes/likeRoutes";
-import { sensitiveLimiter } from "./middleware/reatelimit";
+import { sensitiveLimiter } from "./middleware/ratelimit";
 import { initializeConfig } from "./config";
 
 // Khởi tạo ứng dụng Express

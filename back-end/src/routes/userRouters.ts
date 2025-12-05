@@ -13,7 +13,7 @@ import {
 } from "../controllers/userController";
 import { authMiddleware } from "../middleware/auth"; // auth.ts
 import { adminMiddleware } from "../middleware/admin";
-import { generalLimiter, sensitiveLimiter } from "../middleware/reatelimit";
+import { generalLimiter, sensitiveLimiter } from "../middleware/ratelimit";
 import { preventDuplicateRequest } from "../middleware/idempotency";
 
 const router = Router();

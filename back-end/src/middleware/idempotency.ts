@@ -1,5 +1,10 @@
 import { Request, Response, NextFunction } from "express";
 import * as crypto from "crypto";
+import {
+  releaseIdempotencyKey,
+  reserveIdempotencyKey,
+  getIdempotencyKey,
+} from "../services/redis";
 
 // Sử dụng một Set toàn cục để mô phỏng lưu trữ Idempotency Key trong Redis.
 // LƯU Ý: Phải dùng Redis/Memcached/store chung cho môi trường đa server.
@@ -15,7 +20,7 @@ if (!global.processingRequests) {
  * Middleware chống Duplicate Request bằng Idempotency Key (x-request-id).
  * Chỉ nên áp dụng cho các route POST/PUT có tác dụng phụ (side effects).
  */
-export const preventDuplicateRequest = (
+export const preventDuplicateRequest = async (
   req: Request,
   res: Response,
   next: NextFunction
@@ -30,23 +35,38 @@ export const preventDuplicateRequest = (
     console.warn(`[IDEMPOTENCY] Generated new request ID: ${requestId}`);
   }
 
-  // 2. Kiểm tra trạng thái Request
-  if (global.processingRequests.has(requestId)) {
-    console.warn(`[IDEMPOTENCY] Duplicate request blocked: ${requestId}`);
-    // Mã 429: Too Many Requests
-    return res
-      .status(429)
-      .json({ error: "Duplicate request detected. Please wait." });
+  // 2. Kiểm tra và Đánh dấu Request đang xử lý
+  try {
+    const isNewRequest = await reserveIdempotencyKey(requestId, 60); // TTL 60s
+
+    if (!isNewRequest) {
+      // Key đã tồn tại -> Request TRÙNG LẶP
+      const keyContent = await getIdempotencyKey(requestId); // Đọc nội dung key
+      if (!keyContent || keyContent === "processing") {
+        // Key đang trong trạng thái PROCESSING (hoặc không tìm thấy key vì TTL quá ngắn)
+        console.warn(
+          `[IDEMPOTENCY] Duplicate request blocked (Processing): ${requestId}`
+        );
+        return res
+          .status(429)
+          .json({ error: "Request is already processing. Please wait." });
+      } else {
+        // Key chứa KẾT QUẢ (Full Idempotency)
+        console.log(`[IDEMPOTENCY] Returning cached result for: ${requestId}`);
+        const cachedResult = JSON.parse(keyContent); // Trả về kết quả cũ
+        res.status(cachedResult.status).send(cachedResult.body);
+        return; // Dừng xử lý middleware/controller
+      }
+    }
+    // 3. LOẠI BỎ LOGIC releaseIdempotencyKey (Dùng saveIdempotencyResult trong Controller)
+    // res.on("finish", ...) logic cũ đã bị xóa.
+    next();
+
+    next();
+  } catch (error) {
+    // Xử lý lỗi Redis (ví dụ: Redis bị sập)
+    console.error(`[IDEMPOTENCY] Redis error:`, error);
+    // Tùy chọn: Cho phép request đi qua nếu Redis bị lỗi để tránh Service Outage
+    next();
   }
-
-  // 3. Đánh dấu Request đang xử lý
-  global.processingRequests.add(requestId);
-
-  // 4. Đảm bảo xóa Key khi Request hoàn tất (dù thành công hay thất bại)
-  res.on("finish", () => {
-    global.processingRequests.delete(requestId);
-    console.log(`[IDEMPOTENCY] Request finished, key removed: ${requestId}`);
-  });
-
-  next();
 };

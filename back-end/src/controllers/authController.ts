@@ -4,10 +4,16 @@ import User, { IUser } from "../models/User";
 import bcrypt from "bcrypt";
 import { generateToken } from "../utils/jwt";
 import { asyncHandler } from "../utils/asyncHandler";
-import { BCRYPT_SALT_ROUNDS, MIN_PASSWORD_LENGTH } from "../config/constants";
+import {
+  BCRYPT_SALT_ROUNDS,
+  MIN_PASSWORD_LENGTH,
+  JWT_TOKEN_EXPIRES_IN,
+  JWT_EXPIRATION_SECONDS,
+} from "../config/constants";
 import { LoginBody, RegisterBody, UserResponseData } from "../types/user";
 import { Types } from "mongoose";
-import { cacheUser } from "../services/redis";
+import { addRevokedToken, cacheUser } from "../services/redis";
+import { AuthenticatedRequest } from "../types/express";
 
 // Đăng ký tài khoản
 export const register = asyncHandler(
@@ -48,13 +54,12 @@ export const register = asyncHandler(
       // Whitelist các trường khác nếu có (ví dụ: avatar)
       // Chỉ thêm avatar nếu Client gửi và nó không rỗng
       ...(avatar && avatar.trim() ? { avatar: avatar.trim() } : {}), // Mongoose sẽ tự động gán role: "user", status: "active", timestamps.
-    })) as IUser; // Ép kiểu thành IUser để đảm bảo TS nhận ra method
+    })) as IUser; // Ép kiểu thành IUser để đảm bảo TS nhận ra method // Nếu JWT không có JTI, bạn sẽ dùng userId làm ID để thu hồi
 
+    // Giả định generateToken trả về một Token có JWT ID (JTI) hoặc dùng User ID làm JTI
+    const userId = (newUser.id as Types.ObjectId).toString();
     // 1. Tạo token
-    const token = generateToken(
-      (newUser.id as Types.ObjectId).toString(),
-      newUser.role
-    );
+    const token = generateToken(userId, newUser.role); // <-- Giả định token có chứa ID/JTI
 
     // 2. Lấy đối tượng đã được TRANSFORM với kiểu dữ liệu đã định nghĩa rõ
     const userResponse: UserResponseData = newUser.getUserResponseData();
@@ -113,11 +118,11 @@ export const login = asyncHandler(
           .json({ error: "Account is banned. Please contact administrator." });
       }
 
-      // 🔑 Lấy đối tượng phản hồi đã được transform
+      // Lấy đối tượng phản hồi đã được transform
       const userResponse: UserResponseData = user.getUserResponseData();
 
       // 3. Tạo token
-      const token = generateToken(userResponse.userId, userResponse.role);
+      const token = generateToken(userResponse.userId, userResponse.role); // <-- Giả định token có chứa ID/JTI
 
       // 4. Lưu User Profile vào Redis Cache (Dành cho đăng nhập thành công)
       await cacheUser(userResponse.userId, {
@@ -142,7 +147,30 @@ export const login = asyncHandler(
 );
 
 // Đằng xuất (Stateless - Phi trạng thái)
-export const logout = (req: Request, res: Response) => {
-  // Frontend xóa token, Backend chỉ cần phản hồi thành công.
-  res.json({ message: "Logged out successfully." });
-};
+// (Sử dụng Redis để thu hồi Token)
+// export const logout = (req: Request, res: Response) => {
+//   // Frontend xóa token, Backend chỉ cần phản hồi thành công.
+//   res.json({ message: "Logged out successfully." });
+// };
+
+export const logout = asyncHandler(
+  async (req: AuthenticatedRequest, res: Response) => {
+    // 1. Lấy token/ID cần thu hồi
+    // Lấy JTI (hoặc User ID) từ Request đã được authMiddleware xác thực
+    const userId = req.userId; // Sử dụng userId
+    // 1. Lấy token/ID cần thu hồi
+    // Giả định: Bạn đã sửa authMiddleware để gán Token thô (hoặc JTI) vào req.headers.authorization
+    const jwtIdToRevoke = req.headers.authorization?.split(" ")[1];
+
+    // 2. Thu hồi Token trong Redis
+    if (jwtIdToRevoke) {
+      await addRevokedToken(jwtIdToRevoke, JWT_EXPIRATION_SECONDS);
+      console.log(
+        `Token/Session revoked for user ID: ${userId}, ID: ${jwtIdToRevoke}`
+      );
+    }
+
+    // 3. Phản hồi thành công
+    res.json({ message: "Logged out successfully." });
+  }
+);

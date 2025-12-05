@@ -182,4 +182,110 @@ export async function getCacheUser(userId: string): Promise<any | null> {
   return getCache(key);
 }
 
+// ----------------------------------------------------------------------
+// CÁC HÀM XỬ LÝ REVOCATION LIST (TOKEN/SESSION THU HỒI)
+// ----------------------------------------------------------------------
+
+const REVOKED_TOKEN_PREFIX = "revoked:token";
+
+/**
+ * Thêm ID Token vào danh sách thu hồi.
+ * @param jwtId ID duy nhất của Token (nên dùng JTI hoặc userId + timestamp).
+ * @param expirationInSeconds Thời gian sống (TTL) của token, sau đó key sẽ tự xóa.
+ */
+export async function addRevokedToken(
+  jwtId: string,
+  expirationInSeconds: number
+): Promise<void> {
+  const key = `${REVOKED_TOKEN_PREFIX}:${jwtId}`;
+  // Lưu giá trị '1' (hoặc bất kỳ giá trị nào) với TTL
+  await redisClient.setEx(key, expirationInSeconds, "1");
+}
+
+/**
+ * Kiểm tra xem ID Token đã bị thu hồi hay chưa.
+ * @param jwtId ID Token
+ * @returns true nếu Token đã bị thu hồi (tồn tại trong Redis), false nếu chưa.
+ */
+export async function isTokenRevoked(jwtId: string): Promise<boolean> {
+  const key = `${REVOKED_TOKEN_PREFIX}:${jwtId}`;
+  try {
+    const exists = await redisClient.exists(key);
+    return exists === 1;
+  } catch (e) {
+    console.error(`Error checking revocation for key ${key}:`, e);
+    // Tùy chọn: Bạn có thể chọn trả về false để chấp nhận token nếu Redis bị lỗi
+    // hoặc ném lại lỗi để middleware/controller xử lý.
+    throw e;
+  }
+}
+
+// ----------------------------------------------------------------------
+// CÁC HÀM XỬ LÝ DUPPICATE REQUEST
+// ----------------------------------------------------------------------
+/**
+ * Kiểm tra và đặt Idempotency Key với TTL.
+ * Sử dụng SET key value NX EX seconds.
+ * @param requestId Idempotency Key (x-request-id)
+ * @param expirationInSeconds Thời gian sống của key (ví dụ: 60s)
+ * @returns true nếu key được đặt thành công (Request MỚI), false nếu key đã tồn tại (Request TRÙNG LẶP).
+ */
+export async function reserveIdempotencyKey(
+  requestId: string,
+  expirationInSeconds: number = 60
+): Promise<boolean> {
+  const key = `idempotency:${requestId}`;
+
+  // SETNX: Thiết lập giá trị key chỉ khi key chưa tồn tại (NX)
+  // SETEX: Đặt thời gian sống (EX)
+  // Nếu lệnh SETNX thành công (trả về 'OK'), nghĩa là key chưa tồn tại -> Request MỚI
+  const result = await redisClient.set(
+    key,
+    "processing", // Giá trị (có thể là 'processing' hoặc bất kỳ thứ gì)
+    {
+      NX: true, // Chỉ đặt nếu key KHÔNG tồn tại
+      EX: expirationInSeconds, // Đặt thời gian sống
+    }
+  );
+
+  // Nếu result là 'OK', thì key đã được đặt thành công (Request MỚI)
+  return result === "OK";
+}
+
+/**
+ * Xóa Idempotency Key sau khi request đã hoàn tất.
+ * @param requestId Idempotency Key (x-request-id)
+ */
+export async function releaseIdempotencyKey(requestId: string): Promise<void> {
+  const key = `idempotency:${requestId}`;
+  await redisClient.del(key);
+}
+
+// Thêm hàm để Lưu kết quả cuối cùng (Full Idempotency)
+// Sử dụng SET key value XX EX seconds để thay thế giá trị chỉ khi nó đã tồn tại (XX)
+export async function saveIdempotencyResult(
+  requestId: string,
+  statusCode: number,
+  responseBody: string,
+  expirationInSeconds: number = 600 // Lưu kết quả trong 10 phút
+): Promise<boolean> {
+  const key = `idempotency:${requestId}`;
+  const resultData = JSON.stringify({ status: statusCode, body: responseBody });
+
+  // Chỉ SET nếu key đã TỒN TẠI (XX), và cập nhật TTL.
+  // Điều này chỉ nên được gọi sau khi request đã hoàn thành xử lý lần đầu tiên.
+  const result = await redisClient.set(key, resultData, {
+    XX: true,
+    EX: expirationInSeconds,
+  });
+  return result === "OK";
+}
+
+export async function getIdempotencyKey(
+  requestId: string
+): Promise<string | null> {
+  const key = `idempotency:${requestId}`;
+  return redisClient.get(key);
+}
+
 export default redisClient;

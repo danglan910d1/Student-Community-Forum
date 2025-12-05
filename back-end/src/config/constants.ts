@@ -4,6 +4,8 @@
 // Hằng số cho Bảo mật
 export const BCRYPT_SALT_ROUNDS = 10;
 export const JWT_TOKEN_EXPIRES_IN = "30d"; // Thời gian hết hạn JWT (30 ngày)
+// Thay thế hằng số giả định bằng giá trị thực tế:
+export const JWT_EXPIRATION_SECONDS = 2592000; // 30 ngày tính bằng giây
 
 // Cấu hình Phân trang (Pagination Defaults)
 export const DEFAULT_PAGE = 1;

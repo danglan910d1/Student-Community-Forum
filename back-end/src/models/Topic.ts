@@ -17,6 +17,18 @@ export interface ITopic extends Document {
   updatedAt: Date;
 }
 
+const transformFunc = function (doc: Document, ret: any) {
+  // 1. Đảm bảo 'id' được tạo ra từ '_id'
+  const id = ret._id;
+  delete ret._id; // Loại bỏ _id
+  delete ret.__v; // Loại bỏ __v
+  const newRet: any = {
+    topicId: id,
+    ...ret,
+  };
+  return newRet;
+};
+
 const topicSchema = new Schema<ITopic>(
   {
     name: { type: String, required: true, unique: true },
@@ -40,17 +52,11 @@ const topicSchema = new Schema<ITopic>(
       // Cho phép các Virtuals (topicId) được bao gồm trong phản hồi JSON
       virtuals: false,
       // Loại bỏ các trường MongoDB nội bộ khỏi phản hồi JSON
-      transform: function (doc: Document, ret: any) {
-        // 1. Đảm bảo 'id' được tạo ra từ '_id'
-        const id = ret._id;
-        delete ret._id; // Loại bỏ _id
-        delete ret.__v; // Loại bỏ __v
-        const newRet: any = {
-          topicId: id,
-          ...ret,
-        };
-        return newRet;
-      },
+      transform: transformFunc,
+    },
+    toObject: {
+      virtuals: false,
+      transform: transformFunc,
     },
   }
 );

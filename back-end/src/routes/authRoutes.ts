@@ -3,7 +3,7 @@
 
 import { Router } from "express";
 import { register, login, logout } from "../controllers/authController";
-import { generalLimiter, sensitiveLimiter } from "../middleware/reatelimit";
+import { generalLimiter, sensitiveLimiter } from "../middleware/ratelimit";
 import { preventDuplicateRequest } from "../middleware/idempotency";
 
 const router = Router();

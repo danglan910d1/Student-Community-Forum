@@ -10,7 +10,7 @@ import {
 } from "../controllers/postController";
 import { authMiddleware } from "../middleware/auth"; // auth.ts
 import { adminMiddleware } from "../middleware/admin"; // Dùng để kiểm tra vai trò
-import { generalLimiter, sensitiveLimiter } from "../middleware/reatelimit";
+import { generalLimiter, sensitiveLimiter } from "../middleware/ratelimit";
 import { preventDuplicateRequest } from "../middleware/idempotency";
 
 const router = Router();

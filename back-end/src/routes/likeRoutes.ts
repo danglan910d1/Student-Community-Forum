@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { toggleLike, getLikeStatus } from "../controllers/likeController";
 import { authMiddleware } from "../middleware/auth";
-import { generalLimiter, sensitiveLimiter } from "../middleware/reatelimit";
+import { generalLimiter, sensitiveLimiter } from "../middleware/ratelimit";
 import { preventDuplicateRequest } from "../middleware/idempotency";
 
 const router = Router();
