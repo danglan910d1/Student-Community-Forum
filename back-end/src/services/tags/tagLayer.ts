@@ -1,6 +1,6 @@
 import { Types, Document } from "mongoose";
-import Tag, { ITag } from "../models/Tag";
-import { generateSlug } from "../utils/text";
+import Tag, { ITag } from "../../models/Tag";
+import { generateSlug } from "../../utils/text";
 
 // --- HẰNG SỐ GIỚI HẠN (HARD RULE) ---
 const MAX_TAG_INPUT = 5;

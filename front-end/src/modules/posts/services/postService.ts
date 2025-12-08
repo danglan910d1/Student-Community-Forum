@@ -1,43 +1,39 @@
-// src/modules/posts/services/postService.ts
+import { api } from "@/services/api";
 
-import { api } from '@/services/api'; // Sử dụng Axios instance đã cấu hình
-
-// Định nghĩa kiểu dữ liệu (Model) của Bài viết
+// 1. Định nghĩa kiểu dữ liệu cho MỘT Bài viết
 interface IPost {
-  // Đảm bảo tên trường khớp với BE MongoDB của bạn
-  _id?: string; // Tùy chọn, vì bạn có thể dùng postId
-  postId: string; // Sử dụng postId nếu đây là trường duy nhất
+  postId: string;
   title: string;
   content: string;
   createdAt: string;
+  // Thêm các trường khác cần thiết (ví dụ: user, topic, tags)
 }
 
-// Kiểu dữ liệu cho Toàn bộ Response từ BE
+// 2. Định nghĩa kiểu dữ liệu cho TOÀN BỘ PHẢN HỒI từ Backend (Object chứa Array)
 interface IPostResponse {
   posts: IPost[]; // Mảng bài viết nằm trong thuộc tính 'posts'
   currentPage: number;
   totalPages: number;
   totalItems: number;
+  limit: number;
 }
 
-// export const postService = {
-//   // Hàm gọi API lấy danh sách bài viết
-//   getPosts: async (): Promise<IPost[]> => {
-//     // Gọi đến URL đầy đủ: http://localhost:5000/api/posts
-//     const { data } = await api.get('/posts');
-//     return data;
-//   },
-
-//   // (Sẽ bổ sung thêm: createPost, getPostById,...)
-// };
-
 export const postService = {
-  // Thay đổi kiểu trả về là IPost[]
+  // Hàm gọi API lấy danh sách bài viết
+  // Kiểu trả về vẫn là Promise<IPost[]> (một mảng bài viết)
   getPosts: async (): Promise<IPost[]> => {
-    // Axios nhận biết response.data là IPostResponse
-    const response = await api.get<IPostResponse>('/posts');
+    // Sử dụng kiểu IPostResponse để Axios hiểu cấu trúc dữ liệu nhận về
+    const { data } = await api.get<IPostResponse>("/posts");
 
-    // TRÍCH XUẤT MẢNG: Trả về response.data.posts (tức là mảng bài viết)
-    return response.data.posts;
+    // 3. TRÍCH XUẤT ARRAY:
+    // Trả về thuộc tính 'posts' bên trong Object response
+    if (data && Array.isArray(data.posts)) {
+      return data.posts;
+    }
+
+    // Xử lý trường hợp không có dữ liệu
+    return [];
   },
+
+  // (Sẽ bổ sung thêm: createPost, getPostById,...)
 };

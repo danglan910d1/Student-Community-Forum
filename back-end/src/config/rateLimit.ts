@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-import { checkRateLimit } from "../services/redis"; // Import hàm kiểm tra Redis
+import { checkRateLimit } from "../services/common/redis"; // Import hàm kiểm tra Redis
 import { asyncHandler } from "../utils/asyncHandler"; // Sử dụng utility này nếu cần
 
 /**
@@ -25,14 +25,18 @@ export const redisRateLimiter = (
         return res
           .status(500)
           .json({ error: "Rate limit identifier missing." });
-      }
+      } // Kết hợp HTTP Method và Path để tạo định danh duy nhất cho hành động này.
 
-      const allowed = await checkRateLimit(
-        keyPrefix,
-        identifier,
-        limit,
-        windowInSeconds
-      );
+      // 2. TẠO ID HÀNH ĐỘNG CỤC BỘ (Action-Specific ID)
+      // Dùng req.baseUrl + req.path để tái tạo lại path đầy đủ, ví dụ: /api/users/profile
+      const actionId = `${req.method}:${req.baseUrl || ""}${req.path}`;
+      // Đảm bảo actionId không có ký tự không hợp lệ cho key Redis nếu cần, nhưng string path thường là OK.
+
+      // 3. TẠO KHÓA REDIS HOÀN CHỈNH
+      // Khóa sẽ là: rate:sensitive:USER_ID:POST:/api/auth/register
+      const uniqueKey = `${keyPrefix}:${identifier}:${actionId}`;
+
+      const allowed = await checkRateLimit(uniqueKey, limit, windowInSeconds);
 
       if (!allowed) {
         // Trả về lỗi 429 nếu vượt quá giới hạn

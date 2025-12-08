@@ -24,6 +24,18 @@ export interface IPost extends Document {
   updatedAt: Date;
 }
 
+const postTransformFunc = function (doc: Document, ret: any) {
+  // 1. Đảm bảo 'id' được tạo ra từ '_id'
+  const id = ret._id;
+  delete ret._id; // Loại bỏ _id
+  delete ret.__v; // Loại bỏ __v
+  const newRet: any = {
+    postId: id, // <-- Đổi tên từ _id sang postId
+    ...ret,
+  };
+  return newRet;
+};
+
 const postSchema = new Schema<IPost>(
   {
     userId: {
@@ -72,17 +84,12 @@ const postSchema = new Schema<IPost>(
       // Cho phép các Virtuals (postId) được bao gồm trong phản hồi JSON
       virtuals: false,
       // Loại bỏ các trường MongoDB nội bộ khỏi phản hồi JSON
-      transform: function (doc: Document, ret: any) {
-        // 1. Đảm bảo 'id' được tạo ra từ '_id'
-        const id = ret._id;
-        delete ret._id; // Loại bỏ _id
-        delete ret.__v; // Loại bỏ __v
-        const newRet: any = {
-          postId: id,
-          ...ret,
-        };
-        return newRet;
-      },
+      transform: postTransformFunc,
+    },
+    // ÁP DỤNG CƠ CHẾ NỘI BỘ (Đề phòng trường hợp gọi .toObject())
+    toObject: {
+      virtuals: false,
+      transform: postTransformFunc,
     },
   }
 );

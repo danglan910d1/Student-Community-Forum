@@ -2,7 +2,7 @@ import {
   AuthContext,
   buildCommonFilter,
   CommonQuery,
-} from "./buildCommonFilter"; // Sử dụng CommonQuery
+} from "../common/buildCommonFilter"; // Sử dụng CommonQuery
 
 // Giả định Topic Query chỉ cần các trường chung
 export interface GetTopicsQuery extends CommonQuery {

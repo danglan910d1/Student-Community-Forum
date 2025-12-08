@@ -19,7 +19,7 @@ app.use(express.json()); // Cho phép Express đọc JSON từ request body
 
 // --- 2. ĐỊNH TUYẾN (ROUTING) ---
 // Áp dụng Rate Limiter cho các route nhạy cảm (Auth)
-app.use("/api/auth", sensitiveLimiter, authRoutes); // Áp dụng Rate Limiter
+app.use("/api/auth", authRoutes); // Áp dụng Rate Limiter
 app.use("/api/users", userRoutes);
 app.use("/api/topics", topicRoutes);
 app.use("/api/tags", tagRoutes);

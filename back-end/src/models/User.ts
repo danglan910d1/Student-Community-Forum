@@ -24,7 +24,7 @@ export interface IUser extends Document {
   getUserResponseData(): UserResponseData;
 }
 
-const transformFunc = function (doc: Document, ret: any) {
+const userTransformFunc = function (doc: Document, ret: any) {
   // 1. Đảm bảo 'id' được tạo ra từ '_id'
   const id = ret._id;
   delete ret._id; // Loại bỏ _id
@@ -76,12 +76,12 @@ const userSchema = new Schema<IUser>(
       // Không phép các Virtuals (userId) được bao gồm trong phản hồi JSON
       virtuals: false,
       // Loại bỏ các trường MongoDB nội bộ khỏi phản hồi JSON
-      transform: transformFunc,
+      transform: userTransformFunc,
     },
     // ÁP DỤNG CƠ CHẾ NỘI BỘ (Đề phòng trường hợp gọi .toObject())
     toObject: {
       virtuals: false,
-      transform: transformFunc,
+      transform: userTransformFunc,
     },
   }
 );

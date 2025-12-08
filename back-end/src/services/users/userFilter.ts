@@ -1,6 +1,6 @@
-import { UserRole, UserStatus } from "../models/User";
-import { GetAllUsersQuery } from "../types/user";
-import { AuthContext, buildCommonFilter } from "./buildCommonFilter";
+import { UserRole, UserStatus } from "../../models/User";
+import { GetAllUsersQuery } from "../../types/user";
+import { AuthContext, buildCommonFilter } from "../common/buildCommonFilter";
 
 /**
  * Xây dựng đối tượng filter MongoDB đặc thù cho User.

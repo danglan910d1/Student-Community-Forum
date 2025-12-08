@@ -10,8 +10,11 @@ import { Types } from "mongoose";
 import { asyncHandler } from "../utils/asyncHandler"; // HOF
 import { TopicParams, CreateTopicBody, UpdateTopicBody } from "../types/topic";
 import { generateSlug } from "../utils/text";
-import { buildTopicFilter, GetTopicsQuery } from "../services/topicFilter";
-import { buildTopicAggregationPipeline } from "../services/topicPipeline";
+import {
+  buildTopicFilter,
+  GetTopicsQuery,
+} from "../services/topics/topicFilter";
+import { buildTopicAggregationPipeline } from "../services/topics/topicPipeline";
 import { paginateAggregation } from "../utils/pagination";
 
 // --- [ PUBLIC/ADMIN: Lấy danh sách Topics (Gộp) ] ---

@@ -1,11 +1,11 @@
 // src/services/postService.ts
 import { Types } from "mongoose";
-import { GetPostsQuery } from "../types/post"; // Đã sửa type file
+import { GetPostsQuery } from "../../types/post"; // Đã sửa type file
 import {
   buildCommonFilter,
   AuthContext,
   CommonQuery,
-} from "./buildCommonFilter";
+} from "../common/buildCommonFilter";
 
 /**
  * Xây dựng đối tượng filter MongoDB đặc thù cho Post.

@@ -3,7 +3,7 @@ import {
   AuthContext,
   buildCommonFilter,
   CommonQuery,
-} from "./buildCommonFilter"; // Sử dụng CommonQuery
+} from "../common/buildCommonFilter"; // Sử dụng CommonQuery
 
 // Giả định GetTagsQuery được mở rộng từ CommonQuery
 export interface GetTagsQuery extends CommonQuery {

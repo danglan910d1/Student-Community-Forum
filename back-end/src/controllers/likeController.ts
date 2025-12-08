@@ -11,7 +11,7 @@ import Comment, { IComment } from "../models/Comment";
 import { AuthenticatedRequest } from "../types/express";
 import { asyncHandler } from "../utils/asyncHandler";
 import { ToggleLikeParams, GetLikeStatusQuery } from "../types/like";
-import { addJobToQueue } from "../services/jobQueue";
+import { addJobToQueue } from "../services/common/jobQueue";
 
 // INTERFACE NỘI BỘ: Định nghĩa một kiểu dữ liệu chung (Base) mà Post và Comment đều tuân thủ.
 type BaseLikableDocument = Document & {

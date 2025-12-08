@@ -1,12 +1,13 @@
 // src/services/api.ts
 
-import axios from 'axios';
+import axios from "axios";
 
+// Khởi tạo instance Axios
 export const api = axios.create({
-  // Base URL sẽ là http://localhost:5000/api
-  baseURL: process.env.NEXT_PUBLIC_API_URL,
+  baseURL: process.env.NEXT_PUBLIC_API_URL, // Lấy từ .env.local
   headers: {
-    'Content-Type': 'application/json',
+    "Content-Type": "application/json",
   },
 });
-// ... (Interceptors)
+
+// Bạn sẽ thêm các Interceptor (xử lý Token JWT, Refresh Token) ở đây sau.

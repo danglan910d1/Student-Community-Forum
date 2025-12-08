@@ -4,6 +4,7 @@
  * * Nguyên tắc áp dụng: HOF, Type Safety, RBAC Logic, Data Cleaning.
  */
 import { Request, Response } from "express";
+import * as fs from "fs/promises";
 import User, { IUser } from "../models/User";
 import Post from "../models/Post";
 import Comment from "../models/Comment";
@@ -20,9 +21,23 @@ import {
   GetAllUsersQuery,
 } from "../types/user";
 import { paginate } from "../utils/pagination";
-import { buildUserFilter } from "../services/userFilter"; // Đã sửa đường dẫn/tên file
-import { AuthContext } from "../services/buildCommonFilter"; // Thêm import
-import { cacheUser, getCache, getCacheUser, setCache } from "../services/redis";
+import { buildUserFilter } from "../services/users/userFilter"; // Đã sửa đường dẫn/tên file
+import { AuthContext } from "../services/common/buildCommonFilter"; // Thêm import
+import {
+  cacheUser,
+  getCache,
+  getCacheUser,
+  setCache,
+  saveIdempotencyResult,
+} from "../services/common/redis";
+import path from "path";
+import { UPLOADS_DIR } from "../middleware/multer";
+
+// Định nghĩa lại Request cho TypeScript để biết req.file tồn tại sau Multer
+interface MulterRequest extends Request {
+  file?: Express.Multer.File;
+  files?: Express.Multer.File[];
+}
 
 // --- [ Lấy thông tin User hiện tại ] ---
 export const getMe = asyncHandler(
@@ -59,16 +74,20 @@ export const getMe = asyncHandler(
 export const updateProfile = asyncHandler(
   async (
     // P (Params) = {} | ResBody = {} | ReqBody = UpdateProfileBody | ReqQuery = {}
-    req: AuthenticatedRequest<{}, {}, UpdateProfileBody, {}>,
+    // THAY ĐỔI: Hợp nhất AuthenticatedRequest và MulterRequest
+    req: AuthenticatedRequest<{}, {}, UpdateProfileBody, {}> & MulterRequest,
     res: Response
   ) => {
     // 1. Lấy userId và dữ liệu cần update
     const userId = req.userId;
+    // Lấy Request ID
+    const requestId = req.headers["x-request-id"] as string;
     const { name, avatar } = req.body; // avatar là string | null | undefined
-
+    const uploadedFile = req.file; // Lấy file đã upload
     // Khởi tạo updateFields để chỉ cập nhật những trường được gửi
     const updateFields: Partial<IUser> = {};
     let isDataProvided = false;
+    let newFilename: string | undefined;
 
     // 2. Xử lý trường name (Áp dụng trim() để làm sạch)
     if (name !== undefined) {
@@ -81,10 +100,27 @@ export const updateProfile = asyncHandler(
     }
 
     // 3. Xử lý trường avatar
-    if (avatar !== undefined) {
-      updateFields.avatar = avatar; // Cho phép là null để xóa
+    // Trường hợp 1: File mới được upload (Ưu tiên cao nhất)
+    if (uploadedFile) {
+      // TẠO TÊN FILE MỚI ĐỘC NHẤT (Đồng bộ với logic Disk Storage cũ)
+      const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+      newFilename =
+        uploadedFile.fieldname +
+        "-" +
+        uniqueSuffix +
+        path.extname(uploadedFile.originalname);
+      // Lưu đường dẫn file đã lưu vào thư mục 'uploads'
+      updateFields.avatar = `/uploads/${newFilename}`;
+      isDataProvided = true; // NOTE: Trong production, bạn cần logic xóa file avatar cũ trong storage tại đây.
+    }
+
+    // Trường hợp 2: Người dùng gửi yêu cầu xóa avatar hiện tại
+    else if (avatar === "null" || avatar === null) {
+      updateFields.avatar = null; // Gán null để xóa URL cũ
       isDataProvided = true;
     }
+
+    // Trường hợp 3: Nếu không có file và không có yêu cầu xóa, ta bỏ qua trường avatar.
 
     // 4. Kiểm tra nếu không có trường nào được gửi
     if (!isDataProvided) {
@@ -102,12 +138,40 @@ export const updateProfile = asyncHandler(
       return res.status(404).json({ error: "User not found." });
     }
 
+    // 4. LƯU FILE VẬT LÝ VÀO ĐĨA (CHỈ KHI DB UPDATE THÀNH CÔNG)
+    if (uploadedFile && newFilename) {
+      try {
+        // Ghi Buffer (từ RAM) vào file trên đĩa
+        await fs.writeFile(
+          path.join(UPLOADS_DIR, newFilename),
+          uploadedFile.buffer
+        ); // NOTE: Tại đây, bạn có thể thêm logic xóa file avatar cũ khỏi S3/Cloudinary/Local disk
+      } catch (diskError) {
+        console.error(
+          "Lỗi khi lưu file vào đĩa sau khi cập nhật DB:",
+          diskError
+        ); // Xử lý lỗi: Cân nhắc revert lại DB update hoặc gắn cờ lỗi
+      }
+    }
+
     // 6. CẬP NHẬT CACHE: Ghi đè cache với dữ liệu mới
     const userData = updatedUser.toJSON();
     await cacheUser(userId, userData);
 
-    // 7. Thành công: Trả về thông tin user đã cập nhật (không bao gồm password).
-    res.json(userData);
+    // // 7. Thành công: Trả về thông tin user đã cập nhật (không bao gồm password).
+    // res.json(userData);
+    // 7. Thành công: LƯU KẾT QUẢ IDEMPOTENCY
+    const statusCode = 200;
+    const responseBody = JSON.stringify(userData);
+
+    if (requestId) {
+      // Lưu kết quả thành công vào Redis (TTL 10 phút)
+      await saveIdempotencyResult(requestId, statusCode, responseBody, 600);
+      return res.status(statusCode).send(responseBody); // Trả về kết quả đã được stringify
+    }
+
+    // Fallback hoặc nếu middleware không được sử dụng
+    res.status(statusCode).json(userData);
   }
 );
 

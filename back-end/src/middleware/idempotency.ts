@@ -1,10 +1,9 @@
 import { Request, Response, NextFunction } from "express";
 import * as crypto from "crypto";
 import {
-  releaseIdempotencyKey,
   reserveIdempotencyKey,
   getIdempotencyKey,
-} from "../services/redis";
+} from "../services/common/redis";
 
 // Sử dụng một Set toàn cục để mô phỏng lưu trữ Idempotency Key trong Redis.
 // LƯU Ý: Phải dùng Redis/Memcached/store chung cho môi trường đa server.
@@ -60,8 +59,6 @@ export const preventDuplicateRequest = async (
     }
     // 3. LOẠI BỎ LOGIC releaseIdempotencyKey (Dùng saveIdempotencyResult trong Controller)
     // res.on("finish", ...) logic cũ đã bị xóa.
-    next();
-
     next();
   } catch (error) {
     // Xử lý lỗi Redis (ví dụ: Redis bị sập)

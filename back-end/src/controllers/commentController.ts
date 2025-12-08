@@ -10,10 +10,10 @@ import Post from "../models/Post";
 import Like from "../models/Like";
 import { AuthenticatedRequest } from "../types/express";
 import { asyncHandler } from "../utils/asyncHandler";
-import { paginate, paginateAggregation } from "../utils/pagination";
-import { buildCommentAggregationPipeline } from "../services/commentPipeline";
-import { buildCommentFilter } from "../services/commentFilter";
-import { addJobToQueue } from "../services/jobQueue"; // IMPORT JOB QUEUE
+import { paginateAggregation } from "../utils/pagination";
+import { buildCommentAggregationPipeline } from "../services/comments/commentPipeline";
+import { buildCommentFilter } from "../services/comments/commentFilter";
+import { addJobToQueue } from "../services/common/jobQueue"; // IMPORT JOB QUEUE
 import {
   CommentParams,
   CreateCommentBody,

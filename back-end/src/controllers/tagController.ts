@@ -10,8 +10,8 @@ import { Types } from "mongoose";
 import { asyncHandler } from "../utils/asyncHandler";
 import { paginateAggregation } from "../utils/pagination";
 import { GetTagsQuery, TagParams, UpdateTagBody } from "../types/tag";
-import { buildTagFilter } from "../services/tagFilter";
-import { buildTagAggregationPipeline } from "../services/tagPipeline";
+import { buildTagFilter } from "../services/tags/tagFilter";
+import { buildTagAggregationPipeline } from "../services/tags/tagPipeline";
 import { generateSlug } from "../utils/text";
 
 // --- [ PUBLIC/ADMIN: Lấy danh sách Tags (Gộp) ] ---

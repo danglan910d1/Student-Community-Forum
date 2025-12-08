@@ -7,7 +7,7 @@
 import { Request, Response, NextFunction, RequestHandler } from "express";
 import jwt from "jsonwebtoken"; // Thư viện đã có định nghĩa kiểu (@types/jsonwebtoken)
 import { AuthenticatedRequest } from "../types/express";
-import { isTokenRevoked } from "../services/redis";
+import { isTokenRevoked } from "../services/common/redis";
 import { asyncHandler } from "../utils/asyncHandler";
 
 // Lấy secret key từ biến môi trường hoặc dùng giá trị mặc định

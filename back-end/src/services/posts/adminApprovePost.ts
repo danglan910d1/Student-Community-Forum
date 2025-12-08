@@ -1,6 +1,6 @@
 import { Types, startSession } from "mongoose";
-import Post, { IPost } from "../models/Post";
-import Tag, { ITag } from "../models/Tag";
+import Post, { IPost } from "../../models/Post";
+import Tag, { ITag } from "../../models/Tag";
 
 export type TagApprovalAction =
   | "approve_post_only" // Chỉ approve cho bài viết này, không đổi status Tag global

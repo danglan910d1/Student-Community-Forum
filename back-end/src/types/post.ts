@@ -1,6 +1,6 @@
 import { PostStatus } from "../models/Post";
-import { TagApprovalAction } from "../services/adminApprovePost";
-import { CommonQuery } from "../services/buildCommonFilter";
+import { CommonQuery } from "../services/common/buildCommonFilter";
+import { TagApprovalAction } from "../services/posts/adminApprovePost";
 
 // 1. Dùng cho Params (Lấy chi tiết, cập nhật, xóa)
 export interface PostParams {

@@ -1,5 +1,5 @@
-import Post from "../models/Post";
-import Comment from "../models/Comment";
+import Post from "../../models/Post";
+import Comment from "../../models/Comment";
 import { Model } from "mongoose";
 
 // Định nghĩa các Model có thể được cập nhật qua Job Queue

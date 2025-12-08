@@ -20,13 +20,17 @@ import {
 } from "../types/post";
 import { asyncHandler } from "../utils/asyncHandler";
 import { paginateAggregation } from "../utils/pagination";
-import { processTags } from "../services/tagLayer";
+import { processTags } from "../services/tags/tagLayer";
 import { generateSlug } from "../utils/text";
-import { buildPostFilter } from "../services/postFilter";
-import { adminApprovePost } from "../services/adminApprovePost";
-import { buildPostAggregationPipeline } from "../services/postPipeline";
+import { buildPostFilter } from "../services/posts/postFilter";
+import { adminApprovePost } from "../services/posts/adminApprovePost";
+import { buildPostAggregationPipeline } from "../services/posts/postPipeline";
 // import { addJobToQueue } from "../services/jobQueue"; // LOẠI BỎ JOB QUEUE MOCK
-import { getCache, setCache, incrementPostView } from "../services/redis"; // Dùng service Redis mới
+import {
+  getCache,
+  setCache,
+  incrementPostView,
+} from "../services/common/redis"; // Dùng service Redis mới
 
 // --- [ JOB PRODUCER: Loại bỏ Job View Count ] ---
 // Logic Views Count đã được chuyển sang Redis INCR.

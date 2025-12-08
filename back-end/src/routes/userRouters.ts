@@ -15,6 +15,7 @@ import { authMiddleware } from "../middleware/auth"; // auth.ts
 import { adminMiddleware } from "../middleware/admin";
 import { generalLimiter, sensitiveLimiter } from "../middleware/ratelimit";
 import { preventDuplicateRequest } from "../middleware/idempotency";
+import { multerErrorHandler, uploadSingleAvatar } from "../middleware/multer";
 
 const router = Router();
 
@@ -29,6 +30,7 @@ router.put(
   "/profile",
   sensitiveLimiter,
   authMiddleware,
+  multerErrorHandler(uploadSingleAvatar),
   preventDuplicateRequest,
   updateProfile
 );

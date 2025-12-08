@@ -135,12 +135,11 @@ export async function getPostLikeCount(postId: string): Promise<number> {
  * @returns true nếu còn lượt, false nếu vượt quá giới hạn
  */
 export async function checkRateLimit(
-  keyPrefix: string,
-  identifier: string,
+  uniqueKey: string, // KHÓA DUY NHẤT (bao gồm prefix, identifier, và actionId)
   limit: number,
   windowInSeconds: number
 ): Promise<boolean> {
-  const key = `${keyPrefix}:${identifier}`;
+  const key = uniqueKey;
 
   // INCR: Tăng bộ đếm và trả về giá trị mới
   const currentCount = await redisClient.incr(key);
@@ -151,6 +150,87 @@ export async function checkRateLimit(
   }
 
   return currentCount <= limit;
+}
+
+/**
+ * Xóa tất cả Rate Limit Keys dựa trên một định danh và Prefix.
+ * Thường dùng để xóa giới hạn IP cũ khi user đăng nhập thành công.
+ * @param identifier IP hoặc User ID
+ * @param keyPrefixPrefix Ví dụ: 'rate:auth' hoặc 'rate:general'
+ */
+export async function clearRateLimitsByIdentifier(
+  identifier: string,
+  keyPrefix: string
+): Promise<void> {
+  // Sử dụng KEYS hoặc SCAN để tìm tất cả các key bắt đầu bằng prefix:identifier:*
+  const pattern = `${keyPrefix}:${identifier}:*`;
+  await invalidateCache(pattern); // Tái sử dụng hàm invalidateCache
+}
+
+// HẰNG SỐ BẢO MẬT MỚI: (Giả định được định nghĩa hoặc import)
+const EMAIL_FAIL_LIMIT = 5; // Số lần thử sai mật khẩu tối đa
+const EMAIL_LOCKOUT_SECONDS = 30 * 60; // Thời gian khóa tài khoản tạm thời (30 phút)
+
+/**
+ * Xử lý thất bại đăng nhập theo Email: Tăng bộ đếm và kiểm tra khóa.
+ * @param email Email của user
+ * @param userIp IP của người dùng (Đã được truyền từ req.ip)
+ */
+export async function handleLoginFailure(
+  email: string,
+  userIp: string
+): Promise<void> {
+  const key = `fail:email:${email.toLowerCase()}`;
+  const lockoutKey = `lockout:email:${email.toLowerCase()}`;
+
+  // Tăng bộ đếm thất bại
+  const currentFailures = await redisClient.incr(key);
+
+  // Đặt TTL (30 phút) cho bộ đếm thất bại chỉ khi nó là 1
+  if (currentFailures === 1) {
+    await redisClient.expire(key, EMAIL_LOCKOUT_SECONDS);
+  }
+
+  // Khóa tài khoản nếu vượt quá giới hạn
+  if (currentFailures >= EMAIL_FAIL_LIMIT) {
+    // Thiết lập khóa tài khoản tạm thời
+    await redisClient.set(lockoutKey, "true", {
+      EX: EMAIL_LOCKOUT_SECONDS, // Chuyển EX và TTL vào đối tượng Options
+    }); // Xóa bộ đếm thất bại để tránh lỗi
+    await redisClient.del(key);
+
+    // GIẢI PHÓNG GIỚI HẠN IP CHUNG (BẮT BUỘC đặt trong if)
+    await clearRateLimitsByIdentifier(userIp, "rate:auth");
+    await clearRateLimitsByIdentifier(userIp, "rate:general");
+  }
+}
+
+/**
+ * Xóa trạng thái thất bại và khóa tạm thời của tài khoản.
+ * Phải được gọi khi user đăng nhập thành công (mật khẩu đúng).
+ *
+ * @param email Email của user
+ */
+// Hàm này phải được gọi khi ĐĂNG NHẬP THÀNH CÔNG!
+export async function clearLoginFailure(email: string): Promise<void> {
+  const processedEmail = email.toLowerCase();
+  const failureKey = `fail:email:${processedEmail}`; // Key đếm thất bại
+  const lockoutKey = `lockout:email:${processedEmail}`; // Key trạng thái khóa
+
+  // await redisClient.del(key); // Quan trọng: Xóa bộ đếm (Ví dụ: giá trị 4)
+  // await redisClient.del(lockoutKey); // Xóa trạng thái khóa (phòng trường hợp người dùng nhớ mật khẩu trước khi hết hạn)
+  await Promise.all([redisClient.del(failureKey), redisClient.del(lockoutKey)]);
+}
+
+/**
+ * Kiểm tra xem tài khoản có đang bị khóa tạm thời do nhập sai mật khẩu quá nhiều lần không.
+ * @param email Email của user
+ * @returns true nếu bị khóa
+ */
+export async function isAccountLockedOut(email: string): Promise<boolean> {
+  const lockoutKey = `lockout:email:${email.toLowerCase()}`;
+  const isLocked = await redisClient.get(lockoutKey);
+  return isLocked === "true";
 }
 
 // ----------------------------------------------------------------------

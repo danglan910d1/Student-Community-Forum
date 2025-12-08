@@ -1,10 +1,10 @@
 import { Types } from "mongoose";
-import { GetCommentsQuery } from "../types/comment";
+import { GetCommentsQuery } from "../../types/comment";
 import {
   AuthContext,
   buildCommonFilter,
   CommonQuery,
-} from "./buildCommonFilter";
+} from "../common/buildCommonFilter";
 
 /**
  * Xây dựng đối tượng filter MongoDB cho Comment.

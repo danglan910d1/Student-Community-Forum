@@ -7,12 +7,18 @@ import { asyncHandler } from "../utils/asyncHandler";
 import {
   BCRYPT_SALT_ROUNDS,
   MIN_PASSWORD_LENGTH,
-  JWT_TOKEN_EXPIRES_IN,
   JWT_EXPIRATION_SECONDS,
 } from "../config/constants";
 import { LoginBody, RegisterBody, UserResponseData } from "../types/user";
 import { Types } from "mongoose";
-import { addRevokedToken, cacheUser } from "../services/redis";
+import {
+  addRevokedToken,
+  cacheUser,
+  clearLoginFailure,
+  clearRateLimitsByIdentifier,
+  handleLoginFailure,
+  isAccountLockedOut,
+} from "../services/common/redis";
 import { AuthenticatedRequest } from "../types/express";
 
 // Đăng ký tài khoản
@@ -71,6 +77,14 @@ export const register = asyncHandler(
       name: userResponse.name,
     });
 
+    // XÓA GIỚI HẠN IP CŨ KHI ĐĂNG KÝ THÀNH CÔNG
+    const userIp = req.ip;
+    if (userIp) {
+      // Xóa giới hạn IP trên các key 'rate:auth' (bao gồm /register và /login)
+      await clearRateLimitsByIdentifier(userIp, "rate:auth");
+      await clearRateLimitsByIdentifier(userIp, "rate:general");
+    }
+
     res.status(201).json({
       userId: userResponse.userId,
       name: userResponse.name,
@@ -103,23 +117,40 @@ export const login = asyncHandler(
       "+password"
     );
 
-    if (!user) {
-      return res.status(401).json({ error: "Invalid credentials." });
+    let loginSuccess = false;
+    const userIp = req.ip;
+
+    // KHỐI LOGIC XÁC THỰC
+    if (user) {
+      // KIỂM TRA KHÓA TẠM THỜI (TỐI ƯU HÓA CPU: CHẠY TRƯỚC KIỂM TRA MẬT KHẨU)
+      const isLockedOut = await isAccountLockedOut(trimmedEmail);
+      if (isLockedOut) {
+        // Tài khoản bị khóa, xử lý như một thất bại
+        console.log(`[LOCKOUT] Account ${trimmedEmail} is currently locked.`);
+        return res.status(401).json({ error: "Invalid credentials." });
+      } // KIỂM TRA MẬT KHẨU
+
+      if (await bcrypt.compare(trimmedPassword, user.password)) {
+        loginSuccess = true;
+      }
     }
 
-    // 2. So sánh Mật khẩu GỐC với HASH (Dùng trimmedPassword)
-    const isMatch = await bcrypt.compare(trimmedPassword, user.password);
+    // LOGIC CHUNG
+    if (loginSuccess) {
+      // THÀNH CÔNG
+      // XÓA BỘ ĐẾM THẤT BẠI VÀ TRẠNG THÁI KHÓA
+      await clearLoginFailure(trimmedEmail);
 
-    if (isMatch) {
       // KIỂM TRA BẢO MẬT: Ngăn chặn tài khoản bị cấm đăng nhập
-      if (user.status === "banned") {
+      if (user!.status === "banned") {
+        // user! an toàn vì loginSuccess là true
         return res
           .status(401)
           .json({ error: "Account is banned. Please contact administrator." });
       }
 
       // Lấy đối tượng phản hồi đã được transform
-      const userResponse: UserResponseData = user.getUserResponseData();
+      const userResponse: UserResponseData = user!.getUserResponseData();
 
       // 3. Tạo token
       const token = generateToken(userResponse.userId, userResponse.role); // <-- Giả định token có chứa ID/JTI
@@ -131,6 +162,13 @@ export const login = asyncHandler(
         name: userResponse.name,
       });
 
+      // XÓA GIỚI HẠN IP CŨ
+      if (userIp) {
+        // Xóa tất cả giới hạn IP trong các danh mục 'rate:auth' và 'rate:general'
+        // để giải phóng cho user mới này (B) và những user khác dùng cùng IP
+        await clearRateLimitsByIdentifier(userIp, "rate:auth");
+        await clearRateLimitsByIdentifier(userIp, "rate:general");
+      }
       // 5. Trả về token và thông tin user
       res.json({
         userId: userResponse.userId,
@@ -141,7 +179,15 @@ export const login = asyncHandler(
         token: token,
       });
     } else {
-      res.status(401).json({ error: "Invalid credentials." });
+      // LOGIC THẤT BẠI (FAILURE LOGIC)
+      // XỬ LÝ THẤT BẠI: Tăng bộ đếm Email
+      // Chỉ tăng bộ đếm nếu User tồn tại (đã tìm thấy user trong DB)
+      if (user) {
+        await handleLoginFailure(trimmedEmail, userIp || "0.0.0.0"); // TRUYỀN IP ĐỂ XÓA KEY IP KHI LOCKOUT
+      }
+
+      // Trả về lỗi chung
+      return res.status(401).json({ error: "Invalid credentials." });
     }
   }
 );
