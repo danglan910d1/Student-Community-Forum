@@ -11,7 +11,7 @@ export default function HomePage() {
         Nên nó được render trong môi trường client.
       */}
       <Suspense fallback={<div>Đang tải nội dung...</div>}>
-        <PostListContainer />
+        {/* <PostListContainer /> */}
       </Suspense>
     </main>
   );
