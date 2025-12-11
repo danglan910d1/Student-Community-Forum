@@ -1,3 +1,67 @@
+/* -------------------------------------------------------------------------
+   TAILWIND BASE LAYERS
+   ------------------------------------------------------------------------- */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* -------------------------------------------------------------------------
+   GLOBAL RESET & TYPOGRAPHY
+   ------------------------------------------------------------------------- */
+html,
+body {
+  @apply bg-base-bg text-text-default antialiased;
+}
+
+/* Font mặc định từ layout.tsx (Roboto + Headline) */
+body {
+  font-family: var(--font-roboto), sans-serif;
+}
+
+/* -------------------------------------------------------------------------
+   GLOBAL UTILITIES (DÙNG CHUNG CHO TOÀN PROJECT)
+   ------------------------------------------------------------------------- */
+
+/* --- SHADOWS --- */
+@layer utilities {
+  .shadow-base {
+    @apply shadow-post-shadow;
+  }
+  .shadow-hover {
+    @apply shadow-hover-shadow;
+  }
+}
+
+/* --- HOVER STATES CHUNG (không thuộc component cụ thể) --- */
+@layer utilities {
+  /* Hover cho nền tối */
+  .hover-dark {
+    @apply transition-all duration-150 ease-in-out hover:opacity-80 hover:shadow-hover-shadow;
+  }
+
+  /* Hover cho nền sáng */
+  .hover-light {
+    @apply transition-all duration-150 ease-in-out hover:bg-hover-light-bg hover:shadow-hover-shadow;
+  }
+}
+
+/* -------------------------------------------------------------------------
+   GLOBAL LAYOUT HELPERS
+   (Các lớp tái dùng: card, container, background blocks)
+   ------------------------------------------------------------------------- */
+@layer components {
+  /* CARD / CONTAINER CƠ BẢN */
+  .container-base {
+    @apply bg-container-bg shadow-base border border-border-light rounded-xl text-text-default p-6;
+  }
+
+  /* CONTAINER TƯƠNG TÁC */
+  .container-interactive {
+    @apply bg-container-bg border border-border-light rounded-lg p-4 cursor-pointer text-text-default shadow-md hover-light;
+  }
+
+  /* CONTAINER NỀN TỐI */
+  .container-dark {
+    @apply bg-primary-dark text-text-light shadow-base rounded-lg p-4;
+  }
+}

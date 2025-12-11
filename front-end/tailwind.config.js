@@ -4,24 +4,33 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        "base-bg": "#fff",
-        "nav-bg": "#1c395f",
+        // 1. MÀU GIAO DIỆN CHUNG (GENERAL UI COLORS)
+        "base-bg": "#e5e7eb",
         "container-bg": "#fff",
-        highlight: "#dcdad9",
-        "icon-color": "#c26b32",
+        "text-default": "#374151",
         "text-title": "#041434",
         "text-light": "#fff",
-        "btn-accent": "#3b6cb5",
-        "btn-hover": "#2e4a6e",
-        "yellow-100": "#fff4d4", // Tông màu vàng nhạt tùy chỉnh
-        "blue-100": "#dbe4f9", // Tông màu xanh nhạt tùy chỉnh (gần với nền post)
-        "purple-100": "#f0eafc", // Tông màu tím nhạt tùy chỉnh
-        // Màu Tùy chỉnh cho Tag (để thay thế CSS tùy chỉnh)
-        "tag-performance-bg": "#ffe8e8", // Nền đỏ/hồng nhạt (tương đương bg-red-100 cũ)
-        "tag-performance-text": "#c26b32", // Text màu cam (tương đương icon-color)
 
-        "tag-tech-bg": "#e6f0ff", // Nền xanh nhạt cho Tech/AI/React
-        "tag-tech-text": "#1c395f", // Text màu xanh đậm (tương đương nav-bg)
+        "hover-light-bg": "#f7f7f7",
+        "border-light": "#e5e5e5",
+
+        // 2. MÀU VAI TRÒ CHÍNH (PRIMARY - Approved)
+        "primary-dark": "#1c395f",
+        "primary-light": "#e6f0ff",
+
+        // 3. MÀU VAI TRÒ PHỤ (SECONDARY - Xám/Xanh trung lập)
+        "secondary-dark": "#dcdad9",
+        "secondary-light": "#edecec",
+
+        // 4. MÀU CẢNH BÁO/LỖI (TERTIARY - Cam/Hồng)
+        "tertiary-dark": "#c26b32",
+        "tertiary-light": "#ffe8e8",
+        "tertiary-light-text": "#c26b32",
+
+        // 5. MÀU TIỆN ÍCH KHÁC (UTILITY COLORS)
+        "yellow-100": "#fff4d4",
+        "blue-100": "#dbe4f9",
+        "purple-100": "#f0eafc",
       },
       fontFamily: {
         // Thay thế chuỗi tên font bằng biến CSS
@@ -29,14 +38,9 @@ module.exports = {
         body: ["var(--font-roboto)", "sans-serif"],
       },
       boxShadow: {
-        "default-card":
-          "0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)",
-        "post-shadow":
-          "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1)",
-        "header-shadow": "0 4px 6px -1px rgba(0, 0, 0, 0.3)",
-      },
-      borderRadius: {
-        xl: "0.75rem", // Tăng độ bo góc để khớp
+        "post-shadow": "0 10px 20px rgba(0, 0, 0, 0.1)",
+        "hover-shadow":
+          "0 5px 10px -3px rgba(0, 0, 0, 0.1), 0 2px 4px -4px rgba(0, 0, 0, 0.05)",
       },
     },
   },

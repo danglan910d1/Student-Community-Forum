@@ -1,62 +1,46 @@
-import { forwardRef, ReactNode } from "react";
+import { forwardRef } from "react";
+import clsx from "clsx";
 
-
-// Định nghĩa các kiểu nút
-type ButtonVariant = 'primary' | 'secondary' | 'accent' | 'ghost';
-
+type ButtonVariant = "primary" | "secondary" | "tertiary" | "default";
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  children: ReactNode;
   variant?: ButtonVariant;
-  className?: string;
 }
 
+const base =
+  "px-4 py-2 rounded-lg font-semibold transition-all duration-150 ease-in-out shadow-md";
 
-// 1. DÙNG OBJECT LOOKUP ĐỂ ÁNH XẠ VARIANT SANG CHUỖI CSS
-const variantStyles: Record<ButtonVariant, string> = {
- 
-  // Nút 'New Post': Kích thước nhỏ hơn, bo góc vừa phải (rounded-lg), bóng nhẹ hơn (shadow-md)
-  primary: 'bg-nav-bg text-text-light hover:bg-btn-hover shadow-md',
- 
-  // Nút 'Tag/Accent' (ví dụ: Nút hành động nổi bật): giữ nguyên style nổi bật
-  accent: 'bg-icon-color text-text-light hover:bg-[#d47639] shadow-md',
- 
-  // Nút Lọc (ví dụ: 'Mới nhất', 'Phổ biến'): KHÔNG VIỀN, chỉ có nền trắng, hover nhẹ
-  // Lưu ý: 'Mới nhất' khi được chọn cần xử lý state active bên ngoài component này.
-  secondary: 'bg-white text-text-title hover:bg-highlight/50 shadow-none',
- 
-  // Nút Ghost: Dùng cho các nút không màu nền, text đậm
-  ghost: 'bg-transparent text-text-title hover:bg-highlight/50 shadow-none',
+const variantClasses: Record<ButtonVariant, string> = {
+  /* 1. PRIMARY DARK (#1c395f) */
+  // primary: "bg-primary-dark text-text-light hover:hover-dark",
+  primary: "container-base",
+
+  /* 2. SECONDARY DARK (#dcdad9) */
+  secondary: "bg-secondary-dark text-text-default hover:hover-dark",
+
+  /* 3. TERTIARY DARK (#c26b32) */
+  tertiary: "bg-tertiary-dark text-text-light hover:hover-dark",
+
+  /* 4. DEFAULT BUTTON (white background, border) */
+  default:
+    "bg-white text-text-title border border-border-light hover:hover-light",
 };
 
+const stateClasses =
+  "active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed";
 
-// 2. Component sử dụng ForwardRef
 const Button = forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ children, variant = 'primary', className = '', ...props }, ref) => {
-   
-    // Base style áp dụng cho tất cả các nút
-    // Điều chỉnh Padding và Text Size xuống `text-sm` hoặc `text-base`
-    const baseStyle = ' py-2 px-4 text-white font-medium rounded-lg text-base transition duration-150 shadow-lg';
-   
-    // Lấy chuỗi style dựa trên variant
-    const variantStyle = variantStyles[variant] || variantStyles.primary;
-
-
+  ({ variant = "primary", className, ...props }, ref) => {
     return (
       <button
         ref={ref}
-        className={`${baseStyle} ${variantStyle} ${className} cursor-pointer`}
+        className={clsx(base, variantClasses[variant], stateClasses, className)}
         {...props}
-        disabled={props.disabled}
-      >
-        {children}
-      </button>
+      />
     );
   }
 );
 
-
-Button.displayName = 'Button';
-
+Button.displayName = "Button";
 
 export default Button;

@@ -38,7 +38,10 @@ export function PostListContainer() {
         <p>Không có bài viết nào được tìm thấy hoặc dữ liệu không hợp lệ.</p>
       )}
 
-      <Button>New Post</Button>
+      <Button variant="primary">New Post</Button>
+      <Button variant="secondary">New Post</Button>
+      <Button variant="tertiary">New Post</Button>
+      <Button variant="default">New Post</Button>
 
       <Avatar
         src="/path/to/author-image.jpg"
@@ -60,6 +63,11 @@ export function PostListContainer() {
 
         {/* Tag Performance sử dụng variant 'performance' */}
         <Chip variant="performance">Performance</Chip>
+
+        {/* Tag Performance sử dụng variant 'performance' */}
+        <Chip variant="default">Performance</Chip>
+        {/* Tag Performance sử dụng variant 'performance' */}
+        <Chip variant="highlight">Performance</Chip>
       </div>
 
       <FilterButtons></FilterButtons>
