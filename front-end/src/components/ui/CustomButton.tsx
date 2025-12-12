@@ -48,7 +48,7 @@
 
 import * as React from "react";
 // Import các thứ cần thiết từ file base
-import { Button, ButtonProps } from "./button";
+import { Button } from "./button";
 // Icon
 import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -58,7 +58,7 @@ import { cn } from "@/lib/utils";
 // --------------------------------------------------------------------------
 
 // Omit các props của Button base mà chúng ta muốn định nghĩa lại/ghi đè (nếu cần)
-interface CustomButtonProps extends Omit<ButtonProps, "children"> {
+interface CustomButtonProps {
   // Thêm các props tùy chỉnh
   isLoading?: boolean;
   leftIcon?: React.ReactNode;
@@ -77,7 +77,7 @@ const CustomButton = React.forwardRef<HTMLButtonElement, CustomButtonProps>(
       leftIcon,
       rightIcon,
       children,
-      disabled, // Bắt disabled để kết hợp với isLoading
+      // disabled, // Bắt disabled để kết hợp với isLoading
       ...props
     },
     ref
@@ -104,7 +104,7 @@ const CustomButton = React.forwardRef<HTMLButtonElement, CustomButtonProps>(
     return (
       <Button
         // Tự động disable khi đang loading
-        disabled={disabled || isLoading}
+        // disabled={disabled || isLoading}
         ref={ref}
         {...props}
       >
