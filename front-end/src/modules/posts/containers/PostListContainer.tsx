@@ -2,7 +2,7 @@
 "use client";
 import Chip from "@/components/ui/Chip";
 import { usePostsQuery } from "../hooks/usePostsQuery";
-import Button from "@/components/ui/Button";
+import Button from "@/components/ui/CustomButton";
 import Avatar from "@/components/ui/Avatar";
 import FilterButtons from "@/components/shared/FilterButtons";
 import PostActions from "@/components/shared/PostActions";
@@ -10,6 +10,18 @@ import PopularTagsList from "@/components/shared/PopularTagsList";
 import TrendingPosts from "@/components/shared/TrendingPosts";
 import NotificationBlock from "@/components/shared/NotificationBlock";
 import SearchForm from "@/components/ui/SearchForm";
+import {
+  AlertTriangle,
+  Bell,
+  Check,
+  Download,
+  Plus,
+  Search,
+  Settings,
+  Trash2,
+} from "lucide-react";
+import CodeContainer from "@/components/shared/CodeContainer";
+import OuterContainer from "@/components/shared/OuterContainer";
 
 export function PostListContainer() {
   const { data: posts, isLoading, isError } = usePostsQuery();
@@ -37,11 +49,6 @@ export function PostListContainer() {
         // Hiển thị thông báo hoặc spinner nếu data không phải là mảng
         <p>Không có bài viết nào được tìm thấy hoặc dữ liệu không hợp lệ.</p>
       )}
-
-      <Button variant="primary">New Post</Button>
-      <Button variant="secondary">New Post</Button>
-      <Button variant="tertiary">New Post</Button>
-      <Button variant="default">New Post</Button>
 
       <Avatar
         src="/path/to/author-image.jpg"
