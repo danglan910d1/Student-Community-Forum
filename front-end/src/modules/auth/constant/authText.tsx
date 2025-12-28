@@ -1,0 +1,28 @@
+export const AUTH_TEXT = {
+  SIGNUP: {
+    TITLE: "Tạo tài khoản mới",
+    DESCRIPTION: "Nhập thông tin chi tiết để tạo tài khoản",
+    NAME_LABEL: "Họ và tên",
+    NAME_PLACEHOLDER: "Nguyễn Văn A",
+    EMAIL_LABEL: "Địa chỉ Email",
+    EMAIL_PLACEHOLDER: "ten@vi-du.com",
+    EMAIL_DESC: "Chúng tôi sẽ dùng email này để liên lạc và bảo mật tài khoản.",
+    PASSWORD_LABEL: "Mật khẩu",
+    CONFIRM_PASSWORD_LABEL: "Xác nhận mật khẩu",
+    PASSWORD_DESC: "Mật khẩu phải có ít nhất 8 ký tự.",
+    SUBMIT_BTN: "Đăng ký",
+    HAVE_ACCOUNT: "Đã có tài khoản?",
+    SIGN_IN_LINK: "Đăng nhập",
+  },
+  LOGIN: {
+    TITLE: "Chào mừng trở lại",
+    DESCRIPTION: "Nhập email và mật khẩu để truy cập tài khoản của bạn",
+    EMAIL_LABEL: "Địa chỉ Email",
+    EMAIL_PLACEHOLDER: "ten@vi-du.com",
+    PASSWORD_LABEL: "Mật khẩu",
+    FORGOT_PASSWORD: "Quên mật khẩu?",
+    SUBMIT_BTN: "Đăng nhập",
+    NO_ACCOUNT: "Chưa có tài khoản?",
+    SIGN_UP_LINK: "Đăng ký",
+  },
+} as const;

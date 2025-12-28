@@ -1,15 +1,5 @@
 // src/modules/posts/containers/PostListContainer.tsx (Đã sửa)
 "use client";
-import Chip from "@/components/ui/Chip";
-import { usePostsQuery } from "../hooks/usePostsQuery";
-import Button from "@/components/ui/CustomButton";
-import Avatar from "@/components/ui/Avatar";
-import FilterButtons from "@/components/shared/FilterButtons";
-import PostActions from "@/components/shared/PostActions";
-import PopularTagsList from "@/components/shared/PopularTagsList";
-import TrendingPosts from "@/components/shared/TrendingPosts";
-import NotificationBlock from "@/components/shared/NotificationBlock";
-import SearchForm from "@/components/ui/SearchForm";
 import {
   AlertTriangle,
   Bell,
@@ -20,8 +10,7 @@ import {
   Settings,
   Trash2,
 } from "lucide-react";
-import CodeContainer from "@/components/shared/CodeContainer";
-import OuterContainer from "@/components/shared/OuterContainer";
+import { usePostsQuery } from "../hooks/usePostsQuery";
 
 export function PostListContainer() {
   const { data: posts, isLoading, isError } = usePostsQuery();
@@ -49,40 +38,6 @@ export function PostListContainer() {
         // Hiển thị thông báo hoặc spinner nếu data không phải là mảng
         <p>Không có bài viết nào được tìm thấy hoặc dữ liệu không hợp lệ.</p>
       )}
-
-      <Avatar
-        src="/path/to/author-image.jpg"
-        alt="John Smith"
-        size="md"
-        isOnline={true}
-        hasRing={true} // <-- BẬT VIỀN TRẮNG
-      />
-
-      {/* // Ví dụ 2: Avatar Fallback (size lg, có trạng thái Online - Khối User Status)
-        <Avatar 
-        alt="User Name (Admin)" 
-        size="lg" 
-        isOnline={true} 
-        /> */}
-      <div className="space-x-1">
-        {/* Tag React sử dụng variant 'tech' */}
-        <Chip variant="tech">React</Chip>
-
-        {/* Tag Performance sử dụng variant 'performance' */}
-        <Chip variant="performance">Performance</Chip>
-
-        {/* Tag Performance sử dụng variant 'performance' */}
-        <Chip variant="default">Performance</Chip>
-        {/* Tag Performance sử dụng variant 'performance' */}
-        <Chip variant="highlight">Performance</Chip>
-      </div>
-
-      <FilterButtons></FilterButtons>
-      <PostActions></PostActions>
-      <PopularTagsList></PopularTagsList>
-      <TrendingPosts></TrendingPosts>
-      <NotificationBlock></NotificationBlock>
-      <SearchForm></SearchForm>
     </div>
   );
 }
