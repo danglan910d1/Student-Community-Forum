@@ -94,38 +94,41 @@ export const getTopicById = asyncHandler(
 // Endpoint: POST /api/topics/admin
 export const createTopic = asyncHandler(
   async (req: AuthenticatedRequest<{}, {}, CreateTopicBody>, res: Response) => {
-    // 1. Lấy dữ liệu từ body và adminId từ request (đã xác thực)
     const { name, description } = req.body;
     const adminId = req.userId;
 
-    // 2. Kiểm tra tính hợp lệ cơ bản
-    if (!name) {
+    if (!name)
       return res.status(400).json({ error: "Topic name is required." });
-    }
 
     const trimmedName = name.trim();
-
-    // 3. Kiểm tra trùng lặp tên Topic (Dùng trimmedName)
-    const topicExists = await Topic.findOne({ name: trimmedName });
-    if (topicExists) {
-      return res
-        .status(400)
-        .json({ error: "Topic with this name already exists." });
-    }
-
-    // 4. Tạo slug từ tên Topic để sử dụng cho URL
     const slug = generateSlug(trimmedName);
 
-    // 5. Tạo Topic trong Database
-    const newTopic = await Topic.create({
+    // Kiểm tra trùng lặp (bao gồm cả những cái đã soft delete nếu cần, hoặc bỏ qua)
+    const topicExists = await Topic.findOne({
+      name: trimmedName,
+      is_deleted: false,
+    });
+    if (topicExists)
+      return res.status(400).json({ error: "Topic already exists." });
+
+    const newTopicRaw = await Topic.create({
       name: trimmedName,
       slug,
-      description: description ? description.trim() : undefined, // Làm sạch description
+      description: description?.trim(),
       createdBy: new Types.ObjectId(adminId),
-      status: "approved", // QUY TẮC: Admin tạo -> mặc định approved
+      status: "approved",
+      is_deleted: false, // Mặc định false
     });
 
-    res.status(201).json(newTopic);
+    // TRẢ VỀ QUA PIPELINE: Để đồng nhất topicId và bỏ _id
+    const topicArray = await Topic.aggregate(
+      buildTopicAggregationPipeline(
+        { _id: newTopicRaw._id },
+        { includeCreator: true }
+      )
+    );
+
+    res.status(201).json(topicArray[0]);
   }
 );
 
@@ -136,48 +139,103 @@ export const updateTopic = asyncHandler(
     req: AuthenticatedRequest<TopicParams, {}, UpdateTopicBody>,
     res: Response
   ) => {
-    // 1. Lấy ID Topic từ params và dữ liệu cập nhật từ body
     const topicId = req.params.id;
-    const { name, description, status } = req.body; // BỔ SUNG: Kiểm tra ID hợp lệ
+    const { name, description, status } = req.body;
 
     if (!Types.ObjectId.isValid(topicId)) {
       return res.status(400).json({ error: "Invalid Topic ID format." });
     }
-    const updateFields: Partial<ITopic> = {}; // 2. Xử lý trường name và tự động cập nhật slug
 
+    const updateFields: Partial<ITopic> = {};
     if (name) {
-      const trimmedName = name.trim();
-      if (trimmedName.length === 0) {
-        return res.status(400).json({ error: "Topic name cannot be empty." });
-      }
-      updateFields.name = trimmedName;
-      updateFields.slug = generateSlug(trimmedName);
-    } // 3. Xử lý trường description (chấp nhận cả undefined/null)
-
+      updateFields.name = name.trim();
+      updateFields.slug = generateSlug(name.trim());
+    }
     if (description !== undefined) {
-      // Nếu description không phải null, trim nó
       updateFields.description =
         description === null ? null : description.trim();
-    } // 4. Xử lý trường status (Duyệt/Từ chối)
-
-    if (status) {
-      // Mongoose sẽ kiểm tra enum với runValidators: true
-      updateFields.status = status;
-    } // 5. Kiểm tra nếu không có trường nào được cung cấp
+    }
+    if (status) updateFields.status = status;
 
     if (Object.keys(updateFields).length === 0) {
       return res.status(400).json({ error: "No fields provided for update." });
-    } // 6. Tìm và Cập nhật Topic trực tiếp
+    }
 
-    const updatedTopic = await Topic.findByIdAndUpdate(topicId, updateFields, {
-      new: true,
-      runValidators: true, // Dùng upsert: false để tránh tạo tài liệu mới nếu không tìm thấy
-    }); // 7. Kiểm tra kết quả
+    const updatedTopicRaw = await Topic.findOneAndUpdate(
+      { _id: topicId, is_deleted: false }, // Chỉ update nếu chưa bị xóa
+      updateFields,
+      { new: true, runValidators: true }
+    );
 
-    if (!updatedTopic) {
+    if (!updatedTopicRaw)
+      return res.status(404).json({ error: "Topic not found." });
+
+    // TRẢ VỀ QUA PIPELINE
+    const topicArray = await Topic.aggregate(
+      buildTopicAggregationPipeline(
+        { _id: updatedTopicRaw._id },
+        { includeCreator: true }
+      )
+    );
+
+    res.json(topicArray[0]);
+  }
+);
+
+// --- [ ADMIN: Xóa mềm Topic ] ---
+// Endpoint: DELETE /api/topics/admin/:id
+export const deleteTopic = asyncHandler(
+  async (req: AuthenticatedRequest<TopicParams>, res: Response) => {
+    const { id } = req.params;
+
+    if (!Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ error: "Invalid Topic ID format." });
+    }
+
+    const deletedTopic = await Topic.findByIdAndUpdate(
+      id,
+      { is_deleted: true },
+      { new: true }
+    );
+
+    if (!deletedTopic)
+      return res.status(404).json({ error: "Topic not found." });
+
+    res.json({ message: "Topic soft deleted successfully." });
+  }
+);
+
+// --- [ ADMIN: Khôi phục Topic (Soft Delete -> Active) ] ---
+// Endpoint: PUT /api/topics/admin/restore/:id
+export const restoreTopic = asyncHandler(
+  async (req: AuthenticatedRequest<TopicParams>, res: Response) => {
+    const { id } = req.params;
+
+    if (!Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ error: "Invalid Topic ID format." });
+    }
+
+    const restoredTopic = await Topic.findByIdAndUpdate(
+      id,
+      { is_deleted: false },
+      { new: true }
+    );
+
+    if (!restoredTopic) {
       return res.status(404).json({ error: "Topic not found." });
     }
 
-    res.json(updatedTopic);
+    // TRẢ VỀ QUA PIPELINE ĐỂ ĐỒNG NHẤT DỮ LIỆU
+    const topicArray = await Topic.aggregate(
+      buildTopicAggregationPipeline(
+        { _id: restoredTopic._id },
+        { includeCreator: true }
+      )
+    );
+
+    res.json({
+      message: "Topic restored successfully.",
+      topic: topicArray[0],
+    });
   }
 );

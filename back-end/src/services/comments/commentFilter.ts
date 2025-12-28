@@ -6,47 +6,35 @@ import {
   CommonQuery,
 } from "../common/buildCommonFilter";
 
-/**
- * Xây dựng đối tượng filter MongoDB cho Comment.
- * Sử dụng buildCommonFilter cho các trường chung (Status, Search).
- */
 export const buildCommentFilter = (
   queryParams: GetCommentsQuery,
   authContext: AuthContext
 ): any => {
-  const { postId, parentId, page, limit } = queryParams;
+  const { postId, parentId, status } = queryParams;
 
-  const commonQuery: CommonQuery = {
-    /* ... */
-  };
-  const filter = buildCommonFilter(commonQuery, authContext, "comment");
+  // 1. Build common filter (search, is_deleted, status mặc định)
+  const filter = buildCommonFilter(queryParams, authContext, "comment");
 
-  // 3. XỬ LÝ LỌC ĐẶC THÙ (postId, parentId)
-
-  // 3.1. Lọc BẮT BUỘC theo Post ID
-  if (postId && Types.ObjectId.isValid(postId)) {
-    filter.postId = new Types.ObjectId(postId);
-  } else {
-    // Áp dụng FAIL FAST: Trả về lỗi nếu tham số bắt buộc không hợp lệ
-    return { error: "Valid postId is required for fetching comments." };
+  // 2. Validate PostId (Fail-fast)
+  if (!postId || !Types.ObjectId.isValid(postId)) {
+    return { error: "Valid postId is required." };
   }
+  filter.postId = new Types.ObjectId(postId);
 
-  // 3.2. Lọc theo cấp độ (Parent ID)
+  // 3. Xử lý ParentId (Phân cấp)
   if (parentId) {
-    if (Types.ObjectId.isValid(parentId)) {
-      filter.parentId = new Types.ObjectId(parentId);
-    } else {
-      // Trường hợp lỗi parentId
-      return { error: "Invalid parentId format." };
-    }
+    if (!Types.ObjectId.isValid(parentId))
+      return { error: "Invalid parentId." };
+    filter.parentId = new Types.ObjectId(parentId);
   } else {
-    // Lấy bình luận cấp 1 (root comments)
-    filter.parentId = null;
+    filter.parentId = null; // Lấy comment gốc
   }
 
-  // 3.3. Xử lý is_deleted cho ADMIN (Logic này đã đúng)
-  if (authContext.isAdmin && filter.is_deleted === false) {
+  // 4. Quyền Admin (Sửa lỗi hình ảnh của bạn)
+  // Nếu là Admin và KHÔNG truyền status cụ thể -> Xóa lọc status/deleted để xem tất cả
+  if (authContext.isAdmin && status === undefined) {
     delete filter.is_deleted;
+    delete filter.status;
   }
 
   return filter;

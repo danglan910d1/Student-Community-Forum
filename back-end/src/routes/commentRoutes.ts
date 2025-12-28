@@ -5,6 +5,7 @@ import {
   updateComment,
   deleteComment,
   getAllCommentsForAdmin,
+  restoreComment,
 } from "../controllers/commentController";
 import { authMiddleware } from "../middleware/auth";
 import { adminMiddleware } from "../middleware/admin";
@@ -31,9 +32,9 @@ router.post(
   createComment
 );
 
-// PUT /api/comments/:commentId (Cập nhật bình luận)
+// PATCH /api/comments/:commentId (Cập nhật bình luận)
 // Cần authMiddleware để lấy userId và adminMiddleware để gán userRole
-router.put(
+router.patch(
   "/:commentId",
   sensitiveLimiter,
   authMiddleware,
@@ -51,6 +52,15 @@ router.delete(
   adminMiddleware,
   preventDuplicateRequest,
   deleteComment
+);
+
+// PATCH /api/comments/:commentId/restore (Khôi phục bình luận từ thùng rác)
+router.patch(
+  "/:commentId/restore",
+  sensitiveLimiter,
+  authMiddleware,
+  adminMiddleware,
+  restoreComment
 );
 
 // --- [ ADMIN ONLY ACCESS ] ---

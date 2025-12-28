@@ -4,7 +4,7 @@
  * * Nguyên tắc áp dụng: HOF, Type Safety, RBAC Logic, Data Cleaning.
  */
 import { Request, Response } from "express";
-import Tag, { ITag, TagStatus } from "../models/Tag"; // <-- SỬA: Import Model, ITag, và TagStatus
+import Tag, { ITag } from "../models/Tag";
 import { AuthenticatedRequest } from "../types/express";
 import { Types } from "mongoose";
 import { asyncHandler } from "../utils/asyncHandler";
@@ -38,7 +38,7 @@ export const getTagsList = asyncHandler(
 
     // 3. TẠO AGGREGATION PIPELINE (FIX N+1)
     let pipeline = buildTagAggregationPipeline(filter, {
-      includeTopic: isAdmin, // Chỉ populate Topic nếu là Admin
+      includeTopic: true, // Chỉ populate Topic nếu là Admin
       includeCreator: isAdmin, // Chỉ populate Creator nếu là Admin
       includeProjection: true,
     });
@@ -58,6 +58,48 @@ export const getTagsList = asyncHandler(
 );
 
 // --- [ ADMIN: Cập nhật Tag và Duyệt Status ] ---
+// --- [ ADMIN: Tạo Tag chủ động ] ---
+// Endpoint: POST /api/tags/admin
+export const createTagByAdmin = asyncHandler(
+  async (
+    req: AuthenticatedRequest<{}, {}, { name: string; topicId?: string }>,
+    res: Response
+  ) => {
+    const { name, topicId } = req.body;
+
+    if (!name || name.trim().length === 0) {
+      return res.status(400).json({ error: "Tag name is required." });
+    }
+
+    const slug = generateSlug(name.trim());
+
+    // Kiểm tra trùng
+    const existing = await Tag.findOne({ slug });
+    if (existing)
+      return res.status(400).json({ error: "Tag name already exists." });
+
+    // 1. Tạo bản ghi mới
+    const newTagRaw = await Tag.create({
+      name: name.trim(),
+      slug,
+      topicId: topicId ? new Types.ObjectId(topicId) : null,
+      createdBy: new Types.ObjectId(req.userId),
+      status: "approved", // Admin tạo thì mặc định là approved
+      is_deleted: false,
+    });
+
+    // 2. Trả về qua Pipeline
+    const tagArray = await Tag.aggregate(
+      buildTagAggregationPipeline(
+        { _id: newTagRaw._id },
+        { includeTopic: true, includeCreator: true, includeProjection: true }
+      )
+    );
+
+    res.status(201).json(tagArray[0]);
+  }
+);
+
 // Endpoint: PUT /api/tags/admin/:id
 export const updateTag = asyncHandler(
   async (
@@ -78,19 +120,12 @@ export const updateTag = asyncHandler(
         return res.status(400).json({ error: "Tag name cannot be empty." });
       }
       updateFields.name = trimmedName;
-      // Update Slug nếu tên thay đổi (đảm bảo tính nhất quán)
       updateFields.slug = generateSlug(trimmedName);
     }
 
-    // topicId cần là Types.ObjectId | null
     if (topicId !== undefined) {
-      if (topicId === null) {
-        updateFields.topicId = null;
-      } else if (Types.ObjectId.isValid(topicId)) {
-        updateFields.topicId = new Types.ObjectId(topicId);
-      } else {
-        return res.status(400).json({ error: "Invalid topicId format." });
-      }
+      updateFields.topicId =
+        topicId === null ? null : new Types.ObjectId(topicId);
     }
 
     if (status) updateFields.status = status;
@@ -99,16 +134,31 @@ export const updateTag = asyncHandler(
       return res.status(400).json({ error: "No fields provided for update." });
     }
 
-    const updatedTag = await Tag.findByIdAndUpdate(tagId, updateFields, {
-      new: true,
-      runValidators: true,
-    }).populate("topicId", "name");
+    // 1. Thực hiện Update (Chỉ lấy bản ghi thô để xác nhận tồn tại)
+    const updatedTagRaw = await Tag.findOneAndUpdate(
+      { _id: tagId, is_deleted: { $ne: true } },
+      updateFields,
+      { new: true, runValidators: true }
+    );
 
-    if (!updatedTag) {
+    if (!updatedTagRaw) {
       return res.status(404).json({ error: "Tag not found after update." });
     }
 
-    res.json(updatedTag);
+    // 2. SỬ DỤNG PIPELINE ĐỂ FORMAT DỮ LIỆU TRẢ VỀ (Bỏ _id, đổi sang tagId)
+    // Thay thế hoàn toàn cho .populate() cũ
+    const tagArray = await Tag.aggregate(
+      buildTagAggregationPipeline(
+        { _id: updatedTagRaw._id },
+        {
+          includeTopic: true,
+          includeCreator: true,
+          includeProjection: true,
+        }
+      )
+    );
+
+    res.json(tagArray[0]);
   }
 );
 
@@ -153,15 +203,64 @@ export const deleteTag = asyncHandler(
 
     if (!Types.ObjectId.isValid(tagId)) {
       return res.status(400).json({ error: "Invalid Tag ID format." });
-    } // Xóa Tag
-
-    const deletedTag = await Tag.findByIdAndDelete(tagId);
-
-    if (!deletedTag) {
-      return res.status(404).json({ error: "Tag not found." });
     }
 
-    // LƯU Ý: Không cần xóa liên đới trong Posts vì Post chỉ giữ ID và Mongoose tự bỏ qua ID không tồn tại.
-    res.json({ message: "Tag deleted successfully." });
+    // Chuyển findByIdAndDelete sang findByIdAndUpdate
+    const deletedTag = await Tag.findByIdAndUpdate(
+      tagId,
+      { is_deleted: true },
+      { new: true }
+    );
+
+    if (!deletedTag) return res.status(404).json({ error: "Tag not found." });
+
+    res.json({ message: "Tag moved to trash successfully." });
+  }
+);
+
+// --- [ ADMIN: Khôi phục Tag ] ---
+export const restoreTag = asyncHandler(
+  async (req: AuthenticatedRequest<TagParams>, res: Response) => {
+    const { id } = req.params;
+    const restoredTag = await Tag.findByIdAndUpdate(
+      id,
+      { is_deleted: false },
+      { new: true }
+    );
+    if (!restoredTag) return res.status(404).json({ error: "Tag not found." });
+
+    const tagArray = await Tag.aggregate(
+      buildTagAggregationPipeline(
+        { _id: restoredTag._id },
+        { includeTopic: true }
+      )
+    );
+    res.json({ message: "Tag restored successfully.", tag: tagArray[0] });
+  }
+);
+
+// --- [ ADMIN: Duyệt/Cập nhật hàng loạt Tags ] ---
+// Body: { ids: ["id1", "id2"], status: "approved" }
+export const bulkUpdateTags = asyncHandler(
+  async (
+    req: AuthenticatedRequest<{}, {}, { ids: string[]; status: string }>,
+    res: Response
+  ) => {
+    const { ids, status } = req.body;
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: "List of Tag IDs is required." });
+    }
+
+    const result = await Tag.updateMany(
+      { _id: { $in: ids.map((id) => new Types.ObjectId(id)) } },
+      { $set: { status } }
+    );
+
+    res.json({
+      message: `Successfully updated ${result.modifiedCount} tags to ${status}.`,
+      matchedCount: result.matchedCount,
+      modifiedCount: result.modifiedCount,
+    });
   }
 );

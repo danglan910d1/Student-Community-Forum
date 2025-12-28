@@ -49,6 +49,8 @@ export interface UpdateUserStatusBody {
 // Vừa search vừa lọc
 export interface GetAllUsersQuery extends CommonQuery {
   role?: UserRole;
+  email?: string; // Thêm để lọc chính xác email
+  name?: string; // Thêm để lọc chính xác tên (nếu cần)
 }
 
 // -----------------------------------------------------------

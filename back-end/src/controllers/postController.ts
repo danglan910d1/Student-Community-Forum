@@ -6,14 +6,11 @@
 import { Request, Response } from "express";
 import Post, { IPost } from "../models/Post";
 import Topic from "../models/Topic";
-import Comment from "../models/Comment";
-import Like from "../models/Like";
 import { AuthenticatedRequest } from "../types/express";
 import { Types } from "mongoose";
 import {
   PostParams,
   CreatePostBody,
-  GetPostsQuery,
   UpdatePostBody,
   AdminApprovePostBody,
   ToggleStickyBody,
@@ -70,86 +67,167 @@ export const createPost = asyncHandler(
 
     const slug = generateSlug(title);
 
-    // 5. Tạo bài viết
-    const newPost = await Post.create({
-      userId: userObjectId,
-      topicId: topicObjectId,
+    // 5. Tạo bài viết trong DB
+    const newPostRaw = await Post.create({
+      userId: new Types.ObjectId(userId),
+      topicId: topic._id,
       tags: validTagIds,
       pending_tags: pendingTagIds,
       title,
       slug,
       content,
-      status: "pending", // QUY TẮC: Mặc định chờ duyệt
+      status: "pending",
       is_sticky: false,
+      is_deleted: false, // Khởi tạo giá trị soft delete
     });
 
-    res.status(201).json(newPost);
+    // 2. TRẢ VỀ QUA PIPELINE: Để FE nhận được postId và Author object ngay lập tức
+    const postArray = await Post.aggregate(
+      buildPostAggregationPipeline(
+        { _id: newPostRaw._id },
+        { includeUser: true, includeTopic: true, includeTags: true },
+        req.userRole === "admin",
+        userId
+      )
+    );
+
+    res.status(201).json(postArray[0]);
   }
 );
 
-// --- [ PUBLIC/ADMIN: Lấy danh sách Bài Viết ] ---
-// Hỗ trợ phân trang, lọc theo Topic, Tag và STATUS
-// Endpoint: GET /api/posts
-export const getPosts = asyncHandler(
+// --- [ USER/ADMIN: Cập nhật Bài Viết ] ---
+// Cần authMiddleware (User chỉ sửa bài của mình, Admin sửa bài bất kỳ)
+// Endpoint: PUT /api/posts/:id
+export const updatePost = asyncHandler(
   async (
-    req:
-      | Request<{}, {}, {}, GetPostsQuery>
-      | AuthenticatedRequest<{}, {}, {}, GetPostsQuery>,
+    req: AuthenticatedRequest<PostParams, {}, UpdatePostBody>,
     res: Response
   ) => {
-    // 1. Lấy tham số query và quyền hạn (Zero-Lookup)
-    const { page, limit } = req.query;
-    const userId = "userId" in req ? req.userId : undefined;
-    const isAdmin = "userRole" in req ? req.userRole === "admin" : false;
+    const postId = req.params.id;
+    const userId = req.userId;
+    const { topicId, tags, title, content, status } = req.body;
 
-    // Tạo khóa cache dựa trên TẤT CẢ query params và quyền Admin (chỉ public mới cache)
-    const cacheKey = isAdmin ? null : `posts:list:${JSON.stringify(req.query)}`;
+    if (!Types.ObjectId.isValid(postId))
+      return res.status(400).json({ error: "Invalid ID." });
 
-    if (cacheKey) {
-      const cachedResult = await getCache(cacheKey);
-      if (cachedResult) {
-        console.log(`Cache hit for ${cacheKey}`);
-        return res.json(cachedResult);
+    const post = await Post.findOne({ _id: postId, is_deleted: { $ne: true } });
+    if (!post)
+      return res.status(404).json({ error: "Post not found or deleted." });
+
+    const isAuthor = post.userId.toString() === userId;
+    const isAdmin = req.userRole === "admin";
+    if (!isAuthor && !isAdmin)
+      return res.status(403).json({ error: "Access denied." });
+
+    const updateFields: Partial<IPost> = {};
+    let currentTopicId = post.topicId;
+
+    // 1. Cập nhật nội dung (Không đổi status bài viết)
+    if (title && title.trim() !== post.title) {
+      updateFields.title = title.trim();
+      updateFields.slug = generateSlug(title.trim());
+    }
+    if (content && content.trim() !== post.content) {
+      updateFields.content = content.trim();
+    }
+
+    // 2. Cập nhật Topic
+    if (topicId && !post.topicId.equals(topicId)) {
+      const topic = await Topic.findOne({ _id: topicId, status: "approved" });
+      if (topic) {
+        updateFields.topicId = topic._id as Types.ObjectId;
+        currentTopicId = topic._id as Types.ObjectId;
       }
     }
 
-    // 2. XÂY DỰNG BỘ LỌC (Ủy quyền cho Service Layer)
-    const filter = buildPostFilter(req.query, { userId, isAdmin });
+    // 3. Cập nhật Tags (Logic mới: Không bắt duyệt lại bài)
+    if (tags) {
+      const { validTagIds, pendingTagIds } = await processTags(
+        tags,
+        userId,
+        currentTopicId
+      );
+      updateFields.tags = validTagIds;
+      updateFields.pending_tags = pendingTagIds;
 
-    // 2. TẠO AGGREGATION PIPELINE (Tái sử dụng logic $lookup)
-    let pipeline = buildPostAggregationPipeline(
-      filter,
-      {
-        includeUser: true,
-        includeTopic: true,
-        includeTags: true,
-        includeProjection: true,
-      },
-      isAdmin,
-      userId
-    );
-
-    // 2.1 Thêm Stage sắp xếp sau Stage $project
-    pipeline.push({ $sort: { is_sticky: -1, createdAt: -1 } });
-
-    const result = await paginateAggregation(Post, pipeline, page, limit);
-    // 4. Phản hồi kèm thông tin phân trang
-    const responseData = {
-      posts: result.items,
-      currentPage: result.currentPage,
-      totalPages: result.totalPages,
-      totalItems: result.totalItems,
-      limit: result.limit,
-    };
-
-    // 5. Lưu vào cache nếu là public view (5 phút TTL)
-    if (cacheKey) {
-      await setCache(cacheKey, responseData, 300);
+      if (pendingTagIds.length > 0) {
+        console.log(`Log: Bài ${postId} có tag mới chờ Admin duyệt.`);
+      }
     }
 
-    res.json(responseData);
+    // 4. Quyền Admin cập nhật Status trực tiếp
+    if (isAdmin && status) updateFields.status = status;
+
+    const updatedPostRaw = await Post.findByIdAndUpdate(
+      postId,
+      { $set: updateFields },
+      { new: true, runValidators: true }
+    );
+
+    const postArray = await Post.aggregate(
+      buildPostAggregationPipeline(
+        { _id: updatedPostRaw!._id },
+        { includeUser: true, includeTopic: true, includeTags: true },
+        isAdmin,
+        userId
+      )
+    );
+
+    res.json(postArray[0]);
   }
 );
+// --- [ PUBLIC/ADMIN: Lấy danh sách Bài Viết ] ---
+// Hỗ trợ phân trang, lọc theo Topic, Tag và STATUS
+// Endpoint: GET /api/posts
+export const getPosts = asyncHandler(async (req: Request, res: Response) => {
+  const query = req.query as any;
+  const { page, limit } = query;
+
+  // 1. Xác định context người dùng
+  const isAdmin = (req as any).userRole === "admin";
+  const userId = (req as any).userId;
+
+  // 2. Xử lý Cache Key
+  const sortedQuery = Object.keys(query)
+    .sort()
+    .map((k) => `${k}=${query[k]}`)
+    .join(":");
+  const cacheKey = `posts:list:${isAdmin ? "admin" : "public"}:${sortedQuery}`;
+
+  const cachedData = await getCache(cacheKey);
+  if (cachedData) return res.json(cachedData);
+
+  // 3. Xây dựng Filter & Pipeline
+  const filter = buildPostFilter(query, { userId, isAdmin });
+  console.log(isAdmin);
+  const pipeline = buildPostAggregationPipeline(
+    filter,
+    { includeUser: true, includeTopic: true, includeTags: true },
+    isAdmin,
+    userId
+  );
+
+  // Sắp xếp: Ưu tiên bài ghim, sau đó đến bài mới nhất
+  pipeline.push({ $sort: { is_sticky: -1, createdAt: -1 } });
+
+  // 4. Phân trang & Trả kết quả
+  const result = await paginateAggregation(Post, pipeline, page, limit);
+
+  const response = {
+    posts: result.items,
+    pagination: {
+      totalItems: result.totalItems,
+      totalPages: result.totalPages,
+      currentPage: result.currentPage,
+      limit: result.limit,
+    },
+  };
+
+  // 5. Lưu Cache
+  await setCache(cacheKey, response, isAdmin ? 60 : 300);
+
+  res.json(response);
+});
 
 // --- [ PUBLIC: Lấy chi tiết Bài Viết và tăng Views ] ---
 // Endpoint: GET /api/posts/:id
@@ -276,185 +354,31 @@ export const togglePostStickyController = asyncHandler(
   }
 );
 
-// --- [ USER/ADMIN: Cập nhật Bài Viết ] ---
-// Cần authMiddleware (User chỉ sửa bài của mình, Admin sửa bài bất kỳ)
-// Endpoint: PUT /api/posts/:id
-export const updatePost = asyncHandler(
-  async (
-    req: AuthenticatedRequest<PostParams, {}, UpdatePostBody>,
-    res: Response
-  ) => {
-    const postId = req.params.id;
-    const userId = req.userId;
-    const { topicId, tags, title, content, status } = req.body;
-
-    if (!Types.ObjectId.isValid(postId)) {
-      return res.status(400).json({ error: "Invalid Post ID format." });
-    }
-
-    // 1. Tìm bài viết hiện có
-    const post = await Post.findById(postId);
-    if (!post) {
-      return res.status(404).json({ error: "Post not found." });
-    }
-
-    // 2. KIỂM TRA QUYỀN HẠN
-    const isAuthor = post.userId.toString() === userId;
-    const isAdmin = req.userRole === "admin";
-
-    if (!isAuthor && !isAdmin) {
-      return res.status(403).json({
-        error: "Access denied. Only author or admin can update this post.",
-      });
-    }
-
-    const updateFields: Partial<IPost> = {};
-    let finalTopicId: Types.ObjectId = post.topicId; // Khởi tạo bằng ID hiện tại
-    let shouldSetStatusToPending = false;
-
-    // 3. LOGIC XỬ LÝ NỘI DUNG (Content, Title, Topic)
-
-    // 3.1. Xử lý Tiêu đề & Nội dung
-    if (title && title.trim() !== post.title) {
-      updateFields.title = title.trim();
-      shouldSetStatusToPending = true;
-      // SỬA LỖI SLUG: Buộc Controller tạo slug nếu title thay đổi
-      // Lý do: đảm bảo slug được cập nhật ngay lập tức và tránh lỗi bị bỏ qua hook findByIdAndUpdate
-      updateFields.slug = generateSlug(title.trim());
-    }
-    if (content && content.trim() !== post.content) {
-      updateFields.content = content.trim();
-      shouldSetStatusToPending = true;
-    }
-
-    // 3.2. Xử lý Topic (Nếu có)
-    if (topicId) {
-      if (!Types.ObjectId.isValid(topicId)) {
-        return res.status(400).json({ error: "Invalid Topic ID format." });
-      }
-      const topic = await Topic.findOne({ _id: topicId, status: "approved" });
-      if (!topic) {
-        return res
-          .status(400)
-          .json({ error: "Invalid or unapproved Topic ID." });
-      }
-
-      const topicObjectId = topic._id as Types.ObjectId;
-
-      // SỬA LỖI MONGODB: Dùng .equals() để so sánh ObjectId
-      if (!post.topicId.equals(topicObjectId)) {
-        finalTopicId = topicObjectId;
-        shouldSetStatusToPending = true;
-      }
-    }
-
-    // 3.3. Xử lý Tags (Tái sử dụng Service Tag Đề xuất)
-    if (tags) {
-      const { validTagIds, pendingTagIds } = await processTags(
-        tags,
-        userId,
-        finalTopicId
-      );
-      updateFields.tags = validTagIds;
-      updateFields.pending_tags = pendingTagIds;
-      shouldSetStatusToPending = true;
-    }
-
-    // 4. KIỂM TRA QUYỀN VÀ XÁC LẬP STATUS CUỐI CÙNG
-
-    // 4.1. ADMIN ACTIONS (Quyền lực tối cao)
-    if (isAdmin) {
-      if (status) updateFields.status = status;
-      if (status === "approved" || status === "rejected") {
-        shouldSetStatusToPending = false; // Admin đã quyết định status thủ công
-      }
-    }
-
-    // 4.2. USER (AUTHOR) ACTIONS
-    if (isAuthor && !isAdmin) {
-      // User KHÔNG CÓ quyền thay đổi status hoặc is_sticky (is_sticky đã được loại bỏ)
-      if (status) {
-        // Chỉ cần check status
-        return res.status(403).json({
-          error: "Users cannot directly change post status.",
-        });
-      }
-
-      // Nếu User thay đổi bất kỳ trường nào cần duyệt lại VÀ Admin chưa quyết định status
-      if (shouldSetStatusToPending) {
-        updateFields.status = "pending";
-      }
-    }
-
-    // 4.3. HOÀN THIỆN PAYLOAD
-    // SỬA LỖI MONGODB: Dùng .equals() để so sánh ObjectId
-    if (!post.topicId.equals(finalTopicId)) {
-      updateFields.topicId = finalTopicId;
-    }
-
-    if (Object.keys(updateFields).length === 0) {
-      return res
-        .status(400)
-        .json({ error: "No valid fields provided for update." });
-    }
-
-    // 5. Thực hiện cập nhật
-    const updatedPost = await Post.findByIdAndUpdate(
-      postId,
-      { $set: updateFields },
-      {
-        new: true,
-        runValidators: true,
-      }
-    ).populate("tags", "name");
-
-    if (!updatedPost) {
-      return res.status(404).json({ error: "Post not found after update." });
-    }
-
-    res.json(updatedPost);
-  }
-);
-
 // --- [ USER/ADMIN: Xóa Bài Viết ] ---
 // Cần authMiddleware (User chỉ xóa bài của mình, Admin xóa bài bất kỳ)
 // Endpoint: DELETE /api/posts/:id
+// --- [ USER/ADMIN: Xóa Bài Viết (SOFT DELETE) ] ---
 export const deletePost = asyncHandler(
   async (req: AuthenticatedRequest<PostParams>, res: Response) => {
     const postId = req.params.id;
     const userId = req.userId;
 
-    // BỔ SUNG: Kiểm tra ID hợp lệ
-    if (!Types.ObjectId.isValid(postId)) {
-      return res.status(400).json({ error: "Invalid Post ID format." });
-    }
-
-    // 1. Tìm bài viết hiện có
     const post = await Post.findById(postId);
-    if (!post) {
+    if (!post || post.is_deleted)
       return res.status(404).json({ error: "Post not found." });
-    }
 
-    // 2. KIỂM TRA QUYỀN HẠN
     const isAuthor = post.userId.toString() === userId;
     const isAdmin = req.userRole === "admin";
+    if (!isAuthor && !isAdmin)
+      return res.status(403).json({ error: "Access denied." });
 
-    // Nếu không phải tác giả VÀ không phải admin -> Từ chối
-    if (!isAuthor && !isAdmin) {
-      return res.status(403).json({
-        error: "Access denied. Only author or admin can delete this post.",
-      });
-    }
+    // Chuyển sang xóa mềm
+    await Post.findByIdAndUpdate(postId, { is_deleted: true });
 
-    // 3. Thực hiện xóa
-    await post.deleteOne();
+    // Không xóa Comment/Like ngay để có thể Restore.
+    // Chúng sẽ bị ẩn tự động vì Filter của chúng ta đã chặn is_deleted của Post cha.
 
-    // 4. XÓA DỮ LIỆU LIÊN QUAN (Data Integrity - BẮT BUỘC)
-    // Xóa tất cả Comments và Likes liên quan đến Post này
-    await Comment.deleteMany({ postId: postId });
-    await Like.deleteMany({ targetId: postId, targetType: "post" });
-
-    res.json({ message: "Post deleted successfully." });
+    res.json({ message: "Post moved to trash." });
   }
 );
 
@@ -507,5 +431,19 @@ export const adminApprovePostController = asyncHandler(
     ]).exec();
 
     res.json(finalPostArray[0]);
+  }
+);
+
+export const restorePost = asyncHandler(
+  async (req: AuthenticatedRequest<PostParams>, res: Response) => {
+    const { id } = req.params;
+    const result = await Post.findByIdAndUpdate(
+      id,
+      { is_deleted: false },
+      { new: true }
+    );
+
+    if (!result) return res.status(404).json({ error: "Post not found." });
+    res.json({ message: "Post restored successfully.", postId: id });
   }
 );

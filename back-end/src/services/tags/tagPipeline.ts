@@ -8,7 +8,7 @@ interface TagPipelineConfig {
 
 /**
  * Xây dựng các Aggregation Pipeline Stages cho Tag Model.
- * FIX N+1 Query bằng cách sử dụng $lookup.
+ * Cập nhật để bỏ _id và đồng nhất tagId theo Model Transform.
  */
 export const buildTagAggregationPipeline = (
   filter: any,
@@ -21,7 +21,7 @@ export const buildTagAggregationPipeline = (
   } = config;
 
   const pipeline: PipelineStage[] = [
-    // Stage 1: Lọc dữ liệu thô (BẮT BUỘC)
+    // Stage 1: Lọc dữ liệu thô
     { $match: filter },
   ];
 
@@ -32,7 +32,7 @@ export const buildTagAggregationPipeline = (
         from: "topics",
         localField: "topicId",
         foreignField: "_id",
-        as: "topic",
+        as: "topicData", // Đổi tên tạm để tránh ghi đè
       },
     });
   }
@@ -41,30 +41,54 @@ export const buildTagAggregationPipeline = (
   if (includeCreator) {
     pipeline.push({
       $lookup: {
-        from: "users", // Giả định collection tên là users
+        from: "users",
         localField: "createdBy",
         foreignField: "_id",
-        as: "creator",
+        as: "creatorData",
       },
     });
   }
 
-  // Stage 4: Project/Format kết quả cuối cùng (Đồng nhất ID)
+  // Stage 4: Project/Format kết quả cuối cùng
   if (includeProjection) {
     pipeline.push({
       $project: {
-        _id: 0,
-        tagId: "$_id", // Đồng nhất ID
+        _id: 0, // BỎ _id Ở ĐÂY (Vì Model của bạn đã bỏ _id)
+        tagId: "$_id", // LẤY _id GÁN VÀO tagId
         name: 1,
         slug: 1,
         status: 1,
+        // Xử lý topicId: Nếu lookup thành công thì lấy object đầu tiên,
+        // nhưng bên trong object đó cũng phải đổi _id thành topicId cho đồng bộ
+        topic: includeTopic
+          ? {
+              $let: {
+                vars: { top: { $arrayElemAt: ["$topicData", 0] } },
+                in: {
+                  topicId: "$$top._id",
+                  name: "$$top.name",
+                  slug: "$$top.slug",
+                },
+              },
+            }
+          : "$topicId",
+
+        // Xử lý createdBy
+        createdBy: includeCreator
+          ? {
+              $let: {
+                vars: { user: { $arrayElemAt: ["$creatorData", 0] } },
+                in: {
+                  userId: "$$user._id",
+                  name: "$$user.name",
+                  avatar: "$$user.avatar",
+                },
+              },
+            }
+          : "$createdBy",
+
         createdAt: 1,
         updatedAt: 1,
-        // Định dạng các trường lookup
-        topicId: includeTopic ? { $arrayElemAt: ["$topic", 0] } : "$topicId",
-        createdBy: includeCreator
-          ? { $arrayElemAt: ["$creator", 0] }
-          : "$createdBy",
       },
     });
   }

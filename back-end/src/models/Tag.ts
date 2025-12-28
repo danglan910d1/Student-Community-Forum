@@ -10,18 +10,30 @@ export interface ITag extends Document {
   topicId?: Types.ObjectId | null; // Tag có thể thuộc về một Topic cụ thể (null = freeTag)
   createdBy: Types.ObjectId; // ID của User/Admin gợi ý Tag
   status: TagStatus;
+  is_deleted: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
 
+const transformFunc = function (doc: Document, ret: any) {
+  const id = ret._id;
+  delete ret._id;
+  delete ret.__v;
+  return {
+    tagId: id, // Trả về tagId đồng nhất
+    ...ret,
+  };
+};
+
 const tagSchema = new Schema<ITag>(
   {
-    name: { type: String, required: true, unique: true },
+    name: { type: String, required: true },
     slug: { type: String, required: true, unique: true, index: true }, // Dùng cho URL thân thiện
     topicId: {
       type: Schema.Types.ObjectId,
       ref: "Topic",
       required: false,
+      index: true,
     },
     createdBy: {
       type: Schema.Types.ObjectId,
@@ -32,25 +44,25 @@ const tagSchema = new Schema<ITag>(
       type: String,
       enum: ["pending", "approved", "rejected"],
       default: "pending",
+      index: true,
+    },
+    is_deleted: {
+      type: Boolean,
+      default: false,
+      index: true,
     },
   },
   {
     timestamps: true,
     toJSON: {
-      // Cho phép các Virtuals (tagId) được bao gồm trong phản hồi JSON
+      // Cho phép các Virtuals (topicId) được bao gồm trong phản hồi JSON
       virtuals: false,
       // Loại bỏ các trường MongoDB nội bộ khỏi phản hồi JSON
-      transform: function (doc: Document, ret: any) {
-        // 1. Đảm bảo 'id' được tạo ra từ '_id'
-        const id = ret._id;
-        delete ret._id; // Loại bỏ _id
-        delete ret.__v; // Loại bỏ __v
-        const newRet: any = {
-          tagId: id,
-          ...ret,
-        };
-        return newRet;
-      },
+      transform: transformFunc,
+    },
+    toObject: {
+      virtuals: false,
+      transform: transformFunc,
     },
   }
 );
@@ -63,5 +75,11 @@ tagSchema.pre<ITag>("save", function (next) {
   }
   next();
 });
+
+tagSchema.index({ topicId: 1, status: 1 });
+tagSchema.index(
+  { name: 1 },
+  { unique: true, partialFilterExpression: { is_deleted: false } }
+);
 
 export default model<ITag>("Tag", tagSchema);

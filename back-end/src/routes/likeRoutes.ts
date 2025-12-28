@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { toggleLike, getLikeStatus } from "../controllers/likeController";
 import { authMiddleware } from "../middleware/auth";
+import { optionalAuth } from "../middleware/optionalAuth";
 import { generalLimiter, sensitiveLimiter } from "../middleware/ratelimit";
 import { preventDuplicateRequest } from "../middleware/idempotency";
 
@@ -23,6 +24,6 @@ router.post(
 
 // GET /api/likes?targetType=...&targetId=...
 // Lấy trạng thái Like của người dùng hiện tại (Optional Auth) và tổng số Like
-router.get("/", generalLimiter, getLikeStatus);
+router.get("/", optionalAuth, generalLimiter, getLikeStatus);
 
 export default router;

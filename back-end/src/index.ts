@@ -1,4 +1,4 @@
-import express, { NextFunction, Request, Response } from "express";
+import express from "express";
 import cors from "cors";
 import authRoutes from "./routes/authRoutes";
 import userRoutes from "./routes/userRouters";
@@ -7,8 +7,8 @@ import tagRoutes from "./routes/tagRoutes";
 import postRoutes from "./routes/postRoutes";
 import commentRoutes from "./routes/commentRoutes";
 import likeRoutes from "./routes/likeRoutes";
-import { sensitiveLimiter } from "./middleware/ratelimit";
 import { initializeConfig } from "./config";
+import { globalErrorHandler } from "./middleware/error";
 
 // Khởi tạo ứng dụng Express
 const app = express();
@@ -29,14 +29,15 @@ app.use("/api/likes", likeRoutes);
 
 // --- 3. GLOBAL ERROR HANDLER ---
 // Bắt các lỗi được ném ra từ asyncHandler (ví dụ: lỗi DB, lỗi Logic)
-app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
-  console.error("GLOBAL ERROR HANDLER:", err.stack);
-  // Trả về lỗi 500 (Server) hoặc lỗi tùy chỉnh nếu bạn muốn
-  res.status(500).json({
-    message: "An unexpected error occurred.",
-    error: err.message,
-  });
-});
+app.use(globalErrorHandler);
+// app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
+//   console.error("GLOBAL ERROR HANDLER:", err.stack);
+//   // Trả về lỗi 500 (Server) hoặc lỗi tùy chỉnh nếu bạn muốn
+//   res.status(500).json({
+//     message: "An unexpected error occurred.",
+//     error: err.message,
+//   });
+// });
 
 // --- 4. KHỞI CHẠY SERVER & DB ---
 const PORT = process.env.PORT || 5000;

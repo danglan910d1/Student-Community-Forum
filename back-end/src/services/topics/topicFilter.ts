@@ -17,21 +17,7 @@ export const buildTopicFilter = (
   queryParams: GetTopicsQuery,
   authContext: AuthContext
 ) => {
-  // 1. TẠO OBJECT CHUNG BẰNG CÁCH SỬ DỤNG CONDITIONAL SPREAD
-  const { status, search, myPosts, page, limit } = queryParams;
-
-  const commonQuery: CommonQuery = {
-    ...(status && { status }),
-    ...(search && { search }),
-    ...(myPosts && { myPosts }),
-    ...(page && { page }),
-    ...(limit && { limit }),
-  };
-
-  // 2. Lấy bộ lọc chung (Status, Search, MyPosts)
-  const filter = buildCommonFilter(commonQuery, authContext, "topic");
-
-  // Topic không có logic lọc đặc thù nào khác ngoài status và search
-
-  return filter;
+  // Topic hiện tại không có trường đặc thù, chỉ dùng chung logic với Common
+  // Truyền thẳng queryParams vào là xong
+  return buildCommonFilter(queryParams, authContext, "topic");
 };

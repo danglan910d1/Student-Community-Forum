@@ -1,88 +1,54 @@
 import mongoose, { Document, Schema, Types } from "mongoose";
 
-// Định nghĩa Interface cho Document
 export interface IComment extends Document {
-  userId: Types.ObjectId; // Người tạo bình luận
-  postId: Types.ObjectId; // Bài viết mà bình luận thuộc về (Cần thiết)
-  parentId?: Types.ObjectId; // ID của bình luận cha (để tạo bình luận đa cấp/reply)
-  content: string; // Nội dung bình luận
-  likes_count: number; // Số lượt thích
-  replies_count: number; // Số lượng trả lời trực tiếp (tính toán dựa trên parentId)
-  is_deleted: boolean; // Đánh dấu đã xóa mềm (soft delete)
-  status: "pending" | "approved" | "rejected"; // Trạng thái kiểm duyệt
+  userId: Types.ObjectId;
+  postId: Types.ObjectId;
+  parentId?: Types.ObjectId | null;
+  content: string;
+  likes_count: number;
+  replies_count: number;
+  is_deleted: boolean;
+  status: "pending" | "approved" | "rejected";
   createdAt: Date;
   updatedAt: Date;
 }
 
+// Hàm transform dùng chung cho cả toJSON và toObject
+const transformFunc = function (doc: Document, ret: any) {
+  const id = ret._id;
+  delete ret._id;
+  delete ret.__v;
+  return {
+    commentId: id,
+    ...ret,
+  };
+};
+
 const CommentSchema: Schema = new Schema(
   {
-    userId: {
-      type: Schema.Types.ObjectId,
-      ref: "User", // Tham chiếu đến User Model
-      required: true,
-    },
-    postId: {
-      type: Schema.Types.ObjectId,
-      ref: "Post", // Tham chiếu đến Post Model
-      required: true,
-    },
-    parentId: {
-      type: Schema.Types.ObjectId,
-      ref: "Comment", // Tham chiếu đến chính Comment Model (cho replies)
-      default: null, // Nếu là null thì là bình luận cấp 1
-    },
-    content: {
-      type: String,
-      required: true,
-      trim: true,
-      maxlength: 1000,
-    },
-    likes_count: {
-      type: Number,
-      default: 0,
-      min: 0,
-    },
-    replies_count: {
-      type: Number,
-      default: 0,
-      min: 0,
-    },
-    is_deleted: {
-      type: Boolean,
-      default: false, // Dùng soft delete
-    },
+    userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    postId: { type: Schema.Types.ObjectId, ref: "Post", required: true },
+    parentId: { type: Schema.Types.ObjectId, ref: "Comment", default: null },
+    content: { type: String, required: true, trim: true, maxlength: 1000 },
+    likes_count: { type: Number, default: 0, min: 0 },
+    replies_count: { type: Number, default: 0, min: 0 },
+    is_deleted: { type: Boolean, default: false, index: true },
     status: {
       type: String,
       enum: ["pending", "approved", "rejected"],
-      default: "approved", // Bình luận thường được duyệt tự động (có thể thay đổi)
+      default: "approved",
     },
   },
   {
     timestamps: true,
-    toJSON: {
-      // Cho phép các Virtuals (commentId) được bao gồm trong phản hồi JSON
-      virtuals: false,
-      // Loại bỏ các trường MongoDB nội bộ khỏi phản hồi JSON
-      transform: function (doc: Document, ret: any) {
-        // 1. Đảm bảo 'id' được tạo ra từ '_id'
-        const id = ret._id;
-        delete ret._id; // Loại bỏ _id
-        delete ret.__v; // Loại bỏ __v
-        const newRet: any = {
-          commentId: id,
-          ...ret,
-        };
-        return newRet;
-      },
-    },
+    toJSON: { virtuals: false, transform: transformFunc },
+    toObject: { virtuals: false, transform: transformFunc },
   }
 );
 
-// Indexes để tối ưu hóa truy vấn
 CommentSchema.index({ postId: 1, parentId: 1, createdAt: -1 });
 CommentSchema.index({ userId: 1, createdAt: -1 });
+CommentSchema.index({ status: 1 });
 
-// Tạo Model
 const Comment = mongoose.model<IComment>("Comment", CommentSchema);
-
 export default Comment;

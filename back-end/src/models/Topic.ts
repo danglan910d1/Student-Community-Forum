@@ -13,6 +13,7 @@ export interface ITopic extends Document {
   description?: string | null;
   createdBy: Types.ObjectId; // ID của Admin tạo ra Topic
   status: TopicStatus;
+  is_deleted: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -31,7 +32,7 @@ const transformFunc = function (doc: Document, ret: any) {
 
 const topicSchema = new Schema<ITopic>(
   {
-    name: { type: String, required: true, unique: true },
+    name: { type: String, required: true },
     slug: { type: String, required: true, unique: true, index: true }, // Dùng cho URL thân thiện
     description: { type: String, default: null },
     // Tham chiếu đến UserSchema
@@ -43,7 +44,12 @@ const topicSchema = new Schema<ITopic>(
     status: {
       type: String,
       enum: ["pending", "approved", "rejected"],
-      default: "pending",
+      default: "approved",
+    },
+    is_deleted: {
+      type: Boolean,
+      default: false,
+      index: true,
     },
   },
   {
@@ -69,5 +75,17 @@ topicSchema.pre<ITopic>("save", function (next) {
   }
   next();
 });
+
+// Thêm Index cho status để Admin lọc nhanh
+topicSchema.index({ status: 1 });
+
+// Thêm Text Index để tìm kiếm theo tên topic
+topicSchema.index({ name: "text" });
+
+// Thêm Partial Index ở cuối file
+topicSchema.index(
+  { name: 1 },
+  { unique: true, partialFilterExpression: { is_deleted: false } }
+);
 
 export default model<ITopic>("Topic", topicSchema);

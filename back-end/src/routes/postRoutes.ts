@@ -7,25 +7,21 @@ import {
   deletePost,
   getPostByIdForAdmin,
   adminApprovePostController,
+  restorePost,
+  togglePostStickyController,
 } from "../controllers/postController";
 import { authMiddleware } from "../middleware/auth"; // auth.ts
 import { adminMiddleware } from "../middleware/admin"; // Dùng để kiểm tra vai trò
+import { optionalAuth } from "../middleware/optionalAuth";
 import { generalLimiter, sensitiveLimiter } from "../middleware/ratelimit";
 import { preventDuplicateRequest } from "../middleware/idempotency";
 
 const router = Router();
 
-// --- [ ADMIN ONLY ACCESS ] ---
-// LƯU Ý: Đặt route có tiền tố Admin lên trước route Public/User để tránh xung đột
-// Vì Express sẽ hiểu '/admin' là tham số ':id'
-router.get(
-  "/admin/:id", // GET /api/posts/admin/:id (Lấy chi tiết Bài viết bất kể status)
-  generalLimiter,
-  authMiddleware,
-  adminMiddleware,
-  getPostByIdForAdmin
-);
-// POST /api/posts/admin/approve/:id (DUYỆT BÀI VÀ PENDING TAGS - GIAI ĐOẠN 3)
+// --- [ NHÓM 1: ADMIN ONLY ACCESS ] ---
+// Các thao tác quản trị viên. Yêu cầu cả Đăng nhập + Quyền Admin.
+
+// POST /api/posts/admin/approve/:id (Admin duyệt bài viết và quyết định các Tag mới do User đề xuất)
 router.post(
   "/admin/approve/:id",
   sensitiveLimiter,
@@ -35,29 +31,46 @@ router.post(
   adminApprovePostController
 );
 
-// --- [ PUBLIC / USER ACCESS ] ---
-// GET /api/posts (Lấy danh sách, phân trang, lọc theo topic/tag, và giờ là status)
-router.get(
-  "/", // KHÔNG CẦN authMiddleware bắt buộc (Optional Auth)
-  generalLimiter,
-  // authMiddleware,
-  // adminMiddleware,
-  getPosts
+// PUT /api/posts/admin/restore/:id (Admin khôi phục bài viết đã bị xóa mềm từ thùng rác)
+router.put(
+  "/admin/restore/:id",
+  sensitiveLimiter,
+  authMiddleware,
+  adminMiddleware,
+  restorePost
 );
 
-// GET /api/posts (Lấy danh sách, phân trang, lọc theo topic/tag, và giờ là status)
+// PUT /api/posts/admin/sticky/:id (Admin ghim bài viết lên đầu trang hoặc bỏ ghim bài)
+router.put(
+  "/admin/sticky/:id",
+  sensitiveLimiter,
+  authMiddleware,
+  adminMiddleware,
+  togglePostStickyController
+);
+
+// GET /api/posts/admin/:id (Admin lấy chi tiết bài viết bất kể trạng thái: pending, rejected, deleted)
 router.get(
-  "/", // KHÔNG CÓ /me
+  "/admin/:id",
   generalLimiter,
   authMiddleware,
   adminMiddleware,
-  getPosts
+  getPostByIdForAdmin
 );
 
-// GET /api/posts/:id (Lấy chi tiết và tăng view)
-router.get("/:id", sensitiveLimiter, getPostById);
+// --- [ NHÓM 2: PUBLIC ACCESS ] ---
+// Các route dành cho khách truy cập hoặc không bắt buộc đăng nhập chặt chẽ.
 
-// POST /api/posts (User tạo bài viết mới)
+// GET /api/posts (Lấy danh sách bài: Khách thấy bài Approved, User thấy bài của mình, Admin thấy hết)
+router.get("/", generalLimiter, optionalAuth, getPosts);
+
+// GET /api/posts/:id (Khách xem bài đã duyệt + Tăng view qua Redis. Phải đặt sau các route /admin để tránh xung đột)
+router.get("/:id", generalLimiter, getPostById);
+
+// --- [ NHÓM 3: USER ACCESS ] ---
+// Các route yêu cầu người dùng phải đăng nhập (Author) hoặc Admin.
+
+// POST /api/posts (Người dùng tạo bài viết mới - Mặc định status sẽ là 'pending')
 router.post(
   "/",
   sensitiveLimiter,
@@ -66,16 +79,16 @@ router.post(
   createPost
 );
 
-// PUT /api/posts/:id (User sửa bài của mình, Admin sửa bất kỳ)
+// PUT /api/posts/:id (Tác giả sửa bài của mình hoặc Admin sửa bất kỳ bài nào)
 router.put(
   "/:id",
   sensitiveLimiter,
-  authMiddleware, // Cần xác thực để kiểm tra quyền hạn (isAuthor/isAdmin)
+  authMiddleware,
   preventDuplicateRequest,
   updatePost
 );
 
-// DELETE /api/posts/:id (User xóa bài của mình, Admin xóa bất kỳ)
+// DELETE /api/posts/:id (Tác giả xóa bài mình hoặc Admin xóa bất kỳ - Thực hiện xóa mềm)
 router.delete("/:id", sensitiveLimiter, authMiddleware, deletePost);
 
 export default router;

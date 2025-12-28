@@ -1,14 +1,16 @@
 import { PipelineStage } from "mongoose";
 
 interface CommentPipelineConfig {
-  includeUser?: boolean; // Người bình luận
-  includePost?: boolean; // Bài viết liên quan
-  includeParent?: boolean; // Bình luận cha
+  includeUser?: boolean;
+  includePost?: boolean;
+  includeParent?: boolean;
   includeProjection?: boolean;
+  isAdminView?: boolean; // Thêm cờ để biết ai đang xem
 }
 
 /**
- * Xây dựng Aggregation Pipeline cho Comment Model (FIX N+1 Query).
+ * Xây dựng Aggregation Pipeline cho Comment Model.
+ * Logic: Giữ nguyên data gốc, chỉ xử lý hiển thị nội dung bị xóa dựa trên quyền hạn.
  */
 export const buildCommentAggregationPipeline = (
   filter: any,
@@ -19,23 +21,31 @@ export const buildCommentAggregationPipeline = (
     includePost = false,
     includeParent = false,
     includeProjection = true,
+    isAdminView = false, // Mặc định là người dùng bình thường xem
   } = config;
 
   const pipeline: PipelineStage[] = [{ $match: filter }];
 
-  // $lookup User
+  // 1. $lookup User & Xử lý mảng sang Object
   if (includeUser) {
-    pipeline.push({
-      $lookup: {
-        from: "users",
-        localField: "userId",
-        foreignField: "_id",
-        as: "user",
+    pipeline.push(
+      {
+        $lookup: {
+          from: "users",
+          localField: "userId",
+          foreignField: "_id",
+          as: "user",
+        },
       },
-    });
+      {
+        $addFields: {
+          user: { $arrayElemAt: ["$user", 0] },
+        },
+      }
+    );
   }
 
-  // $lookup Post
+  // 2. $lookup Post (Dùng cho Admin View)
   if (includePost) {
     pipeline.push({
       $lookup: {
@@ -47,7 +57,7 @@ export const buildCommentAggregationPipeline = (
     });
   }
 
-  // $lookup Parent
+  // 3. $lookup Parent (Dùng cho Reply list)
   if (includeParent) {
     pipeline.push({
       $lookup: {
@@ -59,22 +69,45 @@ export const buildCommentAggregationPipeline = (
     });
   }
 
-  // Projection
+  // 4. Projection cuối cùng - Logic ẩn nội dung nằm ở đây
   if (includeProjection) {
     pipeline.push({
       $project: {
         _id: 0,
         commentId: "$_id",
-        content: 1,
         likes_count: 1,
         replies_count: 1,
         is_deleted: 1,
         status: 1,
         createdAt: 1,
         updatedAt: 1,
+        userId: 1, // Giữ lại ID gốc cho FE nếu cần
 
-        // Định dạng các trường lookup
-        userId: includeUser ? { $arrayElemAt: ["$user", 0] } : "$userId",
+        // LOGIC NỘI DUNG:
+        // Nếu is_deleted = true VÀ người xem không phải admin -> Hiện thông báo ẩn
+        // Ngược lại hiện content thật (Admin thấy mọi thứ, User thấy content bình thường)
+        content: {
+          $cond: {
+            if: {
+              $and: [
+                { $eq: ["$is_deleted", true] },
+                { $eq: [isAdminView, false] },
+              ],
+            },
+            then: "[Bình luận này đã bị xóa.]",
+            else: "$content",
+          },
+        },
+
+        // Gọt sạch User data
+        user: includeUser
+          ? {
+              userId: "$user._id",
+              name: "$user.name",
+              avatar: "$user.avatar",
+            }
+          : "$userId",
+
         postId: includePost ? { $arrayElemAt: ["$post", 0] } : "$postId",
         parentId: includeParent
           ? { $arrayElemAt: ["$parent", 0] }

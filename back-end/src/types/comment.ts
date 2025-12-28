@@ -15,9 +15,10 @@ export interface CreateCommentBody {
 
 // 3. Dùng cho GET /comments (Danh sách, lọc, phân trang)
 export interface GetCommentsQuery {
-  postId: string; // Bắt buộc khi gọi API
-  parentId?: string; // ID của Comment cha (để lấy replies)
+  postId?: string;
+  parentId?: string;
+  status?: "pending" | "approved" | "rejected"; // Thêm dòng này
   page?: string;
   limit?: string;
-  // Admin có thể thêm status ở đây nếu muốn lọc bình luận chưa duyệt
+  search?: string;
 }

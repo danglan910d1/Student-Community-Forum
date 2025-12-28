@@ -6,12 +6,11 @@ import {
   updateProfile,
   updatePassword,
   getUserById,
-  getUserDetails,
   updateUserStatus,
   deleteUser,
   getUsersList,
 } from "../controllers/userController";
-import { authMiddleware } from "../middleware/auth"; // auth.ts
+import { authMiddleware } from "../middleware/auth";
 import { adminMiddleware } from "../middleware/admin";
 import { generalLimiter, sensitiveLimiter } from "../middleware/ratelimit";
 import { preventDuplicateRequest } from "../middleware/idempotency";
@@ -19,90 +18,103 @@ import { multerErrorHandler, uploadSingleAvatar } from "../middleware/multer";
 
 const router = Router();
 
-// USER
-// GET /api/users/me (Lấy thông tin profile của chính mình)
-// Ép kiểu: Báo cho TypeScript rằng getMe được truyền vào một Request
-// đã được xử lý bởi authMiddleware và đã đủ điều kiện là AuthenticatedRequest.
-router.get("/me", generalLimiter, authMiddleware, getMe);
+/**
+ * NHÓM 1: CÁC ROUTE ĐỊNH DANH CỤ THỂ (SPECIFIC ROUTES)
+ * Đặt lên đầu để không bị các route động như /:id chiếm quyền.
+ */
 
-// PUT /api/users/profile (Cập nhật tên, avatar)
+// --- [ ADMIN: Lấy danh sách tất cả Users (kể cả bị ban/xóa) ] ---
+// GET /api/users/admin
+router.get(
+  "/admin",
+  authMiddleware,
+  adminMiddleware,
+  generalLimiter,
+  getUsersList
+);
+
+// --- [ USER: Lấy thông tin cá nhân của người dùng hiện tại ] ---
+// GET /api/users/me
+router.get("/me", authMiddleware, generalLimiter, getMe);
+
+// --- [ USER: Cập nhật thông tin profile (Tên, Avatar) ] ---
+// PUT /api/users/profile
 router.put(
   "/profile",
-  sensitiveLimiter,
   authMiddleware,
+  sensitiveLimiter,
   multerErrorHandler(uploadSingleAvatar),
   preventDuplicateRequest,
   updateProfile
 );
 
-// PUT /api/users/password (Đổi mật khẩu)
+// --- [ USER: Cập nhật mật khẩu mới ] ---
+// PUT /api/users/password
 router.put(
   "/password",
-  sensitiveLimiter,
   authMiddleware,
+  sensitiveLimiter,
   preventDuplicateRequest,
   updatePassword
 );
 
-// DELETE /api/users/me (XÓA TÀI KHOẢN CỦA CHÍNH MÌNH)
+// --- [ USER: Người dùng tự xóa tài khoản của chính mình ] ---
+// DELETE /api/users/me
 router.delete(
   "/me",
-  sensitiveLimiter,
   authMiddleware,
+  sensitiveLimiter,
   preventDuplicateRequest,
   deleteUser
 );
 
-// PUBLIC
-// GET /api/users (Tìm kiếm users công khai theo tên)
-router.get("/", generalLimiter, getUsersList);
+/**
+ * NHÓM 2: CÁC ROUTE CÓ THAM SỐ BIẾN ĐỘNG (:id)
+ */
 
-// --- [ ROUTES DÀNH CHO ADMIN ] ---
-// GET /api/users/admin (Lấy danh sách tất cả Users)
-// KHÔNG CẦN adminMiddleware vì đã kiểm tra role bên trong Controller.
-// Tuy nhiên, ta vẫn giữ authMiddleware để gán userId/userRole.
-router.get(
-  "/admin",
-  generalLimiter,
-  authMiddleware, // Bắt buộc đăng nhập để thấy endpoint này rõ ràng hơn
-  adminMiddleware,
-  getUsersList
-);
-
-// GET /api/users/:id/details (Xem chi tiết dành cho admin)
-router.get(
-  "/:id/details",
-  generalLimiter,
-  authMiddleware,
-  adminMiddleware,
-  // Xóa bỏ hoàn toàn mối quan hệ phức tạp giữa kiểu hàm và RequestHandler
-  // Sau khi giá trị đã là unknown, có thể ép kiểu nó thành bất kỳ kiểu nào khác (trong trường hợp này là RequestHandler), bởi vì unknown cho phép ép kiểu.Sau khi giá trị đã là unknown, bạn có thể ép kiểu nó thành bất kỳ kiểu nào khác (trong trường hợp này là RequestHandler), bởi vì unknown cho phép ép kiểu.
-  getUserDetails
-);
-
-// PUT /api/users/:id/status (Cấm/Mở khóa tài khoản VÀ THAY ĐỔI ROLE)
-// Hàm Controller updateUserStatus đã được cấu hình để xử lý cả status và role từ body.
+// --- [ ADMIN: Cập nhật Trạng thái User (Ban/Unban hoặc đổi Role) ] ---
+// PUT /api/users/admin/:id/status
 router.put(
-  "/:id/status",
-  generalLimiter,
+  "/admin/:id/status",
   authMiddleware,
   adminMiddleware,
+  sensitiveLimiter,
   preventDuplicateRequest,
   updateUserStatus
 );
 
-// DELETE /api/users/:id (XÓA TÀI KHOẢN NGƯỜI DÙNG KHÁC)
-// Giữ nguyên logic Admin để xóa người khác.
+// --- [ ADMIN: Xóa tài khoản người khác ] ---
+// DELETE /api/users/admin/:id
 router.delete(
-  "/:id",
-  sensitiveLimiter,
+  "/admin/:id",
   authMiddleware,
   adminMiddleware,
+  sensitiveLimiter,
   preventDuplicateRequest,
   deleteUser
 );
 
-// GET /api/users/:id (Xem hồ sơ công khai của người khác)
-router.get("/:id", generalLimiter, getUserById);
+// --- [ ADMIN: Xem chi tiết User theo ID (Admin View) ] ---
+// GET /api/users/admin/:id
+router.get(
+  "/admin/:id",
+  authMiddleware,
+  adminMiddleware,
+  generalLimiter,
+  getUserById
+);
 
+/**
+ * NHÓM 3: CÁC ROUTE PUBLIC (CHUNG NHẤT)
+ * Đặt ở cuối cùng để làm "lưới lọc" cuối.
+ */
+
+// --- [ PUBLIC: Tìm kiếm danh sách user công khai ] ---
+// GET /api/users/
+router.get("/", generalLimiter, getUsersList);
+
+// --- [ PUBLIC: Xem hồ sơ công khai của người khác ] ---
+// GET /api/users/:id
+// Phải đặt sau các route /admin, /me, /profile,... nếu không nó sẽ coi các chữ đó là "id"
+router.get("/:id", generalLimiter, getUserById);
 export default router;

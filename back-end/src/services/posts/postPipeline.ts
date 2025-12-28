@@ -1,11 +1,10 @@
 import { PipelineStage, Types } from "mongoose";
 
-// Định nghĩa cấu hình cho Pipeline
 interface PostPipelineConfig {
   includeUser?: boolean;
   includeTopic?: boolean;
   includeTags?: boolean;
-  includeProjection?: boolean; // Bao gồm cả Stage $project cuối cùng
+  includeProjection?: boolean;
 }
 
 /**
@@ -15,8 +14,8 @@ interface PostPipelineConfig {
  *
  * @param filter - Stage $match ban đầu (dùng filter được xây dựng từ buildPostFilter)
  * @param config - Cấu hình để bật/tắt các $lookup và $project
- * @param isAdmin - Boolean
- * @param callerId? - String
+ * @param isAdmin - Boolean xác định quyền hạn của người gọi
+ * @param callerId - ID của người đang thực hiện request (để tính toán isOwner)
  * @returns Mảng các PipelineStage đã được cấu hình.
  */
 export const buildPostAggregationPipeline = (
@@ -25,7 +24,6 @@ export const buildPostAggregationPipeline = (
   isAdmin: boolean = false,
   callerId?: string
 ): PipelineStage[] => {
-  // Giá trị mặc định nếu không truyền config
   const {
     includeUser = true,
     includeTopic = true,
@@ -33,43 +31,37 @@ export const buildPostAggregationPipeline = (
     includeProjection = true,
   } = config;
 
-  const pipeline: PipelineStage[] = [
-    // Stage 1: Lọc dữ liệu thô (BẮT BUỘC)
-    { $match: filter },
-  ];
+  const pipeline: PipelineStage[] = [{ $match: filter }];
 
-  // Stage 2: $lookup User
   if (includeUser) {
     pipeline.push({
       $lookup: {
         from: "users",
         localField: "userId",
         foreignField: "_id",
-        as: "user",
+        as: "userData",
       },
     });
   }
 
-  // Stage 3: $lookup Topic
   if (includeTopic) {
     pipeline.push({
       $lookup: {
         from: "topics",
         localField: "topicId",
         foreignField: "_id",
-        as: "topic",
+        as: "topicData",
       },
     });
   }
 
-  // Stage 4: $lookup Tags
   if (includeTags) {
     pipeline.push({
       $lookup: {
         from: "tags",
         localField: "tags",
         foreignField: "_id",
-        as: "tagsData",
+        as: "tagsList",
       },
     });
   }
@@ -77,14 +69,11 @@ export const buildPostAggregationPipeline = (
   if (callerId) {
     pipeline.push({
       $addFields: {
-        isOwner: {
-          $eq: ["$userId", new Types.ObjectId(callerId)],
-        },
+        isOwner: { $eq: ["$userId", new Types.ObjectId(callerId)] },
       },
     });
   }
 
-  // Stage 5: Project/Format kết quả cuối cùng
   if (includeProjection) {
     pipeline.push({
       $project: {
@@ -96,125 +85,57 @@ export const buildPostAggregationPipeline = (
         views_count: 1,
         likes_count: 1,
         comments_count: 1,
-        status: {
-          $cond: {
-            // Nếu là Admin (TRUE), giữ lại giá trị status (status: 1)
-            if: isAdmin,
-            then: "$status", // Nếu không phải Admin (FALSE), loại bỏ trường này
-            else: "$$REMOVE",
-          },
-        },
         is_sticky: 1,
+        is_resolved: 1,
         createdAt: 1,
-        // Định dạng các trường lookup
+        status: { $cond: [isAdmin, "$status", "$$REMOVE"] },
 
-        // Định dạng lại đối tượng User
-        // user: {
-        //   $cond: {
-        //     // Nếu user là mảng rỗng (không tìm thấy user), trả về null/userId
-        //     if: { $eq: ["$user", []] },
-        //     then: "$userId", // Hoặc chỉ cần null
-        //     else: {
-        //       userId: { $arrayElemAt: ["$user._id", 0] }, // Chuyển _id thành userId
-        //       name: { $arrayElemAt: ["$user.name", 0] },
-        //       avatar: { $arrayElemAt: ["$user.avatar", 0] },
-        //       role: { $arrayElemAt: ["$user.role", 0] },
-        //       createdAt: { $arrayElemAt: ["$user.createdAt", 0] },
-        //       // Bỏ qua trường password
-        //       email: {
-        //         $cond: {
-        //           // Nếu là Admin HOẶC là Owner
-        //           if: { $or: [isAdmin, "$isOwner"] },
-        //           then: { $arrayElemAt: ["$user.email", 0] },
-        //           else: "$$REMOVE",
-        //         },
-        //       },
-        //       status: {
-        //         $cond: {
-        //           if: { $or: [isAdmin, "$isOwner"] },
-        //           then: { $arrayElemAt: ["$user.status", 0] },
-        //           else: "$$REMOVE",
-        //         },
-        //       },
-        //     },
-        //   },
-        // },
-        // Định dạng lại đối tượng User (Áp dụng $let để tránh lỗi kiểu dữ liệu)
-        user: {
-          $cond: {
-            // Nếu user là mảng rỗng (không tìm thấy user), trả về userId
-            if: { $eq: ["$user", []] },
-            then: "$userId",
-            else: {
-              $let: {
-                vars: {
-                  userData: { $arrayElemAt: ["$user", 0] }, // Lấy đối tượng user đầu tiên
-                },
-                in: {
-                  userId: "$$userData._id", // Sử dụng $$userData
-                  name: "$$userData.name",
-                  avatar: "$$userData.avatar",
-                  role: "$$userData.role",
-                  createdAt: "$$userData.createdAt", // Bỏ qua trường password
-                  email: {
-                    $cond: {
-                      // Nếu là Admin HOẶC là Owner
-                      if: { $or: [isAdmin, "$isOwner"] },
-                      then: "$$userData.email", // Sử dụng $$userData
-                      else: "$$REMOVE",
-                    },
-                  },
-                  status: {
-                    $cond: {
-                      if: { $or: [isAdmin, "$isOwner"] },
-                      then: "$$userData.status", // Sử dụng $$userData
-                      else: "$$REMOVE",
-                    },
-                  },
-                },
+        // Format Author (khớp với FE MockData)
+        author: {
+          $let: {
+            vars: { user: { $arrayElemAt: ["$userData", 0] } },
+            in: {
+              name: { $ifNull: ["$$user.name", "Anonymous"] },
+              avatar: "$$user.avatar",
+              role: "$$user.role",
+              // Chỉ hiện email/status nếu là admin hoặc chủ bài viết
+              email: {
+                $cond: [
+                  { $or: [isAdmin, "$isOwner"] },
+                  "$$user.email",
+                  "$$REMOVE",
+                ],
+              },
+              status: {
+                $cond: [
+                  { $or: [isAdmin, "$isOwner"] },
+                  "$$user.status",
+                  "$$REMOVE",
+                ],
               },
             },
           },
         },
 
-        // topic: includeTopic ? { $arrayElemAt: ["$topic", 0] } : "$topicId",
         topic: includeTopic
           ? {
-              $cond: {
-                if: { $eq: ["$topic", []] },
-                then: null,
-                else: {
-                  // Lấy đối tượng Topic đầu tiên ra
-                  $let: {
-                    vars: {
-                      topicData: { $arrayElemAt: ["$topic", 0] },
-                    },
-                    in: {
-                      topicId: "$$topicData._id",
-                      name: "$$topicData.name",
-                      slug: "$$topicData.slug",
-                      status: "$$topicData.status",
-                    },
-                  },
-                },
+              $let: {
+                vars: { t: { $arrayElemAt: ["$topicData", 0] } },
+                in: { topicId: "$$t._id", name: "$$t.name", slug: "$$t.slug" },
               },
             }
           : "$topicId",
-        // tags: includeTags ? "$tagsData" : "$tags", // Trả về tagsData hoặc mảng ObjectId gốc
+
+        // Tags thống nhất 1 màu, FE tự render theo brand (StackOverflow style)
         tags: includeTags
           ? {
               $map: {
-                input: "$tagsData", // Lấy mảng tag đã lookup
+                input: "$tagsList",
                 as: "tag",
-                in: {
-                  tagId: "$$tag._id",
-                  name: "$$tag.name",
-                  slug: "$$tag.slug",
-                  status: "$$tag.status", // Giữ lại status để kiểm tra
-                },
+                in: { label: "$$tag.name", slug: "$$tag.slug" },
               },
             }
-          : "$tags", // Hoặc trả về mảng ObjectId gốc
+          : "$tags",
       },
     });
   }

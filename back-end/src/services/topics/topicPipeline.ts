@@ -1,19 +1,10 @@
 import { PipelineStage } from "mongoose";
 
-// Định nghĩa cấu hình cho Pipeline
 interface TopicPipelineConfig {
-  includeCreator?: boolean; // Tương đương với createdBy
+  includeCreator?: boolean;
   includeProjection?: boolean;
 }
 
-/**
- * Xây dựng các Aggregation Pipeline Stages cho Topic Model.
- * FIX N+1 Query bằng cách sử dụng $lookup cho createdBy.
- *
- * @param filter - Stage $match ban đầu
- * @param config - Cấu hình để bật/tắt $lookup và $project
- * @returns Mảng các PipelineStage đã được cấu hình.
- */
 export const buildTopicAggregationPipeline = (
   filter: any,
   config: TopicPipelineConfig = {}
@@ -21,37 +12,49 @@ export const buildTopicAggregationPipeline = (
   const { includeCreator = true, includeProjection = true } = config;
 
   const pipeline: PipelineStage[] = [
-    // Stage 1: Lọc dữ liệu thô (BẮT BUỘC)
+    // 1. Lọc dữ liệu thô
     { $match: filter },
   ];
 
-  // Stage 2: $lookup Creator (Thay thế populate)
+  // 2. $lookup Creator (Fix N+1)
   if (includeCreator) {
-    pipeline.push({
-      $lookup: {
-        from: "users", // Giả định collection tên là users
-        localField: "createdBy",
-        foreignField: "_id",
-        as: "creator",
+    pipeline.push(
+      {
+        $lookup: {
+          from: "users",
+          localField: "createdBy",
+          foreignField: "_id",
+          as: "creatorInfo", // Đổi tên tạm để tránh trùng với field gốc
+        },
       },
-    });
+      {
+        // Trải mảng để biến thành object thay vì mảng 1 phần tử
+        $set: {
+          creatorInfo: { $arrayElemAt: ["$creatorInfo", 0] },
+        },
+      }
+    );
   }
 
-  // Stage 3: Project/Format kết quả cuối cùng (Đồng nhất ID)
+  // 3. Project - Giai đoạn quan trọng nhất để thống nhất cấu trúc
   if (includeProjection) {
     pipeline.push({
       $project: {
         _id: 0,
-        topicId: "$_id", // Đồng nhất ID
+        topicId: "$_id", // Đổi sang topicId như Tag/Post đã làm
         name: 1,
         slug: 1,
         description: 1,
         status: 1,
         createdAt: 1,
         updatedAt: 1,
-        // Lấy creator đầu tiên
+        // Chỉ trả ra thông tin User cần thiết nếu includeCreator = true
         createdBy: includeCreator
-          ? { $arrayElemAt: ["$creator", 0] }
+          ? {
+              userId: "$creatorInfo._id",
+              name: "$creatorInfo.name",
+              email: "$creatorInfo.email",
+            }
           : "$createdBy",
       },
     });
