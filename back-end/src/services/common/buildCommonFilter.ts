@@ -30,18 +30,15 @@ export const buildCommonFilter = (
 
   const filter: any = {};
 
-  // --- 1. XỬ LÝ SOFT DELETE (is_deleted) ---
-  // Nếu là Admin và muốn xem thùng rác
-  if (isAdmin && showDeleted === "true") {
+  // --- 2. LOGIC TRUY CẬP THEO QUYỀN HẠN & TRẠNG THÁI ---
+  const isViewingOwnContent = myPosts === "true" && !!userId;
+
+  // --- 1. XỬ LÝ SOFT DELETE (Thùng rác) ---
+  if (showDeleted === "true" && (isViewingOwnContent || isAdmin)) {
     filter.is_deleted = true;
   } else {
-    // Mặc định luôn lấy các bản ghi chưa xóa.
-    // Dùng $ne true để an toàn cho cả các bản ghi cũ chưa kịp update field is_deleted
     filter.is_deleted = { $ne: true };
   }
-
-  // --- 2. LOGIC TRUY CẬP THEO QUYỀN HẠN & TRẠNG THÁI ---
-  const isViewingOwnContent = myPosts === "true" && userId;
 
   if (isViewingOwnContent) {
     // TRƯỜNG HỢP 1: XEM NỘI DUNG CỦA CHÍNH MÌNH (Profile/My Posts)
@@ -53,39 +50,18 @@ export const buildCommonFilter = (
           ? "userId"
           : "createdBy";
       filter[creatorField] = new Types.ObjectId(userId);
-      // Tự xem bài mình thì thấy cả bài đang chờ duyệt hoặc bị từ chối
-      filter.status = { $in: ["pending", "approved", "rejected"] };
+      // Khi tự xem đồ của mình, mặc định không chặn status (để thấy bài chờ duyệt)
+      // Nếu có truyền status cụ thể thì lọc theo cái đó, không thì thôi
+      if (status) filter.status = status;
     }
   } else {
-    // TRƯỜNG HỢP 2: XEM DANH SÁCH (CÔNG KHAI HOẶC ADMIN QUẢN LÝ)
-
-    // A. Xử lý riêng cho USER
+    // TRƯỜNG HỢP XEM CHUNG
     if (modelType === "user") {
-      if (isAdmin) {
-        const validUserStatuses: UserStatus[] = ["active", "banned"];
-        if (status && validUserStatuses.includes(status as UserStatus)) {
-          filter.status = status;
-        }
-      } else {
-        // Public chỉ được thấy User đang hoạt động
-        filter.status = "active";
-      }
-    }
-    // B. Xử lý cho CONTENT (Post, Topic, Tag, Comment)
-    else {
-      if (isAdmin) {
-        const validContentStatuses: GlobalStatus[] = [
-          "pending",
-          "approved",
-          "rejected",
-        ];
-        if (status && validContentStatuses.includes(status as GlobalStatus)) {
-          filter.status = status;
-        }
-      } else {
-        // Public chỉ được thấy nội dung đã phê duyệt
-        filter.status = "approved";
-      }
+      if (isAdmin && status) filter.status = status;
+      else if (!isAdmin) filter.status = "active";
+    } else {
+      if (isAdmin && status) filter.status = status;
+      else if (!isAdmin) filter.status = "approved";
     }
   }
 

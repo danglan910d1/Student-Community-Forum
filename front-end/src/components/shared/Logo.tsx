@@ -1,4 +1,5 @@
 "use client";
+import { HEADER } from "@/constants/commom";
 
 export const Logo = ({ className = "" }: { className?: string }) => {
   const handleLogoClick = (e: React.MouseEvent) => {
@@ -13,7 +14,7 @@ export const Logo = ({ className = "" }: { className?: string }) => {
       onClick={handleLogoClick}
       className={`flex items-center gap-2 border-none bg-transparent cursor-pointer ${className}`}
     >
-      <h1 className="text-title text-lg tracking-tighter">STUDENT FORUM</h1>
+      <h1 className="text-title text-lg uppercase">{HEADER.TITLE}</h1>
     </button>
   );
 };

@@ -1,12 +1,6 @@
+// src/routes/commentRoutes.ts
 import { Router } from "express";
-import {
-  createComment,
-  getComments,
-  updateComment,
-  deleteComment,
-  getAllCommentsForAdmin,
-  restoreComment,
-} from "../controllers/commentController";
+import * as commentCtrl from "../controllers/commentController";
 import { authMiddleware } from "../middleware/auth";
 import { adminMiddleware } from "../middleware/admin";
 import { generalLimiter, sensitiveLimiter } from "../middleware/ratelimit";
@@ -14,63 +8,64 @@ import { preventDuplicateRequest } from "../middleware/idempotency";
 
 const router = Router();
 
-// Định nghĩa các Route cho Comments (Prefix: /api/comments)
+/**
+ * NHÓM 1: PUBLIC ACCESS
+ */
 
-// --- [ PUBLIC ] ---
-// GET /api/comments?postId=...&parentId=...
-// Lấy danh sách bình luận (cấp 1 HOẶC replies) cho một bài viết (không cần đăng nhập)
-router.get("/", generalLimiter, getComments);
+// GET /api/comments - Lấy danh sách bình luận (Public)
+router.get("/", generalLimiter, commentCtrl.getComments);
 
-// --- [ USER/ADMIN ACCESS - Cần Đăng nhập ] ---
-// POST /api/comments (Tạo bình luận mới hoặc trả lời/reply)
-// Cần authMiddleware để lấy userId
+/**
+ * NHÓM 2: AUTHENTICATED USER (Author/Admin)
+ */
+
+// POST /api/comments - Tạo mới hoặc Trả lời bình luận
 router.post(
   "/",
   sensitiveLimiter,
   authMiddleware,
   preventDuplicateRequest,
-  createComment
+  commentCtrl.createComment
 );
 
-// PATCH /api/comments/:commentId (Cập nhật bình luận)
-// Cần authMiddleware để lấy userId và adminMiddleware để gán userRole
-router.patch(
+// PUT /api/comments/:commentId - Cập nhật nội dung bình luận
+router.put(
   "/:commentId",
   sensitiveLimiter,
   authMiddleware,
-  adminMiddleware,
   preventDuplicateRequest,
-  updateComment
+  commentCtrl.updateComment
 );
 
-// DELETE /api/comments/:commentId (Xóa bình luận - Soft Delete)
-// Cần authMiddleware để lấy userId và adminMiddleware để gán userRole
+// DELETE /api/comments/:commentId - Xóa bình luận (Soft Delete)
 router.delete(
   "/:commentId",
   sensitiveLimiter,
   authMiddleware,
-  adminMiddleware,
-  preventDuplicateRequest,
-  deleteComment
+  commentCtrl.deleteComment
 );
 
-// PATCH /api/comments/:commentId/restore (Khôi phục bình luận từ thùng rác)
-router.patch(
-  "/:commentId/restore",
-  sensitiveLimiter,
-  authMiddleware,
-  adminMiddleware,
-  restoreComment
-);
+/**
+ * NHÓM 3: ADMIN ONLY
+ * Đặt các route admin lên trên các route động nếu cần,
+ * nhưng ở đây prefix '/admin' đã đủ phân biệt.
+ */
 
-// --- [ ADMIN ONLY ACCESS ] ---
-// GET /api/comments/admin (Lấy tất cả comments, kể cả pending và đã xóa)
+// GET /api/comments/admin - Quản lý toàn bộ bình luận (Admin View)
 router.get(
   "/admin",
-  generalLimiter,
   authMiddleware,
   adminMiddleware,
-  getAllCommentsForAdmin // <-- Route Admin đã được thêm
+  generalLimiter,
+  commentCtrl.getAllCommentsForAdmin
+);
+
+// PUT /api/comments/admin/restore/:commentId - Khôi phục bình luận
+router.put(
+  "/admin/restore/:commentId",
+  authMiddleware,
+  adminMiddleware,
+  commentCtrl.restoreComment
 );
 
 export default router;

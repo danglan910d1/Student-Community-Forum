@@ -1,5 +1,8 @@
 export const AUTH_TEXT = {
   SIGNUP: {
+    PAGE_TITLE: "Đăng ký tài khoản - Diễn đàn CNTT",
+    PAGE_DES:
+      "Tham gia cộng đồng chia sẻ kiến thức công nghệ lớn nhất Việt Nam",
     TITLE: "Tạo tài khoản mới",
     DESCRIPTION: "Nhập thông tin chi tiết để tạo tài khoản",
     NAME_LABEL: "Họ và tên",
@@ -13,8 +16,16 @@ export const AUTH_TEXT = {
     SUBMIT_BTN: "Đăng ký",
     HAVE_ACCOUNT: "Đã có tài khoản?",
     SIGN_IN_LINK: "Đăng nhập",
+    SUCCESS_TOAST: "Đăng ký thành công!",
+    SUCCESS_DESCRIPTION: (name: string) =>
+      `Chào mừng ${name} đã gia nhập cộng đồng.`,
+    ERROR_TITLE: "Lỗi đăng ký",
+    LOADING_TEXT: "Đang xử lý...",
   },
   LOGIN: {
+    PAGE_TITLE: "Đăng nhập - Diễn đàn CNTT",
+    PAGE_DES:
+      "Tham gia cộng đồng chia sẻ kiến thức công nghệ lớn nhất Việt Nam",
     TITLE: "Chào mừng trở lại",
     DESCRIPTION: "Nhập email và mật khẩu để truy cập tài khoản của bạn",
     EMAIL_LABEL: "Địa chỉ Email",
@@ -24,5 +35,18 @@ export const AUTH_TEXT = {
     SUBMIT_BTN: "Đăng nhập",
     NO_ACCOUNT: "Chưa có tài khoản?",
     SIGN_UP_LINK: "Đăng ký",
+    SUCCESS_TOAST: "Đăng nhập thành công!",
+    SUCCESS_DESCRIPTION: (name: string) => `Chào mừng ${name} đã quay trở lại.`,
+    ERROR_TITLE: "Lỗi đăng nhập",
+    LOADING_TEXT: "Đang xác thực...",
+  },
+  VALIDATION: {
+    NAME_REQUIRED: "Họ và tên không được để trống",
+    EMAIL_REQUIRED: "Email không được để trống",
+    EMAIL_INVALID: "Email không hợp lệ",
+    PASSWORD_REQUIRED: "Mật khẩu không được để trống",
+    PASSWORD_MIN: "Mật khẩu phải có ít nhất 8 ký tự",
+    CONFIRM_PASSWORD_REQUIRED: "Vui lòng xác nhận lại mật khẩu",
+    CONFIRM_PASSWORD_MISMATCH: "Mật khẩu xác nhận không khớp",
   },
 } as const;

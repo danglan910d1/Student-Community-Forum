@@ -1,15 +1,6 @@
-// src/routes/userRoutes.ts (Prefix: /api/users)
-
+// src/routes/userRoutes.ts
 import { Router } from "express";
-import {
-  getMe,
-  updateProfile,
-  updatePassword,
-  getUserById,
-  updateUserStatus,
-  deleteUser,
-  getUsersList,
-} from "../controllers/userController";
+import * as userCtrl from "../controllers/userController";
 import { authMiddleware } from "../middleware/auth";
 import { adminMiddleware } from "../middleware/admin";
 import { generalLimiter, sensitiveLimiter } from "../middleware/ratelimit";
@@ -20,101 +11,89 @@ const router = Router();
 
 /**
  * NHÓM 1: CÁC ROUTE ĐỊNH DANH CỤ THỂ (SPECIFIC ROUTES)
- * Đặt lên đầu để không bị các route động như /:id chiếm quyền.
  */
 
-// --- [ ADMIN: Lấy danh sách tất cả Users (kể cả bị ban/xóa) ] ---
-// GET /api/users/admin
-router.get(
-  "/admin",
-  authMiddleware,
-  adminMiddleware,
-  generalLimiter,
-  getUsersList
-);
+// GET /api/users/me - Lấy thông tin cá nhân hiện tại
+router.get("/me", authMiddleware, generalLimiter, userCtrl.getMe);
 
-// --- [ USER: Lấy thông tin cá nhân của người dùng hiện tại ] ---
-// GET /api/users/me
-router.get("/me", authMiddleware, generalLimiter, getMe);
-
-// --- [ USER: Cập nhật thông tin profile (Tên, Avatar) ] ---
-// PUT /api/users/profile
+// PUT /api/users/profile - Cập nhật Profile (Name, Avatar)
 router.put(
   "/profile",
   authMiddleware,
   sensitiveLimiter,
   multerErrorHandler(uploadSingleAvatar),
   preventDuplicateRequest,
-  updateProfile
+  userCtrl.updateProfile
 );
 
-// --- [ USER: Cập nhật mật khẩu mới ] ---
-// PUT /api/users/password
+// PUT /api/users/password - Đổi mật khẩu
 router.put(
   "/password",
   authMiddleware,
   sensitiveLimiter,
   preventDuplicateRequest,
-  updatePassword
+  userCtrl.updatePassword
 );
 
-// --- [ USER: Người dùng tự xóa tài khoản của chính mình ] ---
-// DELETE /api/users/me
+// DELETE /api/users/me - Tự xóa tài khoản cá nhân
 router.delete(
   "/me",
   authMiddleware,
   sensitiveLimiter,
   preventDuplicateRequest,
-  deleteUser
+  userCtrl.deleteUser
 );
 
 /**
- * NHÓM 2: CÁC ROUTE CÓ THAM SỐ BIẾN ĐỘNG (:id)
+ * NHÓM 2: CÁC ROUTE ADMIN (DYNAMIC & PROTECTED)
  */
 
-// --- [ ADMIN: Cập nhật Trạng thái User (Ban/Unban hoặc đổi Role) ] ---
-// PUT /api/users/admin/:id/status
+// GET /api/users/admin - Admin lấy danh sách tất cả Users
+router.get(
+  "/admin",
+  authMiddleware,
+  adminMiddleware,
+  generalLimiter,
+  userCtrl.getUsersList
+);
+
+// PUT /api/users/admin/:id/status - Admin cập nhật trạng thái/role
 router.put(
   "/admin/:id/status",
   authMiddleware,
   adminMiddleware,
   sensitiveLimiter,
   preventDuplicateRequest,
-  updateUserStatus
+  userCtrl.updateUserStatus
 );
 
-// --- [ ADMIN: Xóa tài khoản người khác ] ---
-// DELETE /api/users/admin/:id
+// GET /api/users/admin/:id - Admin xem chi tiết User theo ID
+router.get(
+  "/admin/:id",
+  authMiddleware,
+  adminMiddleware,
+  generalLimiter,
+  userCtrl.getUserById
+);
+
+// DELETE /api/users/admin/:id - Admin xóa tài khoản người dùng
 router.delete(
   "/admin/:id",
   authMiddleware,
   adminMiddleware,
   sensitiveLimiter,
   preventDuplicateRequest,
-  deleteUser
-);
-
-// --- [ ADMIN: Xem chi tiết User theo ID (Admin View) ] ---
-// GET /api/users/admin/:id
-router.get(
-  "/admin/:id",
-  authMiddleware,
-  adminMiddleware,
-  generalLimiter,
-  getUserById
+  userCtrl.deleteUser
 );
 
 /**
- * NHÓM 3: CÁC ROUTE PUBLIC (CHUNG NHẤT)
- * Đặt ở cuối cùng để làm "lưới lọc" cuối.
+ * NHÓM 3: PUBLIC ROUTES (DYNAMIC & OPEN)
  */
 
-// --- [ PUBLIC: Tìm kiếm danh sách user công khai ] ---
-// GET /api/users/
-router.get("/", generalLimiter, getUsersList);
+// GET /api/users/ - Tìm kiếm/Danh sách User công khai
+router.get("/", generalLimiter, userCtrl.getUsersList);
 
-// --- [ PUBLIC: Xem hồ sơ công khai của người khác ] ---
-// GET /api/users/:id
-// Phải đặt sau các route /admin, /me, /profile,... nếu không nó sẽ coi các chữ đó là "id"
-router.get("/:id", generalLimiter, getUserById);
+// GET /api/users/:id - Xem hồ sơ công khai của người khác
+router.get("/:id", generalLimiter, userCtrl.getUserById);
+
 export default router;

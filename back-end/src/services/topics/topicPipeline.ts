@@ -1,61 +1,69 @@
 import { PipelineStage } from "mongoose";
 
 interface TopicPipelineConfig {
-  includeCreator?: boolean;
+  includeUser?: boolean;
   includeProjection?: boolean;
+  isAdminView?: boolean;
 }
 
 export const buildTopicAggregationPipeline = (
   filter: any,
   config: TopicPipelineConfig = {}
 ): PipelineStage[] => {
-  const { includeCreator = true, includeProjection = true } = config;
+  const {
+    includeUser = true,
+    includeProjection = true,
+    isAdminView = false,
+  } = config;
 
-  const pipeline: PipelineStage[] = [
-    // 1. Lọc dữ liệu thô
-    { $match: filter },
-  ];
+  const pipeline: PipelineStage[] = [{ $match: filter }];
 
-  // 2. $lookup Creator (Fix N+1)
-  if (includeCreator) {
-    pipeline.push(
-      {
-        $lookup: {
-          from: "users",
-          localField: "createdBy",
-          foreignField: "_id",
-          as: "creatorInfo", // Đổi tên tạm để tránh trùng với field gốc
-        },
+  if (includeUser && isAdminView) {
+    pipeline.push({
+      $lookup: {
+        from: "users",
+        localField: "createdBy",
+        foreignField: "_id",
+        pipeline: [{ $match: { is_deleted: { $ne: true } } }],
+        as: "userData",
       },
-      {
-        // Trải mảng để biến thành object thay vì mảng 1 phần tử
-        $set: {
-          creatorInfo: { $arrayElemAt: ["$creatorInfo", 0] },
-        },
-      }
-    );
+    });
   }
 
-  // 3. Project - Giai đoạn quan trọng nhất để thống nhất cấu trúc
   if (includeProjection) {
     pipeline.push({
       $project: {
         _id: 0,
-        topicId: "$_id", // Đổi sang topicId như Tag/Post đã làm
+        topicId: "$_id",
         name: 1,
         slug: 1,
         description: 1,
-        status: 1,
         createdAt: 1,
         updatedAt: 1,
-        // Chỉ trả ra thông tin User cần thiết nếu includeCreator = true
-        createdBy: includeCreator
-          ? {
-              userId: "$creatorInfo._id",
-              name: "$creatorInfo.name",
-              email: "$creatorInfo.email",
-            }
-          : "$createdBy",
+        status: { $cond: [isAdminView, "$status", "$$REMOVE"] },
+
+        // Nếu là AdminView: Trả về object chi tiết
+        // Nếu là Public: Biến mất hoàn toàn (không lộ ID Admin)
+        user:
+          isAdminView && includeUser
+            ? {
+                $let: {
+                  vars: { user: { $arrayElemAt: ["$userData", 0] } },
+                  in: {
+                    $cond: [
+                      { $ifNull: ["$$user", false] },
+                      {
+                        userId: "$$user._id",
+                        name: "$$user.name",
+                        avatar: "$$user.avatar",
+                        email: "$$user.email", // Admin thấy luôn email
+                      },
+                      null,
+                    ],
+                  },
+                },
+              }
+            : "$$REMOVE", // Public thì không thấy field 'user' này luôn
       },
     });
   }

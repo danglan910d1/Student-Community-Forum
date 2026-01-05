@@ -1,48 +1,15 @@
 // src/services/postService.ts
 import { Types } from "mongoose";
 import { GetPostsQuery } from "../../types/post"; // Đã sửa type file
-import {
-  buildCommonFilter,
-  AuthContext,
-  CommonQuery,
-} from "../common/buildCommonFilter";
+import { buildCommonFilter, AuthContext } from "../common/buildCommonFilter";
+import Topic from "../../models/Topic";
+import Tag from "../../models/Tag";
 
 /**
  * Xây dựng đối tượng filter MongoDB đặc thù cho Post.
  * Nó gọi hàm chung để xử lý Status và Search, sau đó thêm lọc đặc thù.
  */
-// export const buildPostFilter = (
-//   queryParams: GetPostsQuery, // Nhận type mở rộng
-//   authContext: AuthContext
-// ) => {
-//   // SỬA LỖI: Lấy TẤT CẢ các tham số cần thiết từ queryParams
-//   const { topicId, tagId, status, search, myPosts, page, limit } = queryParams;
-
-//   // TẠO OBJECT CHUNG BẰNG CÁCH SỬ DỤNG CONDITIONAL SPREAD
-//   // (Chỉ thêm vào nếu giá trị TỒN TẠI)
-//   const commonQuery: CommonQuery = {
-//     // 1. Chỉ thêm các trường nếu chúng không phải undefined
-//     ...(status && { status }),
-//     ...(search && { search }),
-//     ...(myPosts && { myPosts }),
-//     ...(page && { page }),
-//     ...(limit && { limit }),
-//   };
-
-//   // 1. Lấy bộ lọc chung (Status, Search, MyPosts)
-//   const filter = buildCommonFilter(commonQuery, authContext, "post");
-
-//   // 2. THÊM LỌC ĐẶC THÙ (TOPIC & TAG)
-//   if (topicId && Types.ObjectId.isValid(topicId as string)) {
-//     filter.topicId = new Types.ObjectId(topicId as string);
-//   }
-//   if (tagId && Types.ObjectId.isValid(tagId as string)) {
-//     filter.tags = new Types.ObjectId(tagId as string);
-//   }
-
-//   return filter;
-// };
-export const buildPostFilter = (
+export const buildPostFilter = async (
   queryParams: GetPostsQuery,
   authContext: AuthContext
 ) => {
@@ -50,14 +17,26 @@ export const buildPostFilter = (
   const filter = buildCommonFilter(queryParams, authContext, "post");
 
   // 2. Thêm logic đặc thù (Destructuring lấy các trường riêng của Post)
-  const { topicId, tagId } = queryParams;
-
+  const { topicId, tagId, is_resolved, topicSlug, tagSlug } = queryParams;
+  // Lọc theo Topic (Ưu tiên ID, sau đó đến Slug)
   if (topicId && Types.ObjectId.isValid(topicId)) {
     filter.topicId = new Types.ObjectId(topicId);
+  } else if (topicSlug) {
+    // Tìm ID từ Slug trước khi filter
+    const topic = await Topic.findOne({ slug: topicSlug }).select("_id");
+    filter.topicId = topic ? topic._id : new Types.ObjectId();
   }
-
+  // Lọc theo Tag (Trong mảng tags)
   if (tagId && Types.ObjectId.isValid(tagId)) {
     filter.tags = new Types.ObjectId(tagId);
+  } else if (tagSlug) {
+    // Tìm ID của Tag từ Slug
+    const tag = await Tag.findOne({ slug: tagSlug }).select("_id");
+    filter.tags = tag ? tag._id : new Types.ObjectId();
+  }
+
+  if (is_resolved === "true" || is_resolved === true) {
+    filter.is_resolved = true;
   }
 
   return filter;

@@ -1,6 +1,6 @@
 "use client";
 import { Settings } from "lucide-react";
-import { CardLayout } from "../layout/CardLayout";
+import { CardLayout } from "@/components/layout/CardLayout";
 
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";

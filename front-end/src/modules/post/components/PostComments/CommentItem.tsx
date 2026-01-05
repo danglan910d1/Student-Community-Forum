@@ -1,0 +1,102 @@
+"use client";
+
+import { useState } from "react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { formatDistanceToNow } from "date-fns";
+import { vi } from "date-fns/locale";
+import { LikeButton } from "@/components/shared/LikeButton";
+import { CommentInput } from "./CommentInput";
+import { useLike } from "../../hooks/useLike";
+import { IComment } from "../../types";
+
+export function CommentItem({
+  comment,
+  onReply,
+}: {
+  comment: IComment;
+  onReply: (content: string, parentId: string) => Promise<unknown>;
+}) {
+  const [isReplying, setIsReplying] = useState(false);
+
+  const displayContent = comment.content;
+
+  const { isLiked, likesCount, toggleLike, isPending } = useLike({
+    targetType: "comment",
+    targetId: comment.commentId,
+    initialLikesCount: comment.likes_count,
+  });
+
+  return (
+    <div className="flex flex-col gap-3 animate-in fade-in duration-300">
+      <div className="flex gap-3">
+        <Avatar className="h-8 w-8 shrink-0 border">
+          <AvatarImage src={comment.user.avatar} alt={comment.user.name} />
+          <AvatarFallback>{comment.user.name[0]}</AvatarFallback>
+        </Avatar>
+
+        <div className="flex-1 min-w-0">
+          <div className="bg-muted/50 p-3 rounded-2xl">
+            <p className="text-xs font-bold mb-1 text-foreground">
+              {comment.user.name}
+            </p>
+            <div className="text-sm leading-relaxed text-foreground/90 whitespace-pre-wrap">
+              {displayContent}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4 mt-1 px-1">
+            <span className="text-[11px] text-muted-foreground">
+              {formatDistanceToNow(new Date(comment.createdAt), {
+                addSuffix: true,
+                locale: vi,
+              })}
+            </span>
+
+            <LikeButton
+              isLiked={isLiked}
+              likesCount={likesCount}
+              onLike={toggleLike}
+              isPending={isPending}
+              className="h-auto p-0 text-[11px] font-bold"
+            />
+
+            <button
+              onClick={() => setIsReplying(!isReplying)}
+              className="text-[11px] font-bold text-muted-foreground hover:text-primary transition-colors"
+            >
+              Phản hồi{" "}
+              {comment.replies_count > 0 && `(${comment.replies_count})`}
+            </button>
+          </div>
+
+          {/* Ô nhập phản hồi */}
+          {isReplying && (
+            <div className="mt-3 ml-2 border-l-2 border-muted pl-4 animate-in slide-in-from-top-2 duration-200">
+              <CommentInput
+                autoFocus
+                placeholder={`Trả lời ${comment.user.name}...`}
+                onSubmit={async (val) => {
+                  await onReply(val, comment.commentId);
+                  setIsReplying(false);
+                }}
+              />
+            </div>
+          )}
+
+          {/* HIỂN THỊ DANH SÁCH PHẢN HỒI (REPLIES) */}
+          {comment.replies && comment.replies.length > 0 && (
+            <div className="mt-4 space-y-5 ml-2 border-l-2 border-muted/50 pl-4">
+              {comment.replies.map((reply) => (
+                <CommentItem
+                  key={reply.commentId}
+                  comment={reply}
+                  onReply={onReply}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

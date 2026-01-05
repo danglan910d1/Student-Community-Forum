@@ -1,12 +1,6 @@
+// src/routes/topicRoutes.ts
 import { Router } from "express";
-import {
-  getTopicsList,
-  createTopic,
-  getTopicById,
-  updateTopic,
-  deleteTopic,
-  restoreTopic,
-} from "../controllers/topicController";
+import * as topicCtrl from "../controllers/topicController";
 import { authMiddleware } from "../middleware/auth";
 import { adminMiddleware } from "../middleware/admin";
 import { generalLimiter, sensitiveLimiter } from "../middleware/ratelimit";
@@ -14,70 +8,72 @@ import { preventDuplicateRequest } from "../middleware/idempotency";
 
 const router = Router();
 
-// --- [ NHÓM 1: ADMIN ONLY ACCESS ] ---
-// Các thao tác quản trị dành cho Topic. Yêu cầu Đăng nhập + Quyền Admin.
+/**
+ * NHÓM 1: ADMIN ONLY
+ * Quản lý danh mục (Topics) hệ thống
+ */
 
-// GET /api/topics/admin (Admin lấy toàn bộ danh sách, kể cả pending/rejected/deleted)
+// GET /api/topics/admin - Lấy toàn bộ danh sách (Admin View)
 router.get(
   "/admin",
-  generalLimiter,
   authMiddleware,
   adminMiddleware,
-  getTopicsList
+  generalLimiter,
+  topicCtrl.getTopicsList
 );
 
-// POST /api/topics/admin (Admin tạo topic mới trực tiếp)
+// POST /api/topics/admin - Tạo Topic chính thống mới
 router.post(
   "/admin",
-  sensitiveLimiter,
   authMiddleware,
   adminMiddleware,
+  sensitiveLimiter,
   preventDuplicateRequest,
-  createTopic
+  topicCtrl.createTopic
 );
 
-// PUT /api/topics/admin/restore/:id (Admin khôi phục Topic từ thùng rác)
-// Lưu ý: Đặt trước route :id để Express không nhầm "restore" là một ID bài viết
+// PUT /api/topics/admin/restore/:id - Khôi phục Topic đã xóa mềm
 router.put(
   "/admin/restore/:id",
-  sensitiveLimiter,
   authMiddleware,
   adminMiddleware,
-  restoreTopic
+  sensitiveLimiter,
+  topicCtrl.restoreTopic
 );
 
-// GET /api/topics/admin/:id (Admin lấy chi tiết 1 topic kèm thông tin Creator)
+// GET /api/topics/admin/:id - Chi tiết Topic (Admin View)
 router.get(
   "/admin/:id",
-  generalLimiter,
   authMiddleware,
   adminMiddleware,
-  getTopicById
+  generalLimiter,
+  topicCtrl.getTopicById
 );
 
-// PUT /api/topics/admin/:id (Admin cập nhật topic hoặc duyệt status)
+// PUT /api/topics/admin/:id - Cập nhật thông tin/trạng thái Topic
 router.put(
   "/admin/:id",
-  sensitiveLimiter,
   authMiddleware,
   adminMiddleware,
+  sensitiveLimiter,
   preventDuplicateRequest,
-  updateTopic
+  topicCtrl.updateTopic
 );
 
-// DELETE /api/topics/admin/:id (Admin xóa mềm Topic)
+// DELETE /api/topics/admin/:id - Xóa mềm Topic
 router.delete(
   "/admin/:id",
-  sensitiveLimiter,
   authMiddleware,
   adminMiddleware,
-  deleteTopic
+  sensitiveLimiter,
+  topicCtrl.deleteTopic
 );
 
-// --- [ NHÓM 2: PUBLIC ACCESS ] ---
-// Các route dành cho người dùng vãng lai hoặc User chọn topic khi đăng bài.
+/**
+ * NHÓM 2: PUBLIC ACCESS
+ */
 
-// GET /api/topics (Public: Lấy danh sách các topic đã approved để user chọn khi đăng bài)
-router.get("/", generalLimiter, getTopicsList);
+// GET /api/topics - Danh sách Topic đã duyệt (Cho User chọn hoặc xem danh mục)
+router.get("/", generalLimiter, topicCtrl.getTopicsList);
 
 export default router;

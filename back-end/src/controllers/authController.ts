@@ -1,4 +1,8 @@
-// src/controllers/authController.ts
+/**
+ * CONTROLLER: authController
+ * Trách nhiệm: Xử lý Đăng ký, Đăng nhập, Đăng xuất.
+ * Chiến lược: Service-layered, Redis-backed Revocation, IP-based Rate Limiting.
+ */
 import { Request, Response } from "express";
 import { asyncHandler } from "../utils/asyncHandler";
 import { MIN_PASSWORD_LENGTH } from "../config/constants";
@@ -12,16 +16,14 @@ import {
 } from "../services/users/authlLayer";
 import { AppError } from "../utils/appError";
 
-// Đăng ký tài khoản
+/** * POST /api/auth/register */
 export const register = asyncHandler(
   async (req: Request<{}, {}, RegisterBody>, res: Response) => {
     const { name, email, password } = req.body;
+    const userIp = req.ip || "0.0.0.0";
 
-    // Validation cơ bản (Ném lỗi trực tiếp, không cần return res.status)
-    if (!name || !email || !password) {
+    if (!name || !email || !password)
       throw new AppError(400, "Please enter all fields.");
-    }
-
     if (password.length < MIN_PASSWORD_LENGTH) {
       throw new AppError(
         400,
@@ -29,32 +31,29 @@ export const register = asyncHandler(
       );
     }
 
-    // Gọi Service - Mọi lỗi logic bên trong sẽ tự "trôi" về Global Handler
     const { user, token } = await registerService(name, email, password);
 
-    // Xử lý hậu kỳ thành công
-    if (req.ip) {
-      await clearRateLimitsByIdentifier(req.ip, "rate:auth");
-      await clearRateLimitsByIdentifier(req.ip, "rate:general");
-    }
+    // Xóa giới hạn IP sau khi đăng ký thành công (Phòng trường hợp user bị chặn do thử đăng ký lỗi nhiều lần)
+    await clearRateLimitsByIdentifier(userIp, "rate:auth");
+    await clearRateLimitsByIdentifier(userIp, "rate:general");
 
     res.status(201).json({ ...user, token });
   }
 );
-// Đăng nhập tài khoản
+
+/** * POST /api/auth/login */
 export const login = asyncHandler(
   async (req: Request<{}, {}, LoginBody>, res: Response) => {
     const { email, password } = req.body;
     const userIp = req.ip || "0.0.0.0";
 
-    if (!email || !password) {
+    if (!email || !password)
       throw new AppError(400, "Please provide both email and password.");
-    }
 
-    // Logic xác thực phức tạp đã được Service lo hết
+    // Service này chịu trách nhiệm: Kiểm tra user, verify pass, kiểm tra lockout trong Redis
     const { user, token } = await loginService(email, password, userIp);
 
-    // Nếu chạy đến đây tức là không có lỗi nào được ném ra (Login thành công)
+    // Giải phóng IP khỏi rate limit nếu login thành công
     await clearRateLimitsByIdentifier(userIp, "rate:auth");
     await clearRateLimitsByIdentifier(userIp, "rate:general");
 
@@ -62,30 +61,15 @@ export const login = asyncHandler(
   }
 );
 
-// Đằng xuất (Stateless - Phi trạng thái)
-// (Sử dụng Redis để thu hồi Token)
-// export const logout = (req: Request, res: Response) => {
-//   // Frontend xóa token, Backend chỉ cần phản hồi thành công.
-//   res.json({ message: "Logged out successfully." });
-// };
-
-// src/controllers/authController.ts
-
+/** * POST /api/auth/logout */
 export const logout = asyncHandler(
   async (req: AuthenticatedRequest, res: Response) => {
-    // 1. Lấy token thô từ header (đã được format 'Bearer <token>')
     const token = req.headers.authorization?.split(" ")[1];
+    if (!token) throw new AppError(401, "Token is required for logout.");
 
-    if (!token) {
-      throw new AppError(401, "Token is required for logout.");
-    }
-
-    // 2. Gọi Service xử lý thu hồi
+    // logoutService sẽ thực hiện addRevokedToken vào Redis với TTL khớp với thời gian còn lại của JWT
     await logoutService(token);
 
-    console.log(`[LOGOUT] Token revoked for user: ${req.userId}`);
-
-    // 3. Phản hồi thành công
     res.json({ message: "Logged out successfully." });
   }
 );

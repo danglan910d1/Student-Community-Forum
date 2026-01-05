@@ -181,6 +181,8 @@ import {
   LogOutIcon,
   ShoppingBagIcon,
 } from "lucide-react";
+import MultiAutocomplete from "@/components/shared/MultiAutoComplete";
+import { TagSelectorPage } from "@/components/shared/TestMulti";
 
 export function CoverExample() {
   return (
@@ -345,6 +347,7 @@ function FieldExamples() {
               Cancel
             </Button>
           </Field>
+          <TagSelectorPage />
         </FieldGroup>
       </FieldSet>
     </Example>

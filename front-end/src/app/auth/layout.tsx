@@ -1,5 +1,5 @@
 // app/(main)/page.tsx
-import { AuthLayout } from "@/modules/auth/components/shared/AuthLayout";
+import { AuthLayout } from "@/modules/auth/components/AuthLayout";
 
 // Hàm giả lập thời gian load dữ liệu 2 giây
 const delay = (ms: number) => new Promise((res) => setTimeout(res, ms));

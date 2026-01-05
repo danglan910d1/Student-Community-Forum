@@ -1,6 +1,6 @@
-import { PopularTags } from "../../modules/posts/components/shared/PopularTag";
-import { UserInfo } from "../shared/UserInfo";
-import { QuickNavigation } from "../shared/QuickNavigation";
+import { UserInfo } from "@/components/shared/UserInfo";
+import { QuickNavigation } from "@/components/shared/Navigation/QuickNavigation/QuickNavigation";
+import { PopularTags } from "@/modules/tag/components/PopularTag";
 
 export function LeftSidebar() {
   return (

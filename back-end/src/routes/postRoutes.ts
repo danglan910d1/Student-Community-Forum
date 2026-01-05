@@ -1,94 +1,89 @@
+// src/routes/postRoutes.ts
 import { Router } from "express";
-import {
-  createPost,
-  getPosts,
-  getPostById,
-  updatePost,
-  deletePost,
-  getPostByIdForAdmin,
-  adminApprovePostController,
-  restorePost,
-  togglePostStickyController,
-} from "../controllers/postController";
-import { authMiddleware } from "../middleware/auth"; // auth.ts
-import { adminMiddleware } from "../middleware/admin"; // Dùng để kiểm tra vai trò
+import * as postCtrl from "../controllers/postController";
+import { authMiddleware } from "../middleware/auth";
+import { adminMiddleware } from "../middleware/admin";
 import { optionalAuth } from "../middleware/optionalAuth";
 import { generalLimiter, sensitiveLimiter } from "../middleware/ratelimit";
 import { preventDuplicateRequest } from "../middleware/idempotency";
 
 const router = Router();
 
-// --- [ NHÓM 1: ADMIN ONLY ACCESS ] ---
-// Các thao tác quản trị viên. Yêu cầu cả Đăng nhập + Quyền Admin.
+/**
+ * NHÓM 1: ADMIN ONLY
+ * Đặt lên đầu để không bị trùng với route GET /:id
+ */
 
-// POST /api/posts/admin/approve/:id (Admin duyệt bài viết và quyết định các Tag mới do User đề xuất)
+// POST /api/posts/admin/approve/:id - Duyệt bài & xử lý Tag đề xuất
 router.post(
   "/admin/approve/:id",
-  sensitiveLimiter,
   authMiddleware,
   adminMiddleware,
+  sensitiveLimiter,
   preventDuplicateRequest,
-  adminApprovePostController
+  postCtrl.adminApprovePostController
 );
 
-// PUT /api/posts/admin/restore/:id (Admin khôi phục bài viết đã bị xóa mềm từ thùng rác)
+// PUT /api/posts/admin/restore/:id - Khôi phục bài từ thùng rác
 router.put(
   "/admin/restore/:id",
-  sensitiveLimiter,
   authMiddleware,
   adminMiddleware,
-  restorePost
+  sensitiveLimiter,
+  postCtrl.restorePost
 );
 
-// PUT /api/posts/admin/sticky/:id (Admin ghim bài viết lên đầu trang hoặc bỏ ghim bài)
+// PUT /api/posts/admin/sticky/:id - Ghim/Bỏ ghim bài viết
 router.put(
   "/admin/sticky/:id",
-  sensitiveLimiter,
   authMiddleware,
   adminMiddleware,
-  togglePostStickyController
+  sensitiveLimiter,
+  postCtrl.togglePostStickyController
 );
 
-// GET /api/posts/admin/:id (Admin lấy chi tiết bài viết bất kể trạng thái: pending, rejected, deleted)
+// GET /api/posts/admin/:id - Xem chi tiết mọi trạng thái bài viết
 router.get(
   "/admin/:id",
-  generalLimiter,
   authMiddleware,
   adminMiddleware,
-  getPostByIdForAdmin
+  generalLimiter,
+  postCtrl.getPostByIdForAdmin
 );
 
-// --- [ NHÓM 2: PUBLIC ACCESS ] ---
-// Các route dành cho khách truy cập hoặc không bắt buộc đăng nhập chặt chẽ.
+/**
+ * NHÓM 2: PUBLIC / OPTIONAL AUTH
+ */
 
-// GET /api/posts (Lấy danh sách bài: Khách thấy bài Approved, User thấy bài của mình, Admin thấy hết)
-router.get("/", generalLimiter, optionalAuth, getPosts);
+// GET /api/posts - Danh sách bài viết (Filter theo Approved/User/Search)
+router.get("/", generalLimiter, optionalAuth, postCtrl.getPosts);
 
-// GET /api/posts/:id (Khách xem bài đã duyệt + Tăng view qua Redis. Phải đặt sau các route /admin để tránh xung đột)
-router.get("/:id", generalLimiter, getPostById);
+// GET /api/posts/:id - Xem chi tiết bài viết công khai & Tăng View
+router.get("/:id", generalLimiter, postCtrl.getPostById);
 
-// --- [ NHÓM 3: USER ACCESS ] ---
-// Các route yêu cầu người dùng phải đăng nhập (Author) hoặc Admin.
+/**
+ * NHÓM 3: AUTHORIZED USERS (Author/Admin)
+ */
 
-// POST /api/posts (Người dùng tạo bài viết mới - Mặc định status sẽ là 'pending')
+// POST /api/posts - Tạo bài viết mới (Status mặc định: pending)
 router.post(
   "/",
-  sensitiveLimiter,
   authMiddleware,
+  sensitiveLimiter,
   preventDuplicateRequest,
-  createPost
+  postCtrl.createPost
 );
 
-// PUT /api/posts/:id (Tác giả sửa bài của mình hoặc Admin sửa bất kỳ bài nào)
+// PUT /api/posts/:id - Cập nhật nội dung bài viết
 router.put(
   "/:id",
-  sensitiveLimiter,
   authMiddleware,
+  sensitiveLimiter,
   preventDuplicateRequest,
-  updatePost
+  postCtrl.updatePost
 );
 
-// DELETE /api/posts/:id (Tác giả xóa bài mình hoặc Admin xóa bất kỳ - Thực hiện xóa mềm)
-router.delete("/:id", sensitiveLimiter, authMiddleware, deletePost);
+// DELETE /api/posts/:id - Xóa mềm bài viết
+router.delete("/:id", authMiddleware, sensitiveLimiter, postCtrl.deletePost);
 
 export default router;

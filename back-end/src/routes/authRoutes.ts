@@ -1,24 +1,37 @@
 // src/routes/authRoutes.ts
-// prefix: /api/auth
-
 import { Router } from "express";
-import { register, login, logout } from "../controllers/authController";
+import * as authCtrl from "../controllers/authController";
 import { authLimiter, logoutLimiter } from "../middleware/ratelimit";
 import { preventDuplicateRequest } from "../middleware/idempotency";
+import { authMiddleware } from "../middleware/auth";
 
 const router = Router();
 
-// Route cho việc đăng ký người dùng mới
-// Route Đăng ký và Đăng nhập CHỈ giới hạn theo IP (Dùng generalLimiter hoặc
-// một Limiter riêng biệt cho các Auth endpoint)
-// POST /api/auth/register
-router.post("/register", authLimiter, preventDuplicateRequest, register);
+/**
+ * NHÓM 1: PUBLIC (GUEST ACCESS)
+ */
 
-// Route cho việc đăng nhập (lấy token)
-// POST /api/auth/login
-router.post("/login", authLimiter, preventDuplicateRequest, login);
+// POST /api/auth/register - Đăng ký tài khoản
+router.post(
+  "/register",
+  authLimiter,
+  preventDuplicateRequest,
+  authCtrl.register
+);
 
-// POST /api/auth/logout (Không cần middleware)
-router.post("/logout", logoutLimiter, logout);
+// POST /api/auth/login - Đăng nhập
+router.post("/login", authLimiter, preventDuplicateRequest, authCtrl.login);
+
+/**
+ * NHÓM 2: AUTH REQUIRED (USER ACCESS)
+ */
+
+// POST /api/auth/logout - Đăng xuất (Thu hồi Token)
+router.post(
+  "/logout",
+  authMiddleware, // Cần định danh để biết token nào cần revoke
+  logoutLimiter,
+  authCtrl.logout
+);
 
 export default router;

@@ -4,17 +4,18 @@
 import { toast } from "sonner";
 import { FormProvider, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { AuthLayout } from "../components/shared/AuthLayout";
-import { LoginContent } from "../components/LoginContent";
-import { useLoginMutation } from "../hooks/useLoginMutation";
+import { LoginContent } from "@/modules/auth/components/LoginContent";
+import { useLoginMutation } from "@/modules/auth/hooks/useLoginMutation";
 import { Form } from "@/components/ui/form";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useRouter } from "next/navigation";
-import { loginSchema, LoginInput } from "../schemas/loginSchema";
-import { authResponseHandle } from "../utils/authResponseHandle";
+import { loginSchema, LoginInput } from "@/modules/auth/schemas/loginSchema";
+import { authResponseHandle } from "@/modules/auth/utils/authResponseHandle";
 import { useEffect } from "react";
+import { AUTH_TEXT } from "../constant/authText";
 
 export function LoginContainer() {
+  const { LOGIN } = AUTH_TEXT;
   const router = useRouter();
   const setAuth = useAuthStore((state) => state.setAuth);
 
@@ -38,8 +39,8 @@ export function LoginContainer() {
         // Tận dụng handler cũ để lưu user/token vào Zustand & LocalStorage
         const userName = authResponseHandle.handleSuccess(response, setAuth);
 
-        toast.success("Đăng nhập thành công!", {
-          description: `Chào mừng ${userName} đã quay trở lại.`,
+        toast.success(LOGIN.SUCCESS_TOAST, {
+          description: LOGIN.SUCCESS_DESCRIPTION(userName),
           duration: 3000,
         });
 

@@ -1,13 +1,13 @@
 /**
  * CONTROLLER: postController
- * * Trách nhiệm: Xử lý Business Logic (Logic Nghiệp vụ) liên quan đến Bài viết (CRUD, Kiểm duyệt, Tương tác).
- * * Nguyên tắc áp dụng: HOF, Type Safety, RBAC Logic, Data Integrity.
+ * Trách nhiệm: Xử lý Business Logic cho Bài viết (CRUD, Kiểm duyệt, Tương tác).
+ * Nguyên tắc: Pipeline-driven, Unified Error Handling, RBAC, Data Integrity.
  */
 import { Request, Response } from "express";
-import Post, { IPost } from "../models/Post";
+import { Types } from "mongoose";
+import Post from "../models/Post";
 import Topic from "../models/Topic";
 import { AuthenticatedRequest } from "../types/express";
-import { Types } from "mongoose";
 import {
   PostParams,
   CreatePostBody,
@@ -18,203 +18,96 @@ import {
 import { asyncHandler } from "../utils/asyncHandler";
 import { paginateAggregation } from "../utils/pagination";
 import { processTags } from "../services/tags/tagLayer";
-import { generateSlug } from "../utils/text";
+import { generateUniqueSlugForPost } from "../utils/text";
 import { buildPostFilter } from "../services/posts/postFilter";
 import { adminApprovePost } from "../services/posts/adminApprovePost";
 import { buildPostAggregationPipeline } from "../services/posts/postPipeline";
-// import { addJobToQueue } from "../services/jobQueue"; // LOẠI BỎ JOB QUEUE MOCK
-import {
+import redisClient, {
   getCache,
   setCache,
   incrementPostView,
-} from "../services/common/redis"; // Dùng service Redis mới
+  invalidateCache,
+  saveIdempotencyResult,
+} from "../services/common/redis";
+import { AppError } from "../utils/appError";
+import { createNotification } from "../services/notifications/notificationService";
+import { NotificationType } from "../models/Notification";
 
-// --- [ JOB PRODUCER: Loại bỏ Job View Count ] ---
-// Logic Views Count đã được chuyển sang Redis INCR.
-// --- [ USER: Tạo Bài Viết Mới ] ---
-// Cần authMiddleware
-// Endpoint: POST /api/posts
-export const createPost = asyncHandler(
-  async (req: AuthenticatedRequest<{}, {}, CreatePostBody>, res: Response) => {
-    // 1. Lấy dữ liệu
-    const { topicId, tags, title, content } = req.body;
-    const userId = req.userId;
-    const userObjectId = new Types.ObjectId(userId);
+const clearPostsCache = async () => {
+  await invalidateCache("posts:list:*");
+};
 
-    // 2. Kiểm tra tính hợp lệ cơ bản
-    if (!topicId || !title || !content) {
-      return res
-        .status(400)
-        .json({ error: "Topic ID, Title, and Content are required." });
-    }
+// --- [ 1. READ OPERATIONS ] ---
 
-    // 3. Xác minh Topic tồn tại và đã được Approved
-    const topic = await Topic.findOne({
-      _id: topicId,
-      status: "approved",
-    });
-    if (!topic) {
-      return res.status(404).json({ error: "Invalid or unapproved Topic." });
-    }
-    const topicObjectId = topic._id as Types.ObjectId;
-
-    // --- 3. PHÂN LOẠI INPUTS VÀ XỬ LÝ TAGS (GỌI SERVICE) ---
-    const { validTagIds, pendingTagIds } = await processTags(
-      tags || [],
-      userId,
-      topicObjectId
-    );
-
-    const slug = generateSlug(title);
-
-    // 5. Tạo bài viết trong DB
-    const newPostRaw = await Post.create({
-      userId: new Types.ObjectId(userId),
-      topicId: topic._id,
-      tags: validTagIds,
-      pending_tags: pendingTagIds,
-      title,
-      slug,
-      content,
-      status: "pending",
-      is_sticky: false,
-      is_deleted: false, // Khởi tạo giá trị soft delete
-    });
-
-    // 2. TRẢ VỀ QUA PIPELINE: Để FE nhận được postId và Author object ngay lập tức
-    const postArray = await Post.aggregate(
-      buildPostAggregationPipeline(
-        { _id: newPostRaw._id },
-        { includeUser: true, includeTopic: true, includeTags: true },
-        req.userRole === "admin",
-        userId
-      )
-    );
-
-    res.status(201).json(postArray[0]);
-  }
-);
-
-// --- [ USER/ADMIN: Cập nhật Bài Viết ] ---
-// Cần authMiddleware (User chỉ sửa bài của mình, Admin sửa bài bất kỳ)
-// Endpoint: PUT /api/posts/:id
-export const updatePost = asyncHandler(
-  async (
-    req: AuthenticatedRequest<PostParams, {}, UpdatePostBody>,
-    res: Response
-  ) => {
-    const postId = req.params.id;
-    const userId = req.userId;
-    const { topicId, tags, title, content, status } = req.body;
-
-    if (!Types.ObjectId.isValid(postId))
-      return res.status(400).json({ error: "Invalid ID." });
-
-    const post = await Post.findOne({ _id: postId, is_deleted: { $ne: true } });
-    if (!post)
-      return res.status(404).json({ error: "Post not found or deleted." });
-
-    const isAuthor = post.userId.toString() === userId;
-    const isAdmin = req.userRole === "admin";
-    if (!isAuthor && !isAdmin)
-      return res.status(403).json({ error: "Access denied." });
-
-    const updateFields: Partial<IPost> = {};
-    let currentTopicId = post.topicId;
-
-    // 1. Cập nhật nội dung (Không đổi status bài viết)
-    if (title && title.trim() !== post.title) {
-      updateFields.title = title.trim();
-      updateFields.slug = generateSlug(title.trim());
-    }
-    if (content && content.trim() !== post.content) {
-      updateFields.content = content.trim();
-    }
-
-    // 2. Cập nhật Topic
-    if (topicId && !post.topicId.equals(topicId)) {
-      const topic = await Topic.findOne({ _id: topicId, status: "approved" });
-      if (topic) {
-        updateFields.topicId = topic._id as Types.ObjectId;
-        currentTopicId = topic._id as Types.ObjectId;
-      }
-    }
-
-    // 3. Cập nhật Tags (Logic mới: Không bắt duyệt lại bài)
-    if (tags) {
-      const { validTagIds, pendingTagIds } = await processTags(
-        tags,
-        userId,
-        currentTopicId
-      );
-      updateFields.tags = validTagIds;
-      updateFields.pending_tags = pendingTagIds;
-
-      if (pendingTagIds.length > 0) {
-        console.log(`Log: Bài ${postId} có tag mới chờ Admin duyệt.`);
-      }
-    }
-
-    // 4. Quyền Admin cập nhật Status trực tiếp
-    if (isAdmin && status) updateFields.status = status;
-
-    const updatedPostRaw = await Post.findByIdAndUpdate(
-      postId,
-      { $set: updateFields },
-      { new: true, runValidators: true }
-    );
-
-    const postArray = await Post.aggregate(
-      buildPostAggregationPipeline(
-        { _id: updatedPostRaw!._id },
-        { includeUser: true, includeTopic: true, includeTags: true },
-        isAdmin,
-        userId
-      )
-    );
-
-    res.json(postArray[0]);
-  }
-);
-// --- [ PUBLIC/ADMIN: Lấy danh sách Bài Viết ] ---
-// Hỗ trợ phân trang, lọc theo Topic, Tag và STATUS
-// Endpoint: GET /api/posts
+/** * GET /api/posts
+ * Lấy danh sách bài viết (Public/Admin)
+ */
+/** * GET /api/posts
+ * Lấy danh sách bài viết kèm View Real-time từ Redis
+ */
 export const getPosts = asyncHandler(async (req: Request, res: Response) => {
   const query = req.query as any;
-  const { page, limit } = query;
-
-  // 1. Xác định context người dùng
   const isAdmin = (req as any).userRole === "admin";
   const userId = (req as any).userId;
 
-  // 2. Xử lý Cache Key
-  const sortedQuery = Object.keys(query)
-    .sort()
-    .map((k) => `${k}=${query[k]}`)
-    .join(":");
-  const cacheKey = `posts:list:${isAdmin ? "admin" : "public"}:${sortedQuery}`;
+  const identity = {
+    topic: query.topicSlug ?? null,
+    tag: query.tagSlug ?? null,
+  };
 
+  // 1. Check Cache (Lưu ý: Nếu dùng view real-time, nên để cache ngắn < 30s)
+  const cacheKey = `posts:list:${isAdmin ? "admin" : "public"}:${JSON.stringify(
+    query
+  )}`;
   const cachedData = await getCache(cacheKey);
   if (cachedData) return res.json(cachedData);
 
-  // 3. Xây dựng Filter & Pipeline
-  const filter = buildPostFilter(query, { userId, isAdmin });
-  console.log(isAdmin);
-  const pipeline = buildPostAggregationPipeline(
-    filter,
-    { includeUser: true, includeTopic: true, includeTags: true },
-    isAdmin,
-    userId
+  // 2. Xây dựng Filter & Pipeline
+  const filter = await buildPostFilter(query, { userId, isAdmin });
+  const pipeline = buildPostAggregationPipeline(filter, {
+    includeUser: true,
+    includeTopic: true,
+    includeTags: true,
+    isAdminView: isAdmin,
+  });
+
+  // 3. Sắp xếp & Phân trang
+  const sortStage: any = { is_sticky: -1 };
+  if (query.sortBy === "popular") sortStage.views_count = -1;
+  sortStage.createdAt = -1;
+
+  pipeline.push({ $sort: sortStage });
+
+  const result = await paginateAggregation(
+    Post,
+    pipeline,
+    query.page,
+    query.limit
   );
 
-  // Sắp xếp: Ưu tiên bài ghim, sau đó đến bài mới nhất
-  pipeline.push({ $sort: { is_sticky: -1, createdAt: -1 } });
+  const posts = result.items;
 
-  // 4. Phân trang & Trả kết quả
-  const result = await paginateAggregation(Post, pipeline, page, limit);
+  // CỘNG DỒN VIEW TỪ REDIS CHO DANH SÁCH
+  if (posts.length > 0) {
+    // Gom tất cả các key cần lấy: ["views:id1", "views:id2", ...]
+    const redisKeys = posts.map((p: any) => `views:${p.postId}`);
+
+    // Lấy nhanh tất cả giá trị view tạm thời bằng 1 request duy nhất
+    const pendingViews = await redisClient.mGet(redisKeys);
+
+    // Map ngược lại vào danh sách bài viết
+    posts.forEach((post: any, index: number) => {
+      const extraView = pendingViews[index];
+      if (extraView) {
+        // Cộng dồn vào giá trị từ DB
+        post.views_count += parseInt(extraView, 10);
+      }
+    });
+  }
 
   const response = {
-    posts: result.items,
+    identity,
+    posts,
     pagination: {
       totalItems: result.totalItems,
       totalPages: result.totalPages,
@@ -223,227 +116,378 @@ export const getPosts = asyncHandler(async (req: Request, res: Response) => {
     },
   };
 
-  // 5. Lưu Cache
-  await setCache(cacheKey, response, isAdmin ? 60 : 300);
+  // 5. Set cache ngắn để đảm bảo số view luôn mới
+  await setCache(cacheKey, response, isAdmin ? 10 : 30);
 
   res.json(response);
 });
 
-// --- [ PUBLIC: Lấy chi tiết Bài Viết và tăng Views ] ---
-// Endpoint: GET /api/posts/:id
+/** * GET /api/posts/:id
+ * Lấy chi tiết bài viết (Public + Tăng views)
+ */
 export const getPostById = asyncHandler(
   async (req: Request<PostParams>, res: Response) => {
     const { id } = req.params;
+    if (!Types.ObjectId.isValid(id))
+      throw new AppError(400, "Invalid Post ID.");
 
-    // BỔ SUNG: Kiểm tra ID hợp lệ
-    if (!Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ error: "Invalid Post ID format." });
-    }
-
-    // 1. TÌM BÀI VIẾT BẰNG AGGREGATION (FIX N+1)
-    const postArray = await Post.aggregate([
-      ...buildPostAggregationPipeline(
-        { _id: new Types.ObjectId(id), status: "approved" },
+    // 1. Tìm bài qua Pipeline (Lấy dữ liệu từ MongoDB)
+    const postArray = await Post.aggregate(
+      buildPostAggregationPipeline(
+        {
+          _id: new Types.ObjectId(id),
+          status: "approved",
+          is_deleted: { $ne: true },
+        },
         {
           includeUser: true,
           includeTopic: true,
           includeTags: true,
           includeProjection: true,
-        },
-        false,
-        undefined
-      ),
-    ]).exec();
+          isAdminView: false,
+        }
+      )
+    );
+
+    if (!postArray[0]) throw new AppError(404, "Post not found or unapproved.");
 
     const post = postArray[0];
 
-    if (!post) {
-      return res.status(404).json({ error: "Post not found or not approved." });
+    // --- BỔ SUNG: CỘNG DỒN VIEW TỪ REDIS ---
+    // Lấy số lượt xem hiện có trong Redis (nhưng chưa đồng bộ xuống DB)
+    const pendingViews = await redisClient.get(`views:${id}`);
+    if (pendingViews) {
+      // Cộng dồn vào kết quả trả về để người dùng thấy con số mới nhất
+      post.views_count += parseInt(pendingViews, 10);
     }
+    // ---------------------------------------
 
-    // 2. TÍCH HỢP REDIS: Tăng views_count bằng Redis INCR
-    await incrementPostView(id); // <-- GỌI REDIS SERVICE MỚI
+    // 2. Tăng View qua Redis (Ghi nhận lượt xem mới vào Redis)
+    // Lưu ý: Gọi sau khi đã lấy pendingViews để không bị tính trùng chính lượt xem này
+    // (hoặc gọi trước cũng được nếu bạn muốn user thấy +1 ngay lập tức)
+    await incrementPostView(id);
 
-    // 3. Phản hồi thành công
+    // Trả về post đã được cộng dồn view
     res.json(post);
   }
 );
 
-// --- [ ADMIN: Lấy chi tiết Bài Viết Bất kể Status ] ---
-// Cần authMiddleware & adminMiddleware
+/** * GET /api/posts/admin/:id
+ * Admin lấy chi tiết bài viết (Bất kể trạng thái)
+ */
 export const getPostByIdForAdmin = asyncHandler(
   async (req: AuthenticatedRequest<PostParams>, res: Response) => {
     const { id } = req.params;
-    const isAdmin = req.userRole === "admin";
-    const callerId = req.userId;
+    if (!Types.ObjectId.isValid(id))
+      throw new AppError(400, "Invalid Post ID.");
 
-    // 1. Kiểm tra tính hợp lệ của ID
-    if (!Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ error: "Invalid Post ID format." });
-    }
-
-    // 2. Tìm Bài viết chỉ bằng ID (KHÔNG lọc theo status)
-    // 1. TÌM BÀI VIẾT BẰNG AGGREGATION (FIX N+1)
-    const postArray = await Post.aggregate([
-      ...buildPostAggregationPipeline(
+    const postArray = await Post.aggregate(
+      buildPostAggregationPipeline(
         { _id: new Types.ObjectId(id) },
         {
           includeUser: true,
           includeTopic: true,
           includeTags: true,
           includeProjection: true,
-        },
-        isAdmin,
-        callerId
-      ),
-    ]).exec();
+          isAdminView: true,
+        }
+      )
+    );
 
-    const post = postArray[0];
-
-    if (!post) {
-      return res.status(404).json({ error: "Post not found." });
-    }
-
-    // 3. Phản hồi thành công
-    res.json(post);
+    if (!postArray[0]) throw new AppError(404, "Post not found.");
+    res.json(postArray[0]);
   }
 );
 
-// --- [ ADMIN: Toggle is_sticky (Atomic Update) ] ---
-// FIX 4: Tách logic ghim bài ra khỏi updatePost
-// Endpoint: PUT /api/posts/admin/sticky/:id
-export const togglePostStickyController = asyncHandler(
-  async (
-    req: AuthenticatedRequest<PostParams, {}, ToggleStickyBody>,
-    res: Response
-  ) => {
-    const postId = req.params.id;
-    const { is_sticky } = req.body; // Giá trị mới (true/false)
+// --- [ 2. WRITE OPERATIONS ] ---
 
-    if (!Types.ObjectId.isValid(postId)) {
-      return res.status(400).json({ error: "Invalid Post ID format." });
-    }
-    if (typeof is_sticky !== "boolean") {
-      return res.status(400).json({ error: "is_sticky must be a boolean." });
-    }
+/** * POST /api/posts
+ * Tạo bài viết mới (User)
+ */
+export const createPost = asyncHandler(
+  async (req: AuthenticatedRequest<{}, {}, CreatePostBody>, res: Response) => {
+    const { topicId, tags, title, content } = req.body;
+    const userId = req.userId!;
+    const requestId = req.headers["x-request-id"] as string;
 
-    // SỬ DỤNG ATOMIC UPDATE: Chỉ cập nhật trường này
-    const result = await Post.updateOne(
-      { _id: postId },
-      { $set: { is_sticky } }
+    // 1. Kiểm tra Topic hợp lệ
+    const topic = await Topic.findOne({ _id: topicId, status: "approved" });
+    if (!topic) throw new AppError(404, "Invalid or unapproved Topic.");
+
+    // 2. Xử lý Tags và tạo Slug
+    const { validTagIds, pendingTagIds } = await processTags(
+      tags || [],
+      userId,
+      topic._id as Types.ObjectId
     );
 
-    if (result.matchedCount === 0) {
-      return res.status(404).json({ error: "Post not found." });
-    }
+    const uniqueSlug = await generateUniqueSlugForPost(title);
+    console.log(">>> [STEP 1] Slug generated:", uniqueSlug); // LOG 1
+    // 3. Lưu Database
+    const newPost = await Post.create({
+      userId: new Types.ObjectId(userId),
+      topicId: topic._id,
+      tags: validTagIds,
+      pending_tags: pendingTagIds,
+      title,
+      slug: uniqueSlug,
+      content,
+      status: "pending",
+    });
 
-    // Lấy lại bài viết đã cập nhật bằng Aggregation cho phản hồi
-    const updatedPostArray = await Post.aggregate([
-      ...buildPostAggregationPipeline(
-        { _id: new Types.ObjectId(postId) },
+    console.log(">>> [STEP 2] Post created in DB with Slug:", newPost.slug); // LOG 2
+
+    await clearPostsCache();
+
+    // 4. Trả về format chuẩn qua Pipeline
+    const postArray = await Post.aggregate(
+      buildPostAggregationPipeline(
+        { _id: newPost._id },
         {
           includeUser: true,
           includeTopic: true,
           includeTags: true,
-          includeProjection: true,
+          isAdminView: false,
         }
-      ),
-    ]).exec();
-
-    res.json(updatedPostArray[0]);
+      )
+    );
+    console.log(">>> [STEP 3] Aggregation result Slug:", postArray[0]?.slug); // LOG 3
+    const result = postArray[0];
+    // IDEMPOTENCY: Lưu kết quả
+    if (requestId)
+      await saveIdempotencyResult(requestId, 201, JSON.stringify(result));
+    res.status(201).json(result);
   }
 );
 
-// --- [ USER/ADMIN: Xóa Bài Viết ] ---
-// Cần authMiddleware (User chỉ xóa bài của mình, Admin xóa bài bất kỳ)
-// Endpoint: DELETE /api/posts/:id
-// --- [ USER/ADMIN: Xóa Bài Viết (SOFT DELETE) ] ---
-export const deletePost = asyncHandler(
-  async (req: AuthenticatedRequest<PostParams>, res: Response) => {
-    const postId = req.params.id;
-    const userId = req.userId;
-
-    const post = await Post.findById(postId);
-    if (!post || post.is_deleted)
-      return res.status(404).json({ error: "Post not found." });
-
-    const isAuthor = post.userId.toString() === userId;
+/** * PUT /api/posts/:id
+ * Cập nhật bài viết (Tác giả/Admin)
+ */
+export const updatePost = asyncHandler(
+  async (
+    req: AuthenticatedRequest<PostParams, {}, UpdatePostBody>,
+    res: Response
+  ) => {
+    const { id } = req.params;
+    const { topicId, tags, title, content, status } = req.body;
     const isAdmin = req.userRole === "admin";
-    if (!isAuthor && !isAdmin)
-      return res.status(403).json({ error: "Access denied." });
+    const requestId = req.headers["x-request-id"] as string;
 
-    // Chuyển sang xóa mềm
-    await Post.findByIdAndUpdate(postId, { is_deleted: true });
+    // 1. Kiểm tra tồn tại và quyền sở hữu
+    const post = await Post.findOne({ _id: id, is_deleted: { $ne: true } });
+    if (!post) throw new AppError(404, "Post not found.");
+    if (post.userId.toString() !== req.userId && !isAdmin)
+      throw new AppError(403, "Access denied.");
 
-    // Không xóa Comment/Like ngay để có thể Restore.
-    // Chúng sẽ bị ẩn tự động vì Filter của chúng ta đã chặn is_deleted của Post cha.
+    // 2. Chuẩn bị các trường cập nhật
+    const updateFields: any = {};
+    if (title) {
+      updateFields.title = title;
+      updateFields.slug = await generateUniqueSlugForPost(title);
+    }
+    if (content) updateFields.content = content;
+    if (isAdmin && status) updateFields.status = status;
+    // THÊM DÒNG NÀY:
+    if (typeof req.body.is_resolved !== "undefined") {
+      updateFields.is_resolved = req.body.is_resolved;
+    }
+    // 3. Xử lý logic Tags mới
+    if (tags) {
+      const { validTagIds, pendingTagIds } = await processTags(
+        tags,
+        req.userId!,
+        (topicId as any) || post.topicId
+      );
+      updateFields.tags = validTagIds;
+      updateFields.pending_tags = pendingTagIds;
+    }
 
-    res.json({ message: "Post moved to trash." });
+    // 4. Update & Trả kết quả
+    const updatedPost = await Post.findByIdAndUpdate(
+      id,
+      { $set: updateFields },
+      { new: true }
+    );
+
+    // Xóa cache
+    await clearPostsCache();
+    const postArray = await Post.aggregate(
+      buildPostAggregationPipeline(
+        { _id: updatedPost!._id },
+        {
+          includeUser: true,
+          includeTopic: true,
+          includeTags: true,
+          isAdminView: isAdmin,
+        }
+      )
+    );
+    const result = postArray[0];
+
+    // IDEMPOTENCY: Lưu kết quả
+    if (requestId)
+      await saveIdempotencyResult(requestId, 201, JSON.stringify(result));
+
+    res.json(result);
   }
 );
 
-// --- [ ADMIN: Duyệt Bài Viết và Pending Tags (GIAI ĐOẠN 3) ] ---
-// Endpoint: POST /api/posts/admin/approve/:id
+// --- [ 3. ADMIN OPERATIONS ] ---
+
+/** * POST /api/posts/admin/approve/:id
+ * Admin duyệt bài và Tag đề xuất
+ */
 export const adminApprovePostController = asyncHandler(
   async (
     req: AuthenticatedRequest<PostParams, {}, AdminApprovePostBody>,
     res: Response
   ) => {
-    const postId = req.params.id;
-    const adminId = req.userId;
-    const { pendingTagActions, newPostStatus } = req.body;
+    const { id } = req.params;
+    const { pendingTagActions, newPostStatus, keepTagIds } = req.body;
+    const requestId = req.headers["x-request-id"] as string;
 
-    if (!Types.ObjectId.isValid(postId)) {
-      return res.status(400).json({ error: "Invalid Post ID format." });
-    }
-
-    if (!pendingTagActions || !newPostStatus) {
-      return res.status(400).json({
-        error: "Missing pendingTagActions or newPostStatus in request body.",
-      });
-    }
-
-    if (newPostStatus !== "approved" && newPostStatus !== "rejected") {
-      return res
-        .status(400)
-        .json({ error: "newPostStatus must be 'approved' or 'rejected'." });
-    }
-
-    // GỌI DỊCH VỤ TRANSACTIONAL ĐỂ XỬ LÝ LOGIC PHỨC TẠP
+    // 1. Gọi Service xử lý Transactional logic
     const updatedPost = await adminApprovePost(
-      postId,
-      adminId,
+      id,
+      req.userId!,
       pendingTagActions,
-      newPostStatus
+      newPostStatus,
+      keepTagIds
     );
 
-    // FIX N+1: Sử dụng Aggregation cho phản hồi
-    const finalPostArray = await Post.aggregate([
-      ...buildPostAggregationPipeline(
+    await clearPostsCache();
+
+    // 2. GỬI THÔNG BÁO (Điểm kết nối)
+    // Xác định loại thông báo dựa trên trạng thái mới
+    const isApproved = newPostStatus === "approved";
+
+    await createNotification({
+      recipientId: updatedPost.userId, // ObjectId từ DB
+      senderId: req.userId, // String từ Request
+      type: isApproved
+        ? NotificationType.POST_APPROVED
+        : NotificationType.POST_REJECTED,
+      entityId: updatedPost.id,
+      entityType: "post",
+      content: isApproved
+        ? `Bài viết "${updatedPost.title}" của bạn đã được duyệt.`
+        : `Bài viết "${updatedPost.title}" bị từ chối do không phù hợp.`,
+    });
+
+    // 2. Trả về bài viết sau khi duyệt
+    const postArray = await Post.aggregate(
+      buildPostAggregationPipeline(
         { _id: updatedPost._id },
         {
           includeUser: true,
           includeTopic: true,
           includeTags: true,
-          includeProjection: true,
+          isAdminView: true,
         }
-      ),
-    ]).exec();
+      )
+    );
+    const result = postArray[0];
 
-    res.json(finalPostArray[0]);
+    // IDEMPOTENCY: Lưu kết quả
+    if (requestId)
+      await saveIdempotencyResult(requestId, 200, JSON.stringify(result));
+
+    res.json(result);
   }
 );
 
+/** * PUT /api/posts/admin/sticky/:id
+ * Admin ghim/bỏ ghim bài viết
+ */
+export const togglePostStickyController = asyncHandler(
+  async (
+    req: AuthenticatedRequest<PostParams, {}, ToggleStickyBody>,
+    res: Response
+  ) => {
+    const { id } = req.params;
+    const { is_sticky } = req.body;
+    const requestId = req.headers["x-request-id"] as string;
+
+    const resultUpdate = await Post.updateOne(
+      { _id: id },
+      { $set: { is_sticky } }
+    );
+    if (resultUpdate.matchedCount === 0)
+      throw new AppError(404, "Post not found.");
+
+    await clearPostsCache();
+    const postArray = await Post.aggregate(
+      buildPostAggregationPipeline(
+        { _id: new Types.ObjectId(id) },
+        {
+          includeUser: true,
+          includeTopic: true,
+          includeTags: true,
+          isAdminView: true,
+        }
+      )
+    );
+    const result = postArray[0];
+
+    // IDEMPOTENCY: Lưu kết quả
+    if (requestId)
+      await saveIdempotencyResult(requestId, 200, JSON.stringify(result));
+
+    res.json(result);
+  }
+);
+
+// --- [ 4. DELETE & RESTORE ] ---
+
+/** * DELETE /api/posts/:id
+ * Xóa mềm bài viết (Tác giả/Admin)
+ */
+export const deletePost = asyncHandler(
+  async (req: AuthenticatedRequest<PostParams>, res: Response) => {
+    const { id } = req.params;
+    const requestId = req.headers["x-request-id"] as string;
+    const post = await Post.findById(id);
+    if (!post || post.is_deleted) throw new AppError(404, "Post not found.");
+    if (post.userId.toString() !== req.userId && req.userRole !== "admin")
+      throw new AppError(403, "Access denied.");
+
+    // Xóa mềm và giải phóng slug cũ
+    await Post.findByIdAndUpdate(id, {
+      is_deleted: true,
+      slug: `${post.slug}-deleted-${Date.now()}`,
+    });
+    const result = { message: "Post moved to trash." };
+    if (requestId)
+      await saveIdempotencyResult(requestId, 200, JSON.stringify(result));
+
+    res.json(result);
+  }
+);
+
+/** * PUT /api/posts/admin/restore/:id
+ * Admin khôi phục bài viết
+ */
 export const restorePost = asyncHandler(
   async (req: AuthenticatedRequest<PostParams>, res: Response) => {
     const { id } = req.params;
-    const result = await Post.findByIdAndUpdate(
-      id,
-      { is_deleted: false },
-      { new: true }
-    );
+    const requestId = req.headers["x-request-id"] as string;
+    const post = await Post.findById(id);
+    if (!post) throw new AppError(404, "Post not found.");
 
-    if (!result) return res.status(404).json({ error: "Post not found." });
-    res.json({ message: "Post restored successfully.", postId: id });
+    // Khi restore, phải tính lại slug vì slug cũ có thể đã bị chiếm dụng
+    const newSlug = await generateUniqueSlugForPost(post.title);
+
+    await Post.findByIdAndUpdate(id, {
+      is_deleted: false,
+      slug: newSlug,
+    });
+
+    await clearPostsCache();
+    const result = { message: "Post restored successfully.", postId: id };
+
+    if (requestId)
+      await saveIdempotencyResult(requestId, 200, JSON.stringify(result));
+
+    res.json(result);
   }
 );

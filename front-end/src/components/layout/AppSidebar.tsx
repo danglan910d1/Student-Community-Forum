@@ -7,10 +7,11 @@ import {
   SidebarFooter,
   SidebarGroup,
 } from "@/components/ui/sidebar";
-import { QuickNavigation } from "../shared/QuickNavigation";
-import { PopularTags } from "../../modules/posts/components/shared/PopularTag";
-import { UserInfo } from "../shared/UserInfo";
+import { QuickNavigation } from "@/components/shared/Navigation/QuickNavigation/QuickNavigation";
+
+import { UserInfo } from "@/components/shared/UserInfo";
 import { cn } from "@/lib/utils";
+import { PopularTags } from "@/modules/tag/components/PopularTag";
 
 export function AppSidebar({
   className,

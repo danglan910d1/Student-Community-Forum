@@ -33,7 +33,7 @@ const transformFunc = function (doc: Document, ret: any) {
 const topicSchema = new Schema<ITopic>(
   {
     name: { type: String, required: true },
-    slug: { type: String, required: true, unique: true, index: true }, // Dùng cho URL thân thiện
+    slug: { type: String, required: true, index: true }, // Dùng cho URL thân thiện
     description: { type: String, default: null },
     // Tham chiếu đến UserSchema
     createdBy: {

@@ -5,12 +5,12 @@ interface CommentPipelineConfig {
   includePost?: boolean;
   includeParent?: boolean;
   includeProjection?: boolean;
-  isAdminView?: boolean; // Thêm cờ để biết ai đang xem
+  isAdminView?: boolean;
 }
 
 /**
  * Xây dựng Aggregation Pipeline cho Comment Model.
- * Logic: Giữ nguyên data gốc, chỉ xử lý hiển thị nội dung bị xóa dựa trên quyền hạn.
+ * Hỗ trợ hiển thị content và tự động lookup danh sách replies.
  */
 export const buildCommentAggregationPipeline = (
   filter: any,
@@ -21,12 +21,12 @@ export const buildCommentAggregationPipeline = (
     includePost = false,
     includeParent = false,
     includeProjection = true,
-    isAdminView = false, // Mặc định là người dùng bình thường xem
+    isAdminView = false,
   } = config;
 
   const pipeline: PipelineStage[] = [{ $match: filter }];
 
-  // 1. $lookup User & Xử lý mảng sang Object
+  // 1. $lookup User chính (Người viết comment cha)
   if (includeUser) {
     pipeline.push(
       {
@@ -34,18 +34,43 @@ export const buildCommentAggregationPipeline = (
           from: "users",
           localField: "userId",
           foreignField: "_id",
-          as: "user",
+          pipeline: [{ $match: { is_deleted: { $ne: true } } }],
+          as: "userData",
         },
       },
-      {
-        $addFields: {
-          user: { $arrayElemAt: ["$user", 0] },
-        },
-      }
+      { $unwind: { path: "$userData", preserveNullAndEmptyArrays: true } }
     );
   }
 
-  // 2. $lookup Post (Dùng cho Admin View)
+  // 2. $lookup REPLIES (Lấy các comment con lồng vào bên trong)
+  pipeline.push({
+    $lookup: {
+      from: "comments",
+      let: { parent_id: "$_id" },
+      pipeline: [
+        {
+          $match: {
+            $expr: { $eq: ["$parentId", "$$parent_id"] },
+            is_deleted: { $ne: true }, // Chỉ lấy reply chưa xóa (trừ khi là admin)
+          },
+        },
+        // Lookup User cho từng reply con
+        {
+          $lookup: {
+            from: "users",
+            localField: "userId",
+            foreignField: "_id",
+            as: "replyUser",
+          },
+        },
+        { $unwind: { path: "$replyUser", preserveNullAndEmptyArrays: true } },
+        { $sort: { createdAt: 1 } }, // Phản hồi cũ hiện trước
+      ],
+      as: "repliesData",
+    },
+  });
+
+  // 3. $lookup Post & Parent (Giữ nguyên logic cũ của bạn)
   if (includePost) {
     pipeline.push({
       $lookup: {
@@ -56,8 +81,6 @@ export const buildCommentAggregationPipeline = (
       },
     });
   }
-
-  // 3. $lookup Parent (Dùng cho Reply list)
   if (includeParent) {
     pipeline.push({
       $lookup: {
@@ -69,7 +92,7 @@ export const buildCommentAggregationPipeline = (
     });
   }
 
-  // 4. Projection cuối cùng - Logic ẩn nội dung nằm ở đây
+  // 4. Projection cuối cùng
   if (includeProjection) {
     pipeline.push({
       $project: {
@@ -77,41 +100,55 @@ export const buildCommentAggregationPipeline = (
         commentId: "$_id",
         likes_count: 1,
         replies_count: 1,
-        is_deleted: 1,
-        status: 1,
         createdAt: 1,
         updatedAt: 1,
-        userId: 1, // Giữ lại ID gốc cho FE nếu cần
+        parentId: 1,
+        status: { $cond: [isAdminView, "$status", "$$REMOVE"] },
 
-        // LOGIC NỘI DUNG:
-        // Nếu is_deleted = true VÀ người xem không phải admin -> Hiện thông báo ẩn
-        // Ngược lại hiện content thật (Admin thấy mọi thứ, User thấy content bình thường)
+        // Hiển thị nội dung thực tế hoặc thông báo xóa
         content: {
-          $cond: {
-            if: {
+          $cond: [
+            {
               $and: [
                 { $eq: ["$is_deleted", true] },
-                { $eq: [isAdminView, false] },
+                { $ne: [isAdminView, true] },
               ],
             },
-            then: "[Bình luận này đã bị xóa.]",
-            else: "$content",
-          },
+            "Bình luận này đã bị xóa.",
+            "$content",
+          ],
         },
 
-        // Gọt sạch User data
+        // Format User cha
         user: includeUser
           ? {
-              userId: "$user._id",
-              name: "$user.name",
-              avatar: "$user.avatar",
+              userId: "$userData._id",
+              name: "$userData.name",
+              avatar: "$userData.avatar",
+              email: { $cond: [isAdminView, "$userData.email", "$$REMOVE"] },
             }
           : "$userId",
 
+        // Map lại mảng replies lồng bên trong
+        replies: {
+          $map: {
+            input: "$repliesData",
+            as: "r",
+            in: {
+              commentId: "$$r._id",
+              content: "$$r.content",
+              createdAt: "$$r.createdAt",
+              likes_count: "$$r.likes_count",
+              user: {
+                userId: "$$r.replyUser._id",
+                name: "$$r.replyUser.name",
+                avatar: "$$r.replyUser.avatar",
+              },
+            },
+          },
+        },
+
         postId: includePost ? { $arrayElemAt: ["$post", 0] } : "$postId",
-        parentId: includeParent
-          ? { $arrayElemAt: ["$parent", 0] }
-          : "$parentId",
       },
     });
   }

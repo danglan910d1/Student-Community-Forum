@@ -12,16 +12,16 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { FieldGroup, FieldDescription } from "@/components/ui/field";
-import { LoginInput } from "../schemas/loginSchema";
-import { AUTH_TEXT } from "../constant/authText";
+import { LoginInput } from "@/modules/auth/schemas/loginSchema";
+import { AUTH_TEXT } from "@/modules/auth/constant/authText";
 import Link from "next/link";
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
-import AuthSkeleton from "./shared/AuthSkeleton";
-import { AuthContentProps } from "../types";
+import AuthSkeleton from "@/modules/auth/components/AuthSkeleton";
+import { AuthContentProps } from "@/modules/auth/types";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
-import { authResponseHandle } from "../utils/authResponseHandle";
+import { authResponseHandle } from "@/modules/auth/utils/authResponseHandle";
 
 export function LoginContent({ isPending, serverError }: AuthContentProps) {
   const { LOGIN } = AUTH_TEXT;
@@ -90,7 +90,7 @@ export function LoginContent({ isPending, serverError }: AuthContentProps) {
       <Button
         type="submit"
         isLoading={isPending}
-        loadingText="Loading..." // Nếu bỏ dòng này thì chỉ hiện mỗi Spinner xoay
+        loadingText={LOGIN.LOADING_TEXT} // Nếu bỏ dòng này thì chỉ hiện mỗi Spinner xoay
         className="w-full mt-2"
       >
         {LOGIN.SUBMIT_BTN}
@@ -102,7 +102,7 @@ export function LoginContent({ isPending, serverError }: AuthContentProps) {
           className="animate-in fade-in zoom-in duration-200"
         >
           <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Lỗi đăng nhập</AlertTitle>
+          <AlertTitle>{LOGIN.ERROR_TITLE}</AlertTitle>
           <AlertDescription>
             {authResponseHandle.handleError(serverError)}
           </AlertDescription>

@@ -1,23 +1,32 @@
 import { PipelineStage } from "mongoose";
 
+interface UserPipelineConfig {
+  includeStats?: boolean;
+  includeProjection?: boolean;
+  isAdminView?: boolean;
+}
+
 export const buildUserAggregationPipeline = (
   filter: any,
-  options: {
-    includeStats?: boolean;
-    isAdminView?: boolean;
-  } = {}
+  config: UserPipelineConfig = {}
 ): PipelineStage[] => {
+  const {
+    includeStats = false,
+    includeProjection = true,
+    isAdminView = false,
+  } = config;
+
   const pipeline: PipelineStage[] = [{ $match: filter }];
 
-  if (options.includeStats) {
+  if (includeStats) {
     pipeline.push(
       {
         $lookup: {
           from: "posts",
           localField: "_id",
           foreignField: "userId",
-          as: "rawPosts",
           pipeline: [{ $match: { is_deleted: { $ne: true } } }],
+          as: "rawPosts",
         },
       },
       {
@@ -47,46 +56,38 @@ export const buildUserAggregationPipeline = (
     );
   }
 
-  pipeline.push({
-    $project: {
-      userId: "$_id",
-      _id: 0,
-      name: 1,
-      avatar: 1,
-      role: 1,
-      createdAt: 1,
-      updatedAt: 1, // Đưa ra ngoài: AI CŨNG THẤY ĐƯỢC
+  if (includeProjection) {
+    pipeline.push({
+      $project: {
+        _id: 0,
+        userId: "$_id",
+        name: 1,
+        avatar: 1,
+        role: 1,
+        createdAt: 1,
+        updatedAt: 1,
 
-      // Xử lý postCount linh hoạt
-      ...(options.includeStats
-        ? {
-            postCount: {
-              $cond: {
-                if: options.isAdminView,
-                then: {
+        email: { $cond: [isAdminView, "$email", "$$REMOVE"] },
+        status: { $cond: [isAdminView, "$status", "$$REMOVE"] },
+
+        postCount: includeStats
+          ? {
+              $cond: [
+                isAdminView,
+                {
                   total: {
                     $add: ["$postStats.published", "$postStats.pending"],
                   },
                   published: "$postStats.published",
                   pending: "$postStats.pending",
                 },
-                else: {
-                  published: "$postStats.published", // Vẫn là Object nhưng chỉ có trường published
-                },
-              },
-            },
-          }
-        : {}),
-
-      // Dữ liệu nhạy cảm chỉ Admin thấy
-      ...(options.isAdminView
-        ? {
-            email: 1,
-            status: 1,
-          }
-        : {}),
-    },
-  });
+                { published: "$postStats.published" },
+              ],
+            }
+          : "$$REMOVE",
+      },
+    });
+  }
 
   return pipeline;
 };

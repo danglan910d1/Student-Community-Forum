@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import LoadFullPage from "@/components/loading/LoadFullPage";
+import FullPageSkeleton from "@/components/loading/FullPageSkeleton ";
 
 let hasLoadedOnce = false;
 
@@ -51,7 +51,7 @@ export function InitialLoadProvider({
 
   // Loading full màn hình cho lần đầu vào app
   if (loading) {
-    return <LoadFullPage />;
+    return <FullPageSkeleton />;
   }
 
   return <>{children}</>;

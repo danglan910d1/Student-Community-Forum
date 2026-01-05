@@ -2,8 +2,9 @@ import { PipelineStage } from "mongoose";
 
 interface TagPipelineConfig {
   includeTopic?: boolean;
-  includeCreator?: boolean;
+  includeUser?: boolean;
   includeProjection?: boolean;
+  isAdminView?: boolean;
 }
 
 /**
@@ -16,79 +17,94 @@ export const buildTagAggregationPipeline = (
 ): PipelineStage[] => {
   const {
     includeTopic = true,
-    includeCreator = true,
+    includeUser = true,
     includeProjection = true,
+    isAdminView = false,
   } = config;
 
-  const pipeline: PipelineStage[] = [
-    // Stage 1: Lọc dữ liệu thô
-    { $match: filter },
-  ];
+  const pipeline: PipelineStage[] = [{ $match: filter }];
 
-  // Stage 2: $lookup Topic
   if (includeTopic) {
     pipeline.push({
       $lookup: {
         from: "topics",
-        localField: "topicId",
-        foreignField: "_id",
-        as: "topicData", // Đổi tên tạm để tránh ghi đè
+        let: { tId: "$topicId" },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  { $eq: ["$_id", "$$tId"] },
+                  { $ne: ["$is_deleted", true] },
+                ],
+              },
+            },
+          },
+        ],
+        as: "topicData",
       },
     });
   }
 
-  // Stage 3: $lookup Creator
-  if (includeCreator) {
+  if (includeUser) {
     pipeline.push({
       $lookup: {
         from: "users",
         localField: "createdBy",
         foreignField: "_id",
-        as: "creatorData",
+        as: "userData",
       },
     });
   }
 
-  // Stage 4: Project/Format kết quả cuối cùng
   if (includeProjection) {
     pipeline.push({
       $project: {
-        _id: 0, // BỎ _id Ở ĐÂY (Vì Model của bạn đã bỏ _id)
-        tagId: "$_id", // LẤY _id GÁN VÀO tagId
+        _id: 0,
+        tagId: "$_id",
         name: 1,
         slug: 1,
-        status: 1,
-        // Xử lý topicId: Nếu lookup thành công thì lấy object đầu tiên,
-        // nhưng bên trong object đó cũng phải đổi _id thành topicId cho đồng bộ
+        createdAt: 1,
+        updatedAt: 1,
+        status: { $cond: [isAdminView, "$status", "$$REMOVE"] },
+
         topic: includeTopic
           ? {
               $let: {
                 vars: { top: { $arrayElemAt: ["$topicData", 0] } },
                 in: {
-                  topicId: "$$top._id",
-                  name: "$$top.name",
-                  slug: "$$top.slug",
+                  $cond: [
+                    { $ifNull: ["$$top", false] },
+                    {
+                      topicId: "$$top._id",
+                      name: "$$top.name",
+                      slug: "$$top.slug",
+                    },
+                    null,
+                  ],
                 },
               },
             }
           : "$topicId",
 
-        // Xử lý createdBy
-        createdBy: includeCreator
+        user: includeUser
           ? {
               $let: {
-                vars: { user: { $arrayElemAt: ["$creatorData", 0] } },
+                vars: { user: { $arrayElemAt: ["$userData", 0] } },
                 in: {
-                  userId: "$$user._id",
-                  name: "$$user.name",
-                  avatar: "$$user.avatar",
+                  $cond: [
+                    { $ifNull: ["$$user", false] },
+                    {
+                      userId: "$$user._id",
+                      name: "$$user.name",
+                      avatar: "$$user.avatar",
+                    },
+                    null,
+                  ],
                 },
               },
             }
           : "$createdBy",
-
-        createdAt: 1,
-        updatedAt: 1,
       },
     });
   }

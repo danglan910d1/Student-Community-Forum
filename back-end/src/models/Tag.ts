@@ -28,7 +28,7 @@ const transformFunc = function (doc: Document, ret: any) {
 const tagSchema = new Schema<ITag>(
   {
     name: { type: String, required: true },
-    slug: { type: String, required: true, unique: true, index: true }, // Dùng cho URL thân thiện
+    slug: { type: String, required: true, index: true }, // Dùng cho URL thân thiện
     topicId: {
       type: Schema.Types.ObjectId,
       ref: "Topic",

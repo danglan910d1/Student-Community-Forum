@@ -97,10 +97,11 @@ const postSchema = new Schema<IPost>(
   }
 );
 
-// PRE-SAVE HOOK: Tự động tạo slug trước khi lưu
+// PRE-SAVE HOOK: Chỉ tạo slug nếu chưa có slug nào được cung cấp
 postSchema.pre<IPost & Document>("save", function (next) {
-  if (this.isModified("title") || !this.slug) {
-    // Sử dụng hàm tiện ích đã tách ra
+  // Chỉ tự động tạo slug nếu slug hoàn toàn trống
+  // KHÔNG kiểm tra isModified("title") ở đây vì Controller đã đảm nhận việc xử lý slug khi title đổi
+  if (!this.slug) {
     this.slug = generateSlug(this.title);
   }
   next();
@@ -120,6 +121,6 @@ postSchema.index(
   { title: "text", content: "text" },
   { weights: { title: 10, content: 1 } }
 );
-postSchema.index({ is_sticky: -1, createdAt: -1 });
+postSchema.index({ is_sticky: -1, views_count: -1, createdAt: -1 });
 
 export default model<IPost>("Post", postSchema);

@@ -1,6 +1,6 @@
-import { Logo } from "../shared/Logo";
-import { SearchBar } from "../shared/SearchBar";
-import { TopicDropdown } from "../shared/TopicDropdown";
+import { Logo } from "@/components/shared/Logo";
+import { SearchBar } from "@/components/shared/SearchBar";
+import { TopicDropdownContainer } from "@/modules/topic/containers/TopicDropdownContainer";
 import { Bell, HelpCircle } from "lucide-react";
 
 export function Header() {
@@ -15,7 +15,7 @@ export function Header() {
         {/* Cụm Nav + Search + Actions chiếm 7 cột (7fr) */}
         <div className="col-span-7 flex items-center space-x-4">
           <div className="flex-shrink-0">
-            <TopicDropdown />
+            <TopicDropdownContainer />
           </div>
 
           <div className="flex-1">

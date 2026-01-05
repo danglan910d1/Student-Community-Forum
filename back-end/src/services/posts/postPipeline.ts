@@ -5,75 +5,94 @@ interface PostPipelineConfig {
   includeTopic?: boolean;
   includeTags?: boolean;
   includeProjection?: boolean;
+  isAdminView?: boolean;
 }
 
-/**
- * Xây dựng các Aggregation Pipeline Stages cho Post Model một cách linh hoạt.
- *
- * Hàm này giúp tái sử dụng logic $lookup cho nhiều API khác nhau (danh sách, chi tiết).
- *
- * @param filter - Stage $match ban đầu (dùng filter được xây dựng từ buildPostFilter)
- * @param config - Cấu hình để bật/tắt các $lookup và $project
- * @param isAdmin - Boolean xác định quyền hạn của người gọi
- * @param callerId - ID của người đang thực hiện request (để tính toán isOwner)
- * @returns Mảng các PipelineStage đã được cấu hình.
- */
 export const buildPostAggregationPipeline = (
   filter: any,
-  config: PostPipelineConfig = {},
-  isAdmin: boolean = false,
-  callerId?: string
+  config: PostPipelineConfig = {}
 ): PipelineStage[] => {
   const {
     includeUser = true,
     includeTopic = true,
     includeTags = true,
     includeProjection = true,
+    isAdminView = false,
   } = config;
 
   const pipeline: PipelineStage[] = [{ $match: filter }];
 
+  // 1. Lookup User
   if (includeUser) {
-    pipeline.push({
-      $lookup: {
-        from: "users",
-        localField: "userId",
-        foreignField: "_id",
-        as: "userData",
+    pipeline.push(
+      {
+        $lookup: {
+          from: "users",
+          localField: "userId",
+          foreignField: "_id",
+          pipeline: [{ $match: { is_deleted: { $ne: true } } }],
+          as: "userData",
+        },
       },
-    });
+      { $unwind: "$userData" }
+    );
   }
 
+  // 2. Lookup Topic
   if (includeTopic) {
     pipeline.push({
       $lookup: {
         from: "topics",
-        localField: "topicId",
-        foreignField: "_id",
+        let: { tId: "$topicId" },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  { $eq: ["$_id", "$$tId"] },
+                  { $ne: ["$is_deleted", true] },
+                ],
+              },
+            },
+          },
+        ],
         as: "topicData",
       },
     });
   }
 
+  // 3. Lookup Tags (Gộp cả Approved và Pending)
   if (includeTags) {
     pipeline.push({
       $lookup: {
         from: "tags",
-        localField: "tags",
-        foreignField: "_id",
-        as: "tagsList",
+        let: {
+          tIds: { $ifNull: ["$tags", []] },
+          pIds: { $ifNull: ["$pending_tags", []] },
+        },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  {
+                    $or: [
+                      { $in: ["$_id", "$$tIds"] },
+                      { $in: ["$_id", "$$pIds"] },
+                    ],
+                  },
+                  { $ne: ["$is_deleted", true] },
+                ],
+              },
+            },
+          },
+        ],
+        as: "allTagsFetched",
       },
     });
   }
 
-  if (callerId) {
-    pipeline.push({
-      $addFields: {
-        isOwner: { $eq: ["$userId", new Types.ObjectId(callerId)] },
-      },
-    });
-  }
-
+  // 4. Projection - Giai đoạn xử lý dữ liệu cuối cùng
   if (includeProjection) {
     pipeline.push({
       $project: {
@@ -88,54 +107,80 @@ export const buildPostAggregationPipeline = (
         is_sticky: 1,
         is_resolved: 1,
         createdAt: 1,
-        status: { $cond: [isAdmin, "$status", "$$REMOVE"] },
+        updatedAt: 1,
+        status: { $cond: [isAdminView, "$status", "$status"] },
 
-        // Format Author (khớp với FE MockData)
-        author: {
-          $let: {
-            vars: { user: { $arrayElemAt: ["$userData", 0] } },
-            in: {
-              name: { $ifNull: ["$$user.name", "Anonymous"] },
-              avatar: "$$user.avatar",
-              role: "$$user.role",
-              // Chỉ hiện email/status nếu là admin hoặc chủ bài viết
-              email: {
-                $cond: [
-                  { $or: [isAdmin, "$isOwner"] },
-                  "$$user.email",
-                  "$$REMOVE",
-                ],
-              },
-              status: {
-                $cond: [
-                  { $or: [isAdmin, "$isOwner"] },
-                  "$$user.status",
-                  "$$REMOVE",
-                ],
-              },
-            },
-          },
-        },
+        // User Mapping
+        user: includeUser
+          ? {
+              userId: "$userData._id",
+              name: "$userData.name",
+              avatar: "$userData.avatar",
+              role: "$userData.role",
+              email: { $cond: [isAdminView, "$userData.email", "$$REMOVE"] },
+            }
+          : "$userId",
 
+        // Topic Mapping
         topic: includeTopic
           ? {
               $let: {
                 vars: { t: { $arrayElemAt: ["$topicData", 0] } },
-                in: { topicId: "$$t._id", name: "$$t.name", slug: "$$t.slug" },
+                in: {
+                  $cond: [
+                    { $ifNull: ["$$t", false] },
+                    { topicId: "$$t._id", name: "$$t.name", slug: "$$t.slug" },
+                    null,
+                  ],
+                },
               },
             }
           : "$topicId",
 
-        // Tags thống nhất 1 màu, FE tự render theo brand (StackOverflow style)
+        // Tags Approved Mapping
         tags: includeTags
           ? {
-              $map: {
-                input: "$tagsList",
-                as: "tag",
-                in: { label: "$$tag.name", slug: "$$tag.slug" },
+              $filter: {
+                input: {
+                  $map: {
+                    input: "$allTagsFetched",
+                    as: "tag",
+                    in: {
+                      tagId: "$$tag._id",
+                      name: "$$tag.name",
+                      slug: "$$tag.slug",
+                      status: "$$tag.status",
+                    },
+                  },
+                },
+                as: "fTag",
+                cond: { $eq: ["$$fTag.status", "approved"] },
               },
             }
           : "$tags",
+
+        // Pending Tags Mapping (Chỉ Admin mới thấy)
+        pending_tags: includeTags
+          ? {
+              $filter: {
+                input: {
+                  $map: {
+                    input: "$allTagsFetched",
+                    as: "tag",
+                    in: {
+                      tagId: "$$tag._id",
+                      name: "$$tag.name",
+                      slug: "$$tag.slug",
+                      status: "$$tag.status",
+                    },
+                  },
+                },
+                as: "pTag",
+                // Lọc những tag có status KHÁC approved (tức là pending hoặc rejected)
+                cond: { $ne: ["$$pTag.status", "approved"] },
+              },
+            }
+          : "$pending_tags",
       },
     });
   }

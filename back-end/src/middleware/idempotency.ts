@@ -59,6 +59,7 @@ export const preventDuplicateRequest = async (
     }
     // 3. LOẠI BỎ LOGIC releaseIdempotencyKey (Dùng saveIdempotencyResult trong Controller)
     // res.on("finish", ...) logic cũ đã bị xóa.
+    res.setHeader("x-request-id", requestId);
     next();
   } catch (error) {
     // Xử lý lỗi Redis (ví dụ: Redis bị sập)

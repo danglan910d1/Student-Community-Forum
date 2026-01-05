@@ -6,6 +6,9 @@ import { QueryProvider } from "@/providers/QueryProvider";
 import { ThemeProvider } from "@/providers/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { InitialLoadProvider } from "@/providers/InitialLoadProvider";
+import { NavSync } from "@/components/shared/Navigation/NavSync";
+import { HEADER, COMMON } from "@/constants/commom";
+import { Inter, Montserrat } from "next/font/google";
 
 const fontSans = Roboto({
   subsets: ["latin"],
@@ -13,15 +16,21 @@ const fontSans = Roboto({
   variable: "--font-sans",
 });
 
-const fontHeader = localFont({
-  src: "../../public/fonts/StackSansHeadline-VariableFont_wght.ttf",
-  display: "swap",
+const fontHeader = Inter({
+  subsets: ["vietnamese"], // Quan trọng nhất là dòng này
+  weight: ["600", "700", "800"], // Chọn các weight đậm cho Title
   variable: "--font-header",
 });
 
+// const fontHeader = Montserrat({
+//   subsets: ["vietnamese"],
+//   weight: ["700"],
+//   variable: "--font-header",
+// });
+
 export const metadata: Metadata = {
-  title: "Student Community Forum",
-  description: "Diễn đàn kết nối sinh viên CNTT",
+  title: HEADER.TITLE,
+  description: COMMON.PAGE_DES,
 };
 
 export default function RootLayout({
@@ -43,6 +52,7 @@ export default function RootLayout({
             enableSystem
             disableTransitionOnChange
           >
+            <NavSync />
             <InitialLoadProvider>{children}</InitialLoadProvider>
             <Toaster />
           </ThemeProvider>

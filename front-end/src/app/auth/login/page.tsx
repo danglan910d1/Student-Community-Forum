@@ -1,9 +1,10 @@
 import { LoginContainer } from "@/modules/auth/containers/LoginContainer";
+import { COMMON } from "@/constants/commom";
+import { AUTH_TEXT } from "@/modules/auth/constant/authText";
 
 export const metadata = {
-  title: "Đăng nhập - Diễn đàn CNTT",
-  description:
-    "Tham gia cộng đồng chia sẻ kiến thức công nghệ lớn nhất Việt Nam",
+  title: AUTH_TEXT.LOGIN.PAGE_TITLE,
+  description: COMMON.PAGE_DES,
 };
 
 async function DelayedContent() {

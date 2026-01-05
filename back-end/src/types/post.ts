@@ -16,8 +16,11 @@ export interface CreatePostBody {
 }
 
 export interface GetPostsQuery extends CommonQuery {
-  topicId?: string; // Trường đặc thù
-  tagId?: string; // Trường đặc thù
+  topicId?: string; // Dùng khi truyền trực tiếp ID
+  topicSlug?: string; // Dùng khi lấy từ URL params của Next.js
+  tagId?: string; // Dùng khi truyền trực tiếp ID
+  tagSlug?: string; // Dùng khi lọc theo tag trên URL
+  is_resolved?: string | boolean;
 }
 
 // 4. Dùng cho PUT /posts/:id (Cập nhật)
@@ -27,6 +30,7 @@ export interface UpdatePostBody {
   title?: string;
   content?: string;
   status?: PostStatus; // Dành cho Admin
+  is_resolved?: boolean;
   // is_sticky?: boolean; // Dành cho Admin
 }
 
@@ -47,6 +51,7 @@ export interface PendingTagAction {
 export interface AdminApprovePostBody {
   // Mảng chứa các quyết định của Admin trên TỪNG Tag đang pending.
   pendingTagActions: PendingTagAction[];
+  keepTagIds: string[];
 
   // Trạng thái cuối cùng của Bài viết sau khi duyệt Tag xong.
   newPostStatus: "approved" | "rejected";

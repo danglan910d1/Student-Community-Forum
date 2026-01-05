@@ -12,16 +12,16 @@ import {
   FormDescription,
 } from "@/components/ui/form";
 import { FieldGroup, FieldDescription } from "@/components/ui/field";
-import { AUTH_TEXT } from "../constant/authText";
-import { SignupInput } from "../schemas/signUpSchema";
+import { AUTH_TEXT } from "@/modules/auth/constant/authText";
+import { SignupInput } from "@/modules/auth/schemas/signUpSchema";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import AuthSkeleton from "./shared/AuthSkeleton";
+import AuthSkeleton from "@/modules/auth/components/AuthSkeleton";
 import { useTransition } from "react";
-import { AuthContentProps } from "../types";
+import { AuthContentProps } from "@/modules/auth/types";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
-import { authResponseHandle } from "../utils/authResponseHandle";
+import { authResponseHandle } from "@/modules/auth/utils/authResponseHandle";
 
 export function SignupFormContent({
   isPending,
@@ -128,7 +128,7 @@ export function SignupFormContent({
       <Button
         type="submit"
         isLoading={isPending}
-        loadingText="Loading..." // Nếu bỏ dòng này thì chỉ hiện mỗi Spinner xoay
+        loadingText={SIGNUP.LOADING_TEXT} // Nếu bỏ dòng này thì chỉ hiện mỗi Spinner xoay
         className="w-full mt-2"
       >
         {SIGNUP.SUBMIT_BTN}
@@ -140,7 +140,7 @@ export function SignupFormContent({
           className="animate-in fade-in zoom-in duration-200"
         >
           <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Lỗi đăng ký</AlertTitle>
+          <AlertTitle>{SIGNUP.ERROR_TITLE}</AlertTitle>
           <AlertDescription>
             {authResponseHandle.handleError(serverError)}
           </AlertDescription>

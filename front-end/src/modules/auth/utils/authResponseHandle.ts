@@ -1,32 +1,35 @@
 // src/features/auth/utils/auth-handlers.ts
 import { AxiosError } from "axios";
-import { AuthResponse, User } from "../types";
+import { AuthResponse } from "@/modules/auth/types";
+import { IAuthor } from "@/types/common";
 
 export const authResponseHandle = {
-  // 1. Xử lý khi thành công (Lưu store)
   handleSuccess: (
     response: AuthResponse,
-    setAuth: (user: User, token: string) => void
+    setAuth: (user: IAuthor, token: string) => void
   ) => {
+    // Trích xuất token, các trường còn lại sẽ gom vào userData (kiểu IAuthor)
     const { token, ...userData } = response;
+
+    // Gọi store để lưu
     setAuth(userData, token);
-    return userData.name; // Trả về tên để hiện Toast
+
+    return userData.name;
   },
 
-  // 2. Xử lý khi thất bại (Trích xuất lỗi)
   handleError: (error: unknown): string => {
-    const axiosError = error as AxiosError<{
-      error?: string;
-      message?: string;
-    }>;
+    // Kiểm tra lỗi Axios một cách an toàn
+    if (error && typeof error === "object" && "isAxiosError" in error) {
+      const axiosError = error as AxiosError<{
+        message?: string;
+        error?: string;
+      }>;
+      const serverMessage =
+        axiosError.response?.data?.message || axiosError.response?.data?.error;
 
-    // Ưu tiên trường 'error' từ BE
-    const serverMessage =
-      axiosError.response?.data?.error || axiosError.response?.data?.message;
-
-    if (serverMessage) return serverMessage;
-
-    if (axiosError.message === "Network Error") return "Lỗi kết nối mạng";
+      if (serverMessage) return serverMessage;
+      if (axiosError.code === "ERR_NETWORK") return "Lỗi kết nối mạng";
+    }
     return "Có lỗi xảy ra, vui lòng thử lại!";
   },
 };

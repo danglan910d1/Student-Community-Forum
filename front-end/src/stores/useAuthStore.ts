@@ -1,36 +1,42 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-
-export interface User {
-  userId: string;
-  name: string;
-  email: string;
-  role: string;
-  avatar: string;
-}
+import { IAuthor } from "@/types/common";
 
 interface AuthState {
-  user: User | null;
+  user: IAuthor | null; // Đổi từ IUser sang IAuthor
   token: string | null;
   isAuthenticated: boolean;
-  // Actions
-  setAuth: (user: User, token: string) => void;
+  hasHydrated: boolean;
+
+  // Actions nhận vào IAuthor
+  setAuth: (user: IAuthor, token: string) => void;
   logout: () => void;
   updateAvatar: (newAvatar: string) => void;
+  setHasHydrated: (state: boolean) => void;
 }
+
+const dummyStorage = {
+  getItem: () => null,
+  setItem: () => {},
+  removeItem: () => {},
+};
 
 export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
+      // State
       user: null,
       token: null,
       isAuthenticated: false,
+      hasHydrated: false,
+
+      // Actions
+      setHasHydrated: (state) => set({ hasHydrated: state }),
 
       setAuth: (user, token) => set({ user, token, isAuthenticated: true }),
 
       logout: () => {
         set({ user: null, token: null, isAuthenticated: false });
-        // Xóa cookie thủ công nếu không dùng thư viện
         document.cookie =
           "auth-token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;";
       },
@@ -41,16 +47,13 @@ export const useAuthStore = create<AuthState>()(
         })),
     }),
     {
-      name: "auth-storage", // Tên key trong LocalStorage
+      name: "auth-storage",
       storage: createJSONStorage(() =>
         typeof window !== "undefined" ? window.localStorage : dummyStorage
       ),
+      onRehydrateStorage: () => (state) => {
+        state?.setHasHydrated(true);
+      },
     }
   )
 );
-
-const dummyStorage = {
-  getItem: () => null,
-  setItem: () => {},
-  removeItem: () => {},
-};

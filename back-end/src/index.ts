@@ -7,15 +7,21 @@ import tagRoutes from "./routes/tagRoutes";
 import postRoutes from "./routes/postRoutes";
 import commentRoutes from "./routes/commentRoutes";
 import likeRoutes from "./routes/likeRoutes";
+import notificationRoutes from "./routes/notificationRoutes";
 import { initializeConfig } from "./config";
 import { globalErrorHandler } from "./middleware/error";
+import { initSyncStatsJob } from "./core/scheduler";
 
 // Khởi tạo ứng dụng Express
 const app = express();
 
 // --- 1. MIDDLEWARE TOÀN CỤC ---
-app.use(cors());
-app.use(express.json()); // Cho phép Express đọc JSON từ request body
+app.use(
+  cors({
+    exposedHeaders: ["x-request-id"], // Cực kỳ quan trọng để FE đọc được ID
+  })
+);
+app.use(express.json());
 
 // --- 2. ĐỊNH TUYẾN (ROUTING) ---
 // Áp dụng Rate Limiter cho các route nhạy cảm (Auth)
@@ -26,6 +32,7 @@ app.use("/api/tags", tagRoutes);
 app.use("/api/posts", postRoutes);
 app.use("/api/comments", commentRoutes);
 app.use("/api/likes", likeRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 // --- 3. GLOBAL ERROR HANDLER ---
 // Bắt các lỗi được ném ra từ asyncHandler (ví dụ: lỗi DB, lỗi Logic)
@@ -46,6 +53,9 @@ const PORT = process.env.PORT || 5000;
 initializeConfig()
   .then(() => {
     app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
+    initSyncStatsJob();
+    console.log("Background jobs initialized successfully");
   })
   .catch((err) => {
     console.error("Failed to start server due to configuration error:", err);

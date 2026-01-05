@@ -1,5 +1,9 @@
 import { api } from "@/services/api";
-import { AuthResponse, LoginRequest, SignupRequest } from "../types";
+import {
+  AuthResponse,
+  LoginRequest,
+  SignupRequest,
+} from "@/modules/auth/types";
 
 export const authService = {
   register: async (payload: SignupRequest): Promise<AuthResponse> => {
