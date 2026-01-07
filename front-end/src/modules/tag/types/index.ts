@@ -1,3 +1,4 @@
+import { ITopic } from "@/modules/topic/types";
 import {
   IApiResponse,
   IAuthor,
@@ -13,7 +14,7 @@ export interface ITag extends IBaseMetadata {
 
   // Topic: Pipeline dùng $let + $arrayElemAt trả về Object hoặc ID
   topic: (IBaseMetadata & { topicId: string }) | string | null;
-
+  postCount: number;
   // User: Pipeline trả về thông tin người tạo (createdBy) dưới dạng Object IAuthor
   user?: IAuthor | string;
 
@@ -32,3 +33,7 @@ export interface IGetAdminTagsParams extends IGetTagsParams {
 }
 
 export type ITagResponse = IApiResponse<ITag, "tags">;
+
+export interface TopicWithTags extends ITopic {
+  tags: ITag[];
+}

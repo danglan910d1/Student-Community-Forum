@@ -1,4 +1,3 @@
-import { PostItemData } from "@/constants/posts";
 import {
   Card,
   CardHeader,
@@ -6,11 +5,14 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, Clock, Eye, Heart, MessageSquare } from "lucide-react"; // Import icon
+import { CheckCircle2, Clock, Eye, MessageSquare } from "lucide-react"; // Import icon
 import { IPost } from "../../types";
 import { formatDistanceToNow } from "date-fns";
 import Link from "next/link";
 import MDEditor from "@uiw/react-md-editor";
+import { LoginGuard } from "@/components/shared/LoginGuarđialog";
+import { LikeButton } from "@/components/shared/LikeButton";
+import { useLike } from "../../hooks/useLike";
 
 export const PostItem = ({
   postId,
@@ -27,10 +29,17 @@ export const PostItem = ({
 }: IPost) => {
   const postDetailHref = `/posts/${postId}/${slug}`;
 
+  // Sử dụng Hook Like cho từng Item
+  const { isLiked, likesCount, toggleLike } = useLike({
+    targetType: "post",
+    targetId: postId,
+    initialLikesCount: likes_count,
+  });
+
   return (
     <Card className="group relative hover:shadow-lg cursor-pointer hover:bg-muted py-3 transition-all">
       <CardHeader className="px-5">
-        <CardTitle className="text-[20px] font-bold flex items-center gap-1 overflow-hidden">
+        <CardTitle className="text-xl font-bold flex items-center gap-1 overflow-hidden">
           {is_resolved && (
             <CheckCircle2 className="w-5 h-5 text-green-600 shrink-0" />
           )}
@@ -79,12 +88,30 @@ export const PostItem = ({
               <span className="flex items-center gap-1">
                 <Eye className="w-3.5 h-3.5" /> {views_count}
               </span>
-              <span className="flex items-center gap-1">
-                <MessageSquare className="w-3.5 h-3.5" /> {comments_count}
-              </span>
-              <span className="flex items-center gap-1 text-pink-600 font-medium">
-                <Heart className="w-3.5 h-3.5 fill-pink-600/10" /> {likes_count}
-              </span>
+              <LoginGuard
+                title="Thảo luận bài viết"
+                description="Đăng nhập để tham gia bình luận và giải đáp thắc mắc."
+              >
+                <Link
+                  href={`${postDetailHref}#comments`}
+                  className="flex items-center gap-1 hover:text-primary transition-colors"
+                >
+                  <MessageSquare className="w-3.5 h-3.5" /> {comments_count}
+                </Link>
+              </LoginGuard>
+
+              {/* LIKE: Xử lý tại chỗ */}
+              <LoginGuard
+                title="Yêu thích bài viết"
+                description="Đăng nhập để lưu bài viết và ủng hộ tác giả."
+              >
+                <LikeButton
+                  isLiked={isLiked}
+                  likesCount={likesCount}
+                  onLike={toggleLike}
+                  className="h-auto p-0 text-pink-600"
+                />
+              </LoginGuard>
             </div>
           </div>
 

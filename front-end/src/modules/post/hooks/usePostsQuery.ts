@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { postService } from "@/modules/post/services/postService";
 import { AxiosError } from "axios";
 import { IGetPostsParams, IPostResponse } from "@/modules/post/types";

@@ -23,7 +23,7 @@ export function AuthorCard({
   return (
     <div className="bg-blue-50/50 p-4 rounded-lg border border-blue-100 w-full max-w-[240px]">
       {/* TIME LABEL */}
-      <p className="text-[11px] text-muted-foreground mb-3 font-medium">
+      <p className="text-xs mb-3">
         {label}{" "}
         {format(new Date(createdAt), "HH:mm, 'ngày' dd/MM", { locale: vi })}
       </p>

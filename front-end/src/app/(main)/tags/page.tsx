@@ -1,5 +1,5 @@
-import { PostListContainer } from "@/modules/post/containers/PostListContainer";
+import TagsPageContainer from "@/modules/tag/containers/TagsContainer";
 
-export default function TagsPage() {
-  return <div>Tags</div>;
+export default function PostListPage() {
+  return <TagsPageContainer />;
 }

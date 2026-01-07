@@ -3,6 +3,8 @@
 import ContentPageSkeleton from "@/components/loading/ContentPageSkeleton";
 import { usePostDetail } from "../hooks/usePostDetail";
 import { PostDetailSection } from "../components/PostDetail/PostDetailSection";
+import { EmptyState } from "@/components/shared/EmtyState";
+import { FileSearch } from "lucide-react";
 
 export function PostDetailContainer({ postId }: { postId: string }) {
   const { data: post, isLoading, isError } = usePostDetail(postId);
@@ -17,12 +19,13 @@ export function PostDetailContainer({ postId }: { postId: string }) {
 
   if (isError || !post) {
     return (
-      <div className="py-20 text-center">
-        <h2 className="text-xl font-semibold">Không tìm thấy bài viết</h2>
-        <p className="text-muted-foreground">
-          Bài viết có thể đã bị xóa hoặc không tồn tại.
-        </p>
-      </div>
+      <EmptyState
+        icon={FileSearch}
+        title="Không tìm thấy bài viết"
+        description="Bài viết bạn đang tìm kiếm có thể đã bị xóa, thay đổi địa chỉ hoặc không tồn tại trên hệ thống."
+        actionLabel="Quay lại danh sách"
+        actionHref="/posts"
+      />
     );
   }
 

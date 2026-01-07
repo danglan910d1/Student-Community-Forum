@@ -6,10 +6,12 @@ import {
 } from "@tanstack/react-query";
 import { commentService } from "../services/commentService";
 import { toast } from "sonner";
+import { useAuthStore } from "@/stores/useAuthStore";
 
 export function useComments(postId: string) {
   const queryClient = useQueryClient();
-  const queryKey = ["comments", postId];
+  const { isAuthenticated } = useAuthStore();
+  const queryKey = ["comments", postId, isAuthenticated];
 
   const { data, fetchNextPage, hasNextPage, isLoading, isFetchingNextPage } =
     useInfiniteQuery({

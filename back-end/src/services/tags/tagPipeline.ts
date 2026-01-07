@@ -57,6 +57,22 @@ export const buildTagAggregationPipeline = (
     });
   }
 
+  pipeline.push({
+    $lookup: {
+      from: "posts",
+      localField: "_id",
+      foreignField: "tags",
+      as: "postsUsingThisTag",
+    },
+  });
+
+  // Thêm field postCount
+  pipeline.push({
+    $addFields: {
+      postCount: { $size: "$postsUsingThisTag" },
+    },
+  });
+
   if (includeProjection) {
     pipeline.push({
       $project: {
@@ -66,6 +82,7 @@ export const buildTagAggregationPipeline = (
         slug: 1,
         createdAt: 1,
         updatedAt: 1,
+        postCount: 1,
         status: { $cond: [isAdminView, "$status", "$$REMOVE"] },
 
         topic: includeTopic

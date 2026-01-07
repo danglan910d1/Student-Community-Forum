@@ -19,7 +19,13 @@ export function AuthLayout({
   const pathname = usePathname();
   return (
     <CenteredContainer>
-      <Card className={cn("overflow-hidden p-0", className)} {...props}>
+      <Card
+        className={cn(
+          "overflow-hidden p-0 animate-in fade-in duration-700",
+          className
+        )}
+        {...props}
+      >
         <CardContent className="grid p-0 md:grid-cols-2">
           {/* Cột trái: Nội dung Form */}
           <div className="p-6 md:p-8">

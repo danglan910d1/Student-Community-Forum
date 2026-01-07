@@ -1,31 +1,36 @@
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { IPost } from "../../types";
+import Link from "next/link";
 
 export function PostDetailAside({ post }: { post: IPost }) {
   return (
     <aside className="space-y-6">
       <div className="p-4 border rounded-xl bg-card">
-        <h4 className="text-xs font-bold uppercase text-muted-foreground mb-4">
+        <h4 className="text-sm font-bold uppercase text-muted-foreground mb-4">
           Thông tin bổ sung
         </h4>
 
         <div className="space-y-4">
           {/* CHỦ ĐỀ */}
           <div className="space-y-1">
-            <span className="text-[10px] text-muted-foreground uppercase font-bold">
+            <span className="text-xs text-muted-foreground uppercase font-bold">
               Chủ đề
             </span>
-            <p className="text-sm font-medium hover:underline cursor-pointer">
+            <br />
+            <Link
+              href={`/posts?topic=${post.topic?.slug}`}
+              className="text-sm font-medium hover:underline cursor-pointer"
+            >
               {post.topic?.name || "Đang cập nhật"}
-            </p>
+            </Link>
           </div>
 
           <Separator />
 
           {/* TRẠNG THÁI */}
           <div className="space-y-2">
-            <span className="text-[10px] text-muted-foreground uppercase font-bold block">
+            <span className="text-xs text-muted-foreground uppercase font-bold block">
               Trạng thái
             </span>
             <Badge

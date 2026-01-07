@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { likeService } from "../services/likeService";
-import { toast } from "sonner"; // Hoặc thư viện thông báo bạn dùng
+import { toast } from "sonner";
 import {
   ILikeStatusResponse,
   IToggleLikeResponse,
@@ -13,7 +13,7 @@ import { useAuthStore } from "@/stores/useAuthStore";
 interface UseLikeProps {
   targetType: LikeTargetType;
   targetId: string;
-  initialLikesCount: number;
+  initialLikesCount: number; // Chỉ nhận count để hiển thị số lúc chưa load
 }
 
 export function useLike({
@@ -22,27 +22,24 @@ export function useLike({
   initialLikesCount,
 }: UseLikeProps) {
   const queryClient = useQueryClient();
-  const { isAuthenticated, hasHydrated } = useAuthStore(); // Lấy trạng thái auth
-  const likeStatusQueryKey = ["like-status", targetType, targetId] as const;
+  const { isAuthenticated, hasHydrated } = useAuthStore();
+  const likeStatusQueryKey = [
+    "like-status",
+    targetType,
+    targetId,
+    isAuthenticated,
+  ] as const;
 
-  /**
-   * 1. GET trạng thái Like
-   * Thêm enabled: hasHydrated để chắc chắn query chỉ chạy khi token đã được load từ Storage
-   */
-  const { data } = useQuery<ILikeStatusResponse>({
+  // 1. GET trạng thái: KHÔNG dùng initialData để ép buộc isLoading = true
+  const { data, isLoading } = useQuery<ILikeStatusResponse>({
     queryKey: likeStatusQueryKey,
     queryFn: () => likeService.getLikeStatus(targetType, targetId),
-    enabled: hasHydrated, // Quan trọng: Đợi Zustand load xong token
-    initialData: {
-      isLiked: false,
-      likes_count: initialLikesCount,
-    },
+    enabled: hasHydrated,
     staleTime: 1000 * 60 * 5,
+    refetchOnWindowFocus: false,
   });
 
-  /**
-   * 2. MUTATION Toggle Like
-   */
+  // 2. TOGGLE: Chỉ chạy khi data từ Query đã tồn tại
   const toggleLikeMutation = useMutation<
     IToggleLikeResponse,
     Error,
@@ -50,10 +47,7 @@ export function useLike({
     { previous?: ILikeStatusResponse }
   >({
     mutationFn: () => {
-      // Bảo vệ tầng service: Nếu chưa đăng nhập thì không gọi API
-      if (!isAuthenticated) {
-        throw new Error("UNAUTHORIZED");
-      }
+      if (!isAuthenticated) throw new Error("UNAUTHORIZED");
       return likeService.toggleLike(targetType, targetId);
     },
     onMutate: async () => {
@@ -61,18 +55,16 @@ export function useLike({
       const previous =
         queryClient.getQueryData<ILikeStatusResponse>(likeStatusQueryKey);
 
-      queryClient.setQueryData<ILikeStatusResponse>(
-        likeStatusQueryKey,
-        (old) => {
-          const isLiked = old?.isLiked ?? false;
-          const currentCount = old?.likes_count ?? initialLikesCount;
-
-          return {
-            isLiked: !isLiked,
-            likes_count: Math.max(0, currentCount + (isLiked ? -1 : 1)),
-          };
-        }
-      );
+      // Optimistic Update: Chỉ chạy nếu đã có dữ liệu từ lệnh GET trước đó
+      if (previous) {
+        queryClient.setQueryData<ILikeStatusResponse>(likeStatusQueryKey, {
+          isLiked: !previous.isLiked,
+          likes_count: Math.max(
+            0,
+            previous.likes_count + (previous.isLiked ? -1 : 1)
+          ),
+        });
+      }
 
       return { previous };
     },
@@ -80,13 +72,11 @@ export function useLike({
       if (context?.previous) {
         queryClient.setQueryData(likeStatusQueryKey, context.previous);
       }
-
-      // Thông báo lỗi cho user
-      if (error.message === "UNAUTHORIZED") {
-        toast.error("Vui lòng đăng nhập để thích bài viết!");
-      } else {
-        toast.error("Thao tác thất bại, vui lòng thử lại sau.");
-      }
+      toast.error(
+        error.message === "UNAUTHORIZED"
+          ? "Vui lòng đăng nhập!"
+          : "Thao tác thất bại"
+      );
     },
     onSuccess: (res) => {
       queryClient.setQueryData<ILikeStatusResponse>(likeStatusQueryKey, {
@@ -97,15 +87,24 @@ export function useLike({
   });
 
   return {
+    // isLiked chỉ TRUE khi và chỉ khi Server trả về TRUE
     isLiked: data?.isLiked ?? false,
+
+    // likesCount ưu tiên từ Server, nếu chưa có thì dùng tạm số ban đầu từ Post/Comment
     likesCount: data?.likes_count ?? initialLikesCount,
-    // Bọc thêm 1 lớp check ở UI
+
     toggleLike: () => {
-      if (!isAuthenticated) {
-        return toast.error("Bạn cần đăng nhập để thực hiện chức năng này!");
-      }
+      if (!isAuthenticated) return toast.error("Bạn cần đăng nhập!");
+      // BẮT BUỘC: Nếu chưa GET xong (isLoading) hoặc data chưa có thì không cho Toggle
+      if (isLoading || !data) return;
+
       toggleLikeMutation.mutate();
     },
-    isPending: toggleLikeMutation.isPending,
+
+    // isPending = true khi đang load trạng thái ban đầu HOẶC đang xử lý bấm Like
+    isPending: isLoading || toggleLikeMutation.isPending,
+
+    // Trạng thái load ban đầu để UI có thể hiển thị skeleton nếu muốn
+    isInitialLoading: isLoading,
   };
 }

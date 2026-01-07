@@ -10,13 +10,13 @@ import {
   ChevronUp,
   ChevronDown,
   MessageSquare,
+  FileSearch,
 } from "lucide-react";
-
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import ContentPageSkeleton from "@/components/loading/ContentPageSkeleton";
-import { IPost } from "../../types";
 import { usePostDetail } from "../../hooks/usePostDetail";
+import { EmptyState } from "@/components/shared/EmtyState";
 
 interface PostDetailContainerProps {
   postId: string;
@@ -35,11 +35,14 @@ export function PostDetailContainer({ postId }: PostDetailContainerProps) {
 
   if (isError || !post) {
     return (
-      <div className="py-20 text-center">
-        <h2 className="text-xl font-semibold">Không tìm thấy bài viết</h2>
-        <p className="text-muted-foreground">
-          Bài viết có thể đã bị xóa hoặc không tồn tại.
-        </p>
+      <div className="container max-w-6xl mx-auto px-4 py-20">
+        <EmptyState
+          icon={FileSearch}
+          title="Không tìm thấy bài viết"
+          description="Bài viết bạn đang tìm kiếm có thể đã bị xóa, thay đổi địa chỉ hoặc không tồn tại trên hệ thống."
+          actionLabel="Quay lại danh sách"
+          actionHref="/posts" // Sử dụng router.push đã tích hợp trong EmptyState
+        />
       </div>
     );
   }

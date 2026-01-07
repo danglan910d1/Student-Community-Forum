@@ -56,3 +56,7 @@ export const generateUniqueSlugForPost = async (
   // Trả về slug mới với số thứ tự tiếp theo
   return `${baseSlug}-${maxSuffix + 1}`;
 };
+
+export function escapeRegex(text: string) {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}

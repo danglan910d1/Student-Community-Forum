@@ -8,6 +8,11 @@ import { LikeButton } from "@/components/shared/LikeButton";
 import { CommentInput } from "./CommentInput";
 import { useLike } from "../../hooks/useLike";
 import { IComment } from "../../types";
+import { useDeleteComment } from "../../hooks/useDeleteComment";
+import { useAuthStore } from "@/stores/useAuthStore";
+import { Trash2 } from "lucide-react";
+import { Button } from "@base-ui/react";
+import { LoginGuard } from "@/components/shared/LoginGuarđialog";
 
 export function CommentItem({
   comment,
@@ -17,14 +22,22 @@ export function CommentItem({
   onReply: (content: string, parentId: string) => Promise<unknown>;
 }) {
   const [isReplying, setIsReplying] = useState(false);
+  const { user } = useAuthStore();
+  const deleteMutation = useDeleteComment();
 
-  const displayContent = comment.content;
+  const isOwner = user?.userId === comment.user.userId;
 
   const { isLiked, likesCount, toggleLike, isPending } = useLike({
     targetType: "comment",
     targetId: comment.commentId,
     initialLikesCount: comment.likes_count,
   });
+
+  const handleDelete = () => {
+    if (window.confirm("Bạn có chắc chắn muốn xóa bình luận này không?")) {
+      deleteMutation.mutate(comment.commentId);
+    }
+  };
 
   return (
     <div className="flex flex-col gap-3 animate-in fade-in duration-300">
@@ -35,41 +48,72 @@ export function CommentItem({
         </Avatar>
 
         <div className="flex-1 min-w-0">
-          <div className="bg-muted/50 p-3 rounded-2xl">
-            <p className="text-xs font-bold mb-1 text-foreground">
+          <div className="bg-muted/50 p-3 rounded-2xl group relative">
+            <p className="text-sm font-bold mb-1 text-foreground">
               {comment.user.name}
             </p>
-            <div className="text-sm leading-relaxed text-foreground/90 whitespace-pre-wrap">
-              {displayContent}
+            <div className="text-sm leading-relaxed whitespace-pre-wrap">
+              {comment.content}
             </div>
+
+            {isOwner && (
+              <Button
+                onClick={handleDelete}
+                disabled={deleteMutation.isPending}
+                className="absolute top-2 right-2 p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </Button>
+            )}
           </div>
 
           <div className="flex items-center gap-4 mt-1 px-1">
-            <span className="text-[11px] text-muted-foreground">
+            <span className="text-xs text-muted-foreground">
               {formatDistanceToNow(new Date(comment.createdAt), {
                 addSuffix: true,
                 locale: vi,
               })}
             </span>
 
-            <LikeButton
-              isLiked={isLiked}
-              likesCount={likesCount}
-              onLike={toggleLike}
-              isPending={isPending}
-              className="h-auto p-0 text-[11px] font-bold"
-            />
-
-            <button
-              onClick={() => setIsReplying(!isReplying)}
-              className="text-[11px] font-bold text-muted-foreground hover:text-primary transition-colors"
+            {/* GUARD CHO LIKE */}
+            <LoginGuard
+              title="Yêu thích bình luận"
+              description="Đăng nhập để bày tỏ sự đồng cảm với bình luận này bạn nhé!"
             >
-              Phản hồi{" "}
-              {comment.replies_count > 0 && `(${comment.replies_count})`}
-            </button>
+              <LikeButton
+                isLiked={isLiked}
+                likesCount={likesCount}
+                onLike={toggleLike}
+                isPending={isPending}
+                className="h-auto p-0 text-xs font-bold"
+              />
+            </LoginGuard>
+
+            {/* GUARD CHO PHẢN HỒI */}
+            <LoginGuard
+              title="Phản hồi bình luận"
+              description="Tham gia thảo luận bằng cách đăng nhập vào hệ thống."
+              className="flex items-center"
+            >
+              <Button
+                onClick={() => setIsReplying(!isReplying)}
+                className="h-full text-xs font-bold text-muted-foreground hover:text-primary transition-colors"
+              >
+                Phản hồi{" "}
+                {comment.replies_count > 0 && `(${comment.replies_count})`}
+              </Button>
+            </LoginGuard>
+
+            {isOwner && (
+              <Button
+                onClick={handleDelete}
+                className="text-xs font-bold text-muted-foreground hover:text-destructive transition-colors"
+              >
+                Xóa
+              </Button>
+            )}
           </div>
 
-          {/* Ô nhập phản hồi */}
           {isReplying && (
             <div className="mt-3 ml-2 border-l-2 border-muted pl-4 animate-in slide-in-from-top-2 duration-200">
               <CommentInput
@@ -83,7 +127,6 @@ export function CommentItem({
             </div>
           )}
 
-          {/* HIỂN THỊ DANH SÁCH PHẢN HỒI (REPLIES) */}
           {comment.replies && comment.replies.length > 0 && (
             <div className="mt-4 space-y-5 ml-2 border-l-2 border-muted/50 pl-4">
               {comment.replies.map((reply) => (

@@ -14,7 +14,7 @@ export function CardLayout({
   return (
     <div
       className={cn(
-        "bg-card rounded-lg border shadow-sm overflow-hidden p-2 border-1 flex flex-col min-h-0",
+        "bg-card rounded-lg border shadow-sm p-2 border-1 flex flex-col min-h-0",
         "transition-all duration-200", // color-card transition
         // Nếu muốn dùng hiệu ứng nổi khi hover như các ô màu
         withHover &&

@@ -1,6 +1,4 @@
 import MDEditor from "@uiw/react-md-editor";
-import { ChevronUp, ChevronDown } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { IPost } from "../../types";
 import Link from "next/link";

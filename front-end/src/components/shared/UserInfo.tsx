@@ -1,17 +1,27 @@
 "use client";
-import { Settings } from "lucide-react";
-import { CardLayout } from "@/components/layout/CardLayout";
 
+import { LogOut, Settings, User } from "lucide-react";
+import { CardLayout } from "@/components/layout/CardLayout";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuthStore } from "@/stores/useAuthStore";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export const UserInfo = () => {
-  // 1. Lấy dữ liệu từ Zustand Store
+  // 1. Lấy dữ liệu và hàm logout từ Zustand Store
   const user = useAuthStore((state) => state.user);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const logout = useAuthStore((state) => state.logout);
 
-  // 2. Logic tạo chữ cái đầu cho Avatar Fallback (ví dụ: "Đặng Lân" -> "ĐL")
+  // 2. Logic tạo chữ cái đầu cho Avatar Fallback
   const initials =
     user?.name
       ?.split(" ")
@@ -20,16 +30,15 @@ export const UserInfo = () => {
       .toUpperCase()
       .slice(0, 2) || "U";
 
-  // Nếu chưa đăng nhập thì có thể ẩn UserInfo hoặc hiện nút Login
+  // Nếu chưa đăng nhập thì ẩn component
   if (!isAuthenticated || !user) return null;
 
   return (
     <CardLayout className="shadow-md">
       <div className="flex items-center gap-4">
-        {/* AVATAR WRAPPER: Nơi chứa ảnh và chấm xanh online */}
+        {/* AVATAR WRAPPER */}
         <div className="relative flex-shrink-0">
           <Avatar className="w-12 h-12 border border-gray-100">
-            {/* Sử dụng avatar từ DB, nếu là chuỗi rỗng "" hoặc null, AvatarImage sẽ tự lỗi và hiện Fallback */}
             <AvatarImage
               src={user.avatar}
               alt={user.name}
@@ -40,7 +49,7 @@ export const UserInfo = () => {
             </AvatarFallback>
           </Avatar>
 
-          {/* CHẤM XANH ĐÈ LÊN: absolute định vị so với relative wrapper */}
+          {/* CHẤM XANH ONLINE */}
           <div
             className={cn(
               "absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-white",
@@ -60,13 +69,40 @@ export const UserInfo = () => {
           </p>
         </div>
 
-        {/* NÚT SETTINGS (Sẽ làm xoay ở bước sau) */}
-        <div className="group cursor-pointer p-1.5 hover:bg-gray-100 rounded-md transition-colors">
-          <Settings
-            size={18}
-            className="text-gray-400 group-hover:text-blue-700 transition-transform duration-300"
-          />
-        </div>
+        {/* DROPDOWN MENU SETTINGS */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <div className="group cursor-pointer p-1.5 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-md transition-colors outline-none">
+              <Settings
+                size={18}
+                className="text-gray-400 group-hover:text-blue-700 group-hover:rotate-90 transition-all duration-300"
+              />
+            </div>
+          </DropdownMenuTrigger>
+
+          <DropdownMenuContent align="end" className="w-52">
+            <DropdownMenuLabel>Tài khoản của tôi</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuGroup>
+              <DropdownMenuItem className="cursor-pointer">
+                <User className="mr-2 h-4 w-4" />
+                <span>Hồ sơ cá nhân</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem className="cursor-pointer">
+                <Settings className="mr-2 h-4 w-4" />
+                <span>Cài đặt hệ thống</span>
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="text-red-600 focus:text-red-600 cursor-pointer"
+              onClick={() => logout()}
+            >
+              <LogOut className="mr-2 h-4 w-4" />
+              <span>Đăng xuất</span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </CardLayout>
   );

@@ -3,13 +3,10 @@
 
 import { useCallback, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-
 import { PAGINATION_CONFIG } from "@/constants/pagination";
 import { usePostsQuery } from "../hooks/usePostsQuery";
 import { useTopicStore } from "@/stores/useTopicStore";
 import { PostSection } from "../components/PostList/PostSection";
-import { useMinimumLoading } from "@/hooks/useMinimumLoading";
-import ContentPageSkeleton from "@/components/loading/ContentPageSkeleton";
 
 export function PostListContainer() {
   const router = useRouter();
@@ -73,10 +70,10 @@ export function PostListContainer() {
     return "Danh sách Bài viết";
   }, [params.tag, params.topic, topics]);
 
-  const isInitialLoading = postsQuery.isLoading && !postsQuery.data;
-  const showPageSkeleton = useMinimumLoading(isInitialLoading, 300);
+  // const isInitialLoading = postsQuery.isLoading && !postsQuery.data;
+  // const showPageSkeleton = useMinimumLoading(isInitialLoading, 300);
 
-  if (showPageSkeleton) return <ContentPageSkeleton />;
+  // if (showPageSkeleton) return <ContentPageSkeleton />;
 
   return (
     <PostSection

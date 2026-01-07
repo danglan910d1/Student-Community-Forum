@@ -106,10 +106,13 @@ export default function MultiAutocomplete<T extends FieldValues>({
   );
 
   const anchorRef = useComboboxAnchor();
+  const isInvalid = !!fieldState.error;
 
   return (
     <Field>
-      <FieldLabel htmlFor={name}>{label}</FieldLabel>
+      <FieldLabel className="text-md font-bold" htmlFor={name}>
+        {label}
+      </FieldLabel>
 
       <Combobox
         multiple
@@ -120,7 +123,15 @@ export default function MultiAutocomplete<T extends FieldValues>({
         inputValue={inputValue}
         onInputValueChange={setInputValue}
       >
-        <ComboboxChips onKeyDown={handleKeyDown} ref={anchorRef}>
+        <ComboboxChips
+          onKeyDown={handleKeyDown}
+          ref={anchorRef}
+          className={
+            isInvalid
+              ? "border-red-500 focus-within:ring-1 focus-within:ring-red-500"
+              : ""
+          }
+        >
           {value.map((v: Tag) => (
             <ComboboxChip key={v.slug} value={v.slug}>
               {v.name}

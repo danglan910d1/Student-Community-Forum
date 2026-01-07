@@ -48,7 +48,7 @@ export const TagItem = ({
       {/* 2. Content Area */}
       <div className="flex flex-col items-start min-w-0">
         <span className="text-sm bold truncate">#{name}</span>
-        <span className="text-[11px] text-gray-500 font-normal truncate">
+        <span className="text-xs text-gray-500 font-normal truncate">
           {count} bài đăng
           {isTrending && (
             <>

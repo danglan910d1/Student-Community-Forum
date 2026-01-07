@@ -1,9 +1,6 @@
 import { ReactNode } from "react";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/layout/AppSidebar";
-import { Suspense } from "react";
-import ContentPageSkeleton from "../loading/ContentPageSkeleton";
-import { usePathname, useSearchParams } from "next/navigation";
 
 interface MainContainerProps {
   children: ReactNode;

@@ -1,5 +1,6 @@
 import { api } from "@/services/api";
 import {
+  ICreatePostBody,
   IGetPostsParams,
   IPost,
   IPostResponse,
@@ -21,6 +22,12 @@ export const postService = {
   // Ví dụ bổ sung lấy chi tiết bài viết
   getPostById: async (postId: string): Promise<IPost> => {
     const { data } = await api.get<IPost>(`/posts/${postId}`);
+    return data;
+  },
+
+  createPost: async (body: ICreatePostBody): Promise<IPost> => {
+    // Backend return về post object sau khi aggregate
+    const { data } = await api.post<IPost>("/posts", body);
     return data;
   },
 };

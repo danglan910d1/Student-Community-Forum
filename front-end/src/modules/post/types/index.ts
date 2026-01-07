@@ -48,11 +48,20 @@ export interface IGetPostsParams extends IGetListParams {
 }
 export type IPostDetailResponse = { post: IPost };
 
+// Trong file types của bạn
+export interface ICreatePostBody {
+  title: string;
+  content: string;
+  topicId: string;
+  tags: string[]; // Đổi từ Tag[] thành string[]
+}
+
 export interface IComment {
   commentId: string; // Backend đã đổi từ _id thành commentId
   postId: string; // Hoặc IPost nếu includePost = true
   parentId: string | null;
   content: string;
+  isLiked?: boolean;
   likes_count: number;
   replies_count: number;
   createdAt: string;

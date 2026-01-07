@@ -6,10 +6,13 @@ import { Button } from "@/components/ui/button";
 import { CardLayout } from "@/components/layout/CardLayout";
 import { PaginationSection } from "@/components/shared/PaginationSection";
 import { ContentFilter } from "@/components/shared/FilterMenu";
-
 import { PostItem } from "./PostItem";
 import { PostItemSkeleton } from "./PostItemSkeleton";
 import { IPost } from "../../types";
+import { LoginGuard } from "@/components/shared/LoginGuarđialog";
+import Link from "next/link";
+import { FileQuestion, PlusCircle } from "lucide-react";
+import { EmptyState } from "@/components/shared/EmtyState";
 
 interface PostSectionProps {
   headerTitle: string;
@@ -38,10 +41,20 @@ export function PostSection({
     <main>
       <CardLayout className="p-0 border-none shadow-sm">
         {/* HEADER */}
-        <div className="p-5">
+        <div className="p-5 animate-in fade-in duration-700">
           <header className="flex items-center justify-between mb-4">
             <h2 className="text-2xl font-bold uppercase">{headerTitle}</h2>
-            <Button>New Post</Button>
+            <LoginGuard
+              title="Tạo bài viết mới"
+              description="Bạn cần đăng nhập để đóng góp bài viết cho cộng đồng nhé!"
+            >
+              <Link href="/posts/create" passHref>
+                <Button>
+                  <PlusCircle className="w-4 h-4" />
+                  <span>New Post</span>
+                </Button>
+              </Link>
+            </LoginGuard>
           </header>
 
           <ContentFilter
@@ -55,14 +68,20 @@ export function PostSection({
         <div className="h-[1px] bg-border w-full" />
 
         {/* LIST */}
-        <div className="p-5">
+        <div className="p-5 animate-in fade-in duration-700">
           <div className="space-y-4 min-h-[400px]">
             {posts.length > 0 ? (
               posts.map((post) => <PostItem key={post.postId} {...post} />)
             ) : isFetching ? (
               <SkeletonList count={PAGINATION_CONFIG.postsPerPage} />
             ) : (
-              <EmptyState message="Không tìm thấy bài viết nào." />
+              <EmptyState
+                icon={FileQuestion}
+                title="Danh sách trống"
+                description="Hiện chưa có bài viết nào trong mục này. Hãy là người đầu tiên đóng góp bài viết!"
+                actionLabel="Tạo bài viết ngay"
+                actionHref="/posts/create"
+              />
             )}
           </div>
 
@@ -92,13 +111,5 @@ function SkeletonList({ count }: { count: number }) {
         <PostItemSkeleton key={i} />
       ))}
     </>
-  );
-}
-
-function EmptyState({ message }: { message: string }) {
-  return (
-    <div className="py-20 text-center text-muted-foreground">
-      <p>{message}</p>
-    </div>
   );
 }

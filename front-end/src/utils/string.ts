@@ -30,3 +30,17 @@ export function getInitials(
 
   return initials.slice(0, maxLength) || fallback;
 }
+
+export function sanitizeQuery(query: string) {
+  // 1. Loại bỏ khoảng trắng đầu cuối
+  let clean = query.trim();
+
+  // 2. Loại bỏ dấu ngoặc kép, ngoặc vuông, dấu đặc biệt MongoDB regex có thể gây lỗi
+  //    Bao gồm: / \ ^ $ * + ? . ( ) | { } [ ]
+  clean = clean.replace(/["'\\\/^$*+?.()|[\]{}]/g, "");
+
+  // 3. Nếu còn dư khoảng trắng, gộp lại thành 1 space
+  clean = clean.replace(/\s+/g, " ");
+
+  return clean;
+}
