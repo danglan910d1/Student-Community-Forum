@@ -1,22 +1,27 @@
 import { useQuery } from "@tanstack/react-query";
 import { postService } from "@/modules/post/services/postService";
 import { AxiosError } from "axios";
-import { IGetPostsParams, IPostResponse } from "@/modules/post/types";
+import { IGetPostsRequestParams, IPostResponse } from "@/modules/post/types";
 
-export const usePostsQuery = (params: IGetPostsParams) => {
+export const usePostsQuery = (params: IGetPostsRequestParams) => {
   const queryKey = [
     "posts",
+    // Đưa adminView lên đầu queryKey để phân tách cache ngay lập tức
+    params.adminView ?? false,
     params.page,
     params.topicSlug ?? "",
     params.tagSlug ?? "",
     params.sortBy ?? "",
     params.is_resolved ?? false,
+    params.myPosts ?? false,
   ];
 
   return useQuery<IPostResponse, AxiosError>({
     queryKey,
     queryFn: () => postService.getPosts(params),
-    staleTime: 0,
-    refetchOnWindowFocus: true,
+    staleTime: 0, // Dữ liệu luôn cũ, sẽ fetch lại khi component mount
+    gcTime: 1000 * 60 * 5, // (Tên mới của cacheTime) Giữ trong bộ nhớ đệm 5 phút
+    refetchOnWindowFocus: true, // Tự động lấy lại dữ liệu khi quay lại tab
+    retry: 1, // Thử lại 1 lần nếu lỗi
   });
 };

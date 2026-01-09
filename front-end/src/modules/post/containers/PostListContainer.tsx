@@ -31,6 +31,7 @@ export function PostListContainer() {
     tagSlug: params.tag ?? undefined,
     is_resolved: params.sort === "resolved" ? true : undefined,
     sortBy: params.sort === "popular" ? "popular" : undefined,
+    adminView: false,
   });
 
   // 🔹 Log state query để debug

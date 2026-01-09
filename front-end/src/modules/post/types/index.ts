@@ -46,6 +46,11 @@ export interface IGetPostsParams extends IGetListParams {
   // Chỉ Admin dùng:
   showDeleted?: boolean;
 }
+
+export interface IGetPostsRequestParams extends IGetPostsParams {
+  adminView?: boolean;
+}
+
 export type IPostDetailResponse = { post: IPost };
 
 // Trong file types của bạn

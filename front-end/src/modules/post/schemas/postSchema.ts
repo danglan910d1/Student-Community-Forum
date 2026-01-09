@@ -16,6 +16,7 @@ export const createPostSchema = z.object({
       z.object({
         name: z.string(),
         tagId: z.string().optional(),
+        slug: z.string(),
       })
     )
     .min(1, "Vui lòng chọn ít nhất 1 tag")

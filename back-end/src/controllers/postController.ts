@@ -45,9 +45,23 @@ const clearPostsCache = async () => {
 /** * GET /api/posts
  * Lấy danh sách bài viết kèm View Real-time từ Redis
  */
+/** * GET /api/posts
+ * Lấy danh sách bài viết (Public/Admin)
+ */
 export const getPosts = asyncHandler(async (req: Request, res: Response) => {
   const query = req.query as any;
-  const isAdmin = (req as any).userRole === "admin";
+
+  // LOGIC QUAN TRỌNG:
+  // 1. Lấy role thực từ token (đã qua middleware auth/optionalAuth)
+  const actualRole = (req as any).userRole;
+
+  // 2. Chỉ coi là isAdmin (để hiện bài pending/deleted) nếu:
+  //    - Role thực sự là admin
+  //    - VÀ Client chủ động yêu cầu xem bằng adminView=true
+  const isAdmin =
+    actualRole === "admin" &&
+    (query.adminView === "true" || query.adminView === true);
+
   const userId = (req as any).userId;
 
   const identity = {
@@ -55,7 +69,7 @@ export const getPosts = asyncHandler(async (req: Request, res: Response) => {
     tag: query.tagSlug ?? null,
   };
 
-  // 1. Check Cache (Lưu ý: Nếu dùng view real-time, nên để cache ngắn < 30s)
+  // 1. Check Cache (Cache key sẽ phân tách rõ 'admin' và 'public')
   const cacheKey = `posts:list:${isAdmin ? "admin" : "public"}:${JSON.stringify(
     query
   )}`;
@@ -63,15 +77,17 @@ export const getPosts = asyncHandler(async (req: Request, res: Response) => {
   if (cachedData) return res.json(cachedData);
 
   // 2. Xây dựng Filter & Pipeline
+  // Biến isAdmin ở đây quyết định buildPostFilter có lấy bài "pending" hay không
   const filter = await buildPostFilter(query, { userId, isAdmin });
+
   const pipeline = buildPostAggregationPipeline(filter, {
     includeUser: true,
     includeTopic: true,
     includeTags: true,
-    isAdminView: isAdmin,
+    isAdminView: isAdmin, // isAdminView ở đây quyết định có project (hiển thị) status, email... hay không
   });
 
-  // 3. Sắp xếp & Phân trang
+  // 3. Sắp xếp & Phân trang (Giữ nguyên logic của bạn)
   const sortStage: any = { is_sticky: -1 };
   if (query.sortBy === "popular") sortStage.views_count = -1;
   sortStage.createdAt = -1;
@@ -87,21 +103,13 @@ export const getPosts = asyncHandler(async (req: Request, res: Response) => {
 
   const posts = result.items;
 
-  // CỘNG DỒN VIEW TỪ REDIS CHO DANH SÁCH
+  // 4. Cộng dồn view từ Redis (Giữ nguyên logic của bạn)
   if (posts.length > 0) {
-    // Gom tất cả các key cần lấy: ["views:id1", "views:id2", ...]
     const redisKeys = posts.map((p: any) => `views:${p.postId}`);
-
-    // Lấy nhanh tất cả giá trị view tạm thời bằng 1 request duy nhất
     const pendingViews = await redisClient.mGet(redisKeys);
-
-    // Map ngược lại vào danh sách bài viết
     posts.forEach((post: any, index: number) => {
       const extraView = pendingViews[index];
-      if (extraView) {
-        // Cộng dồn vào giá trị từ DB
-        post.views_count += parseInt(extraView, 10);
-      }
+      if (extraView) post.views_count += parseInt(extraView, 10);
     });
   }
 
@@ -116,7 +124,7 @@ export const getPosts = asyncHandler(async (req: Request, res: Response) => {
     },
   };
 
-  // 5. Set cache ngắn để đảm bảo số view luôn mới
+  // 5. Set cache (Giữ nguyên logic của bạn)
   await setCache(cacheKey, response, isAdmin ? 10 : 30);
 
   res.json(response);
@@ -281,13 +289,18 @@ export const updatePost = asyncHandler(
 
     // 2. Chuẩn bị các trường cập nhật
     const updateFields: any = {};
+    if (topicId) {
+      updateFields.topicId = topicId;
+    }
+
     if (title) {
       updateFields.title = title;
       updateFields.slug = await generateUniqueSlugForPost(title);
     }
+
     if (content) updateFields.content = content;
     if (isAdmin && status) updateFields.status = status;
-    // THÊM DÒNG NÀY:
+
     if (typeof req.body.is_resolved !== "undefined") {
       updateFields.is_resolved = req.body.is_resolved;
     }
@@ -456,6 +469,8 @@ export const deletePost = asyncHandler(
       is_deleted: true,
       slug: `${post.slug}-deleted-${Date.now()}`,
     });
+
+    await clearPostsCache();
     const result = { message: "Post moved to trash." };
     if (requestId)
       await saveIdempotencyResult(requestId, 200, JSON.stringify(result));

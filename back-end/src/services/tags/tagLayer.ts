@@ -68,10 +68,12 @@ export const processTags = async (
     $or: [
       { _id: { $in: tagIdsFromInput } },
       { slug: { $in: tagSlugsFromInput } },
+      { name: { $in: uniqueTags } },
     ],
   }).select("_id name status slug");
 
   const existingSlugSet = new Set(existingTags.map((t) => t.slug));
+  const existingNameSet = new Set(existingTags.map((t) => t.name));
 
   // 3. Xử lý Tags đã tồn tại và xác định Tags cần tạo mới
   const tagsToCreate: Partial<ITag>[] = [];
@@ -124,7 +126,11 @@ export const processTags = async (
         // Giai đoạn 1: Tag Pending/Rejected Global -> pending_tags
         pendingTagIds.push(tagObjectId);
       }
-    } else if (!isObjectId && !existingSlugSet.has(itemSlug)) {
+    } else if (
+      !isObjectId &&
+      !existingSlugSet.has(itemSlug) &&
+      !existingNameSet.has(trimmedItem)
+    ) {
       // Chỉ tạo mới nếu là TÊN và CHƯA tồn tại trong DB
       tagsToCreate.push({
         name: trimmedItem,
@@ -134,6 +140,7 @@ export const processTags = async (
         topicId: topicId, // Tag mới được gán Topic ID của Post này (để Admin dễ duyệt)
       } as any);
       existingSlugSet.add(itemSlug); // Khóa slug tạm thời cho bulk insert
+      existingNameSet.add(trimmedItem);
     }
   }
 

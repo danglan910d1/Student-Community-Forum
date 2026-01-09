@@ -24,7 +24,13 @@ import { AppError } from "../utils/appError";
 export const getTagsList = asyncHandler(
   async (req: Request | AuthenticatedRequest, res: Response) => {
     const query = req.query as GetTagsQuery;
-    const isAdmin = "userRole" in req ? req.userRole === "admin" : false;
+    // 1. Xác định quyền dựa trên token (nếu có)
+    const actualRole = (req as any).userRole;
+
+    // 2. Ý định của người dùng (Chỉ Admin mới có quyền bật view này)
+    const isAdmin =
+      actualRole === "admin" &&
+      (query.adminView === "true" || query.adminView === true);
     const userId = "userId" in req ? (req as any).userId : undefined;
 
     // 1. Xây dựng bộ lọc và ống dẫn (isAdminView quyết định việc hiện các trường ẩn)

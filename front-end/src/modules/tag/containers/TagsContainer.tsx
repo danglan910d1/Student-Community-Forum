@@ -15,7 +15,9 @@ import { EmptyState } from "@/components/shared/EmtyState";
 import { CardLayout } from "@/components/layout/CardLayout";
 
 export default function TagsPageContainer() {
-  const { data, systemTags, isLoading, isError } = useTagsExplorer();
+  const { data, systemTags, isLoading, isError } = useTagsExplorer({
+    adminView: false,
+  });
   const [searchTerm, setSearchTerm] = React.useState("");
   const { toast } = useToast();
 

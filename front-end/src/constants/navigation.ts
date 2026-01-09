@@ -10,7 +10,7 @@ export const QUICK_NAV_ITEMS = [
   },
   {
     label: "Chủ đề",
-    href: "/tags", // Trang tags
+    href: "/topics", // Trang tags
     icon: Hash,
     iconBg: "bg-orange-100",
     iconColor: "text-orange-600",

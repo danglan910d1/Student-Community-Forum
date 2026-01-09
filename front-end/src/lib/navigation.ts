@@ -10,7 +10,7 @@ export const determineActiveLabel = (
     return "Bài viết";
   }
 
-  if (pathname.startsWith("/tags")) {
+  if (pathname.startsWith("/topics")) {
     return "Chủ đề"; // Phải khớp với label trong QUICK_NAV_ITEMS
   }
 
