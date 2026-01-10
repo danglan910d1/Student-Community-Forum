@@ -62,37 +62,31 @@ export const buildPostAggregationPipeline = (
   }
 
   // 3. Lookup Tags (Gộp cả Approved và Pending)
+  // ... các phần Lookup User và Topic giữ nguyên ...
+
+  // 3. Lookup Tags
   if (includeTags) {
-    pipeline.push({
-      $lookup: {
-        from: "tags",
-        let: {
-          tIds: { $ifNull: ["$tags", []] },
-          pIds: { $ifNull: ["$pending_tags", []] },
+    pipeline.push(
+      {
+        $lookup: {
+          from: "tags",
+          localField: "tags",
+          foreignField: "_id",
+          as: "approvedTagsFetched",
         },
-        pipeline: [
-          {
-            $match: {
-              $expr: {
-                $and: [
-                  {
-                    $or: [
-                      { $in: ["$_id", "$$tIds"] },
-                      { $in: ["$_id", "$$pIds"] },
-                    ],
-                  },
-                  { $ne: ["$is_deleted", true] },
-                ],
-              },
-            },
-          },
-        ],
-        as: "allTagsFetched",
       },
-    });
+      {
+        $lookup: {
+          from: "tags",
+          localField: "pending_tags",
+          foreignField: "_id",
+          as: "pendingTagsFetched",
+        },
+      }
+    );
   }
 
-  // 4. Projection - Giai đoạn xử lý dữ liệu cuối cùng
+  // 4. Projection
   if (includeProjection) {
     pipeline.push({
       $project: {
@@ -108,9 +102,8 @@ export const buildPostAggregationPipeline = (
         is_resolved: 1,
         createdAt: 1,
         updatedAt: 1,
-        status: { $cond: [isAdminView, "$status", "$status"] },
+        status: 1,
 
-        // User Mapping
         user: includeUser
           ? {
               userId: "$userData._id",
@@ -121,7 +114,6 @@ export const buildPostAggregationPipeline = (
             }
           : "$userId",
 
-        // Topic Mapping
         topic: includeTopic
           ? {
               $let: {
@@ -137,48 +129,53 @@ export const buildPostAggregationPipeline = (
             }
           : "$topicId",
 
-        // Tags Approved Mapping
+        // FIX: Chỉ hiện các tag đã được phê duyệt cho người dùng cuối
         tags: includeTags
           ? {
-              $filter: {
+              $map: {
                 input: {
-                  $map: {
-                    input: "$allTagsFetched",
-                    as: "tag",
-                    in: {
-                      tagId: "$$tag._id",
-                      name: "$$tag.name",
-                      slug: "$$tag.slug",
-                      status: "$$tag.status",
-                    },
+                  $filter: {
+                    input: "$approvedTagsFetched",
+                    as: "t",
+                    cond: { $ne: ["$$t.is_deleted", true] },
                   },
                 },
-                as: "fTag",
-                cond: { $eq: ["$$fTag.status", "approved"] },
+                as: "tag",
+                in: {
+                  tagId: "$$tag._id",
+                  name: "$$tag.name",
+                  slug: "$$tag.slug",
+                  status: "$$tag.status",
+                },
               },
             }
           : "$tags",
 
-        // Pending Tags Mapping (Chỉ Admin mới thấy)
+        // FIX: Chỉ Admin hoặc Logic tác giả mới thấy tags đang chờ duyệt
         pending_tags: includeTags
           ? {
-              $filter: {
-                input: {
+              $cond: [
+                isAdminView,
+                {
                   $map: {
-                    input: "$allTagsFetched",
-                    as: "tag",
+                    input: {
+                      $filter: {
+                        input: "$pendingTagsFetched",
+                        as: "pt",
+                        cond: { $ne: ["$$pt.is_deleted", true] },
+                      },
+                    },
+                    as: "pTag",
                     in: {
-                      tagId: "$$tag._id",
-                      name: "$$tag.name",
-                      slug: "$$tag.slug",
-                      status: "$$tag.status",
+                      tagId: "$$pTag._id",
+                      name: "$$pTag.name",
+                      slug: "$$pTag.slug",
+                      status: "$$pTag.status",
                     },
                   },
                 },
-                as: "pTag",
-                // Lọc những tag có status KHÁC approved (tức là pending hoặc rejected)
-                cond: { $ne: ["$$pTag.status", "approved"] },
-              },
+                "$$REMOVE",
+              ],
             }
           : "$pending_tags",
       },

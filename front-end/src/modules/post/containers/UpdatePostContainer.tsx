@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useParams } from "next/navigation"; // 1. Lấy params từ URL
 import { FormProvider, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTopicStore } from "@/stores/useTopicStore";
 import { useUpdatePost } from "@/modules/post/hooks/useUpdatePost";
-import { useTags } from "@/modules/tag/hooks/useTag";
+import { useTagsData } from "@/modules/tag/hooks/useTagsData";
 import { usePostDetail } from "@/modules/post/hooks/usePostDetail";
 import { createPostSchema, CreatePostInput } from "../schemas/postSchema";
 import { transformPostData } from "../utils/postTransform";
@@ -23,7 +23,15 @@ export function UpdatePostContainer() {
 
   const { topics } = useTopicStore();
   const { mutate: updatePost, isPending } = useUpdatePost(postId);
-  const { data: post, isLoading } = usePostDetail(postId);
+  const { data: post, isLoading: isLoadingPost } = usePostDetail(postId);
+  console.log(post);
+  const {
+    getTagsByTopicId,
+    systemTags,
+    isLoading: isLoadingTags,
+  } = useTagsData({
+    adminView: false,
+  });
 
   const methods = useForm<CreatePostInput>({
     resolver: zodResolver(createPostSchema),
@@ -36,27 +44,30 @@ export function UpdatePostContainer() {
     mode: "onChange",
   });
 
-  // 2. Xử lý logic Reset với Type-safe
+  const selectedTopicId = methods.watch("topicId");
+
+  const topicTags = useMemo(() => {
+    return getTagsByTopicId(selectedTopicId);
+  }, [selectedTopicId, getTagsByTopicId]);
+
   useEffect(() => {
-    if (post) {
+    if (post && !isLoadingTags) {
       methods.reset({
         title: post.title,
         content: post.content,
         topicId: post.topic?.topicId || "",
-        // Truyền nguyên mảng Object tags từ post vào
         tags: post.tags || [],
       });
     }
-  }, [post, methods]);
+  }, [post, isLoadingTags, methods]);
 
-  const selectedTopicId = methods.watch("topicId");
-  const { topicTags, systemTags } = useTags(selectedTopicId);
+  console.log(post);
 
   const handleFormSubmit = (data: CreatePostInput) => {
     updatePost(transformPostData(data));
   };
 
-  if (isLoading) {
+  if (isLoadingPost || (isLoadingTags && !post)) {
     return (
       <div className="p-10 text-center animate-pulse">Đang tải dữ liệu...</div>
     );

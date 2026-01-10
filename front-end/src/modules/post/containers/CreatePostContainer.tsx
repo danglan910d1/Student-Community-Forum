@@ -4,7 +4,7 @@ import { FormProvider, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTopicStore } from "@/stores/useTopicStore";
 import { useCreatePost } from "@/modules/post/hooks/useCreatePost";
-import { useTags } from "@/modules/tag/hooks/useTag";
+import { useTagsData } from "@/modules/tag/hooks/useTagsData";
 import { createPostSchema, CreatePostInput } from "../schemas/postSchema";
 import { transformPostData } from "../utils/postTransform";
 import { CardLayout } from "@/components/layout/CardLayout";
@@ -14,6 +14,7 @@ import { Separator } from "@/components/ui/separator";
 import { PostFormHeader } from "../components/PostForm/PostFormHeader";
 import { PostFormContent } from "../components/PostForm/PostFormContent";
 import { PostFormActions } from "../components/PostForm/PostFormAction";
+import { useMemo } from "react";
 
 export function CreatePostContainer() {
   const { topics } = useTopicStore();
@@ -33,11 +34,16 @@ export function CreatePostContainer() {
 
   const selectedTopicId = methods.watch("topicId");
 
-  // Lấy tags dựa trên topic đã chọn
-  const { topicTags, systemTags } = useTags(selectedTopicId);
+  const { getTagsByTopicId, systemTags } = useTagsData({
+    adminView: false,
+  });
+
+  // 2. Lấy tags dựa trên topic đã chọn từ dữ liệu có sẵn trong cache
+  const topicTags = useMemo(() => {
+    return getTagsByTopicId(selectedTopicId);
+  }, [selectedTopicId, getTagsByTopicId]);
 
   const handleFormSubmit = (data: CreatePostInput) => {
-    // Gọi API create
     createPost(transformPostData(data));
   };
 
