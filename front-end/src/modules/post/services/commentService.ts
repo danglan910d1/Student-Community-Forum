@@ -8,10 +8,11 @@ export const commentService = {
   getComments: async (
     postId: string,
     page = 1,
-    limit = 10
+    limit = 10,
+    parentId: string | null = null // Thêm cái này
   ): Promise<ICommentResponse> => {
     const { data } = await api.get<ICommentResponse>("/comments", {
-      params: { postId, page, limit },
+      params: { postId, page, limit, parentId }, // Gửi lên server
     });
     return data;
   },
@@ -23,6 +24,14 @@ export const commentService = {
     parentId?: string | null;
   }) => {
     const { data } = await api.post<IComment>("/comments", payload);
+    return data;
+  },
+
+  updateComment: async (commentId: string, content: string) => {
+    // API: PUT /api/comments/:commentId
+    const { data } = await api.put<IComment>(`/comments/${commentId}`, {
+      content,
+    });
     return data;
   },
 

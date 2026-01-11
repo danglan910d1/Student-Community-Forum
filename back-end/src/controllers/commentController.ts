@@ -118,7 +118,10 @@ export const getAllCommentsForAdmin = asyncHandler(
 
 // --- [ 2. WRITE OPERATIONS ] ---
 
-/** * POST /api/comments (User) */
+/**
+ * POST /api/comments (User)
+ * Cập nhật: Đảm bảo dữ liệu trả về là dữ liệu mới nhất thông qua Lean và Aggregate chuẩn.
+ */
 export const createComment = asyncHandler(
   async (
     req: AuthenticatedRequest<{}, {}, CreateCommentBody>,
@@ -129,65 +132,72 @@ export const createComment = asyncHandler(
       throw new AppError(400, "Post ID and content are required.");
 
     const userId = req.userId!;
-    // 1. Lưu DB
-    const newComment = await Comment.create({
+
+    // 1. Lưu DB - Sử dụng lean() hoặc save() để đảm bảo object được tạo
+    const newCommentDoc = new Comment({
       userId: new Types.ObjectId(userId),
       postId: new Types.ObjectId(postId),
       parentId: parentId ? new Types.ObjectId(parentId) : null,
       content: content.trim(),
       status: "approved",
     });
+    await newCommentDoc.save();
 
-    // 2. Tìm thông tin bài viết để xác định chủ sở hữu (Recipient)
-    // Lấy kèm userId của chủ bài viết
-    const post = await Post.findById(postId).select("userId title");
-    if (!post) throw new AppError(404, "Post not found.");
-
-    // Mặc định thông báo gửi cho chủ bài viết
-    let recipientId = post.userId;
-    let type = NotificationType.NEW_COMMENT;
-    let notificationContent = "đã bình luận về bài viết của bạn.";
-
-    // 3. Xử lý logic nếu là phản hồi (Reply)
     if (parentId) {
-      const parentComment = await Comment.findById(parentId).select("userId");
-      if (parentComment) {
-        // Nếu là reply, người nhận thông báo là chủ của bình luận cha
-        recipientId = parentComment.userId;
-        type = NotificationType.NEW_REPLY;
-        notificationContent = "đã trả lời bình luận của bạn.";
-      }
+      await Comment.findByIdAndUpdate(parentId, {
+        $inc: { replies_count: 1 },
+      });
+    } else {
+      await Post.findByIdAndUpdate(postId, {
+        $inc: { comments_count: 1 },
+      });
     }
 
-    // 4. GỬI THÔNG BÁO
-    // Hàm createNotification đã có logic chặn tự gửi cho chính mình (recipientId === senderId)
-    await createNotification({
-      recipientId: recipientId as Types.ObjectId, // Ép kiểu để tránh báo đỏ
-      senderId: userId,
-      type,
-      entityId: post._id as Types.ObjectId, // Click vào thông báo dẫn về bài viết
-      entityType: "post",
-      content: notificationContent,
-    });
-
-    // 2. Chạy Job tăng count ngầm
-    parentId
-      ? addCountJob("Comment", parentId.toString(), 1)
-      : addCountJob("Post", postId, 1);
-
-    // 3. Trả về format chuẩn qua Pipeline
+    // 3. XỬ LÝ LẤY DỮ LIỆU MỚI NHẤT
+    // Dùng aggregate với chính ID vừa tạo để trả về đúng format pipeline FE yêu cầu
     const commentArray = await Comment.aggregate(
       buildCommentAggregationPipeline(
-        { _id: newComment._id },
+        { _id: newCommentDoc._id },
         { includeUser: true, includeProjection: true }
       )
     );
+
+    if (!commentArray || commentArray.length === 0) {
+      throw new AppError(500, "Lỗi khi truy xuất bình luận vừa tạo.");
+    }
+
+    // 4. Gửi thông báo (Giữ nguyên logic của bạn)
+    const post = await Post.findById(postId).select("userId");
+    if (post) {
+      let recipientId = post.userId;
+      let type = NotificationType.NEW_COMMENT;
+      if (parentId) {
+        const parentComment = await Comment.findById(parentId).select("userId");
+        if (parentComment) {
+          recipientId = parentComment.userId;
+          type = NotificationType.NEW_REPLY;
+        }
+      }
+      await createNotification({
+        recipientId: recipientId as Types.ObjectId,
+        senderId: userId,
+        type,
+        entityId: post._id as Types.ObjectId,
+        entityType: "post",
+        content: parentId
+          ? "đã trả lời bình luận của bạn."
+          : "đã bình luận về bài viết của bạn.",
+      });
+    }
 
     res.status(201).json(commentArray[0]);
   }
 );
 
-/** * PUT /api/comments/:commentId (Author/Admin) */
+/**
+ * PUT /api/comments/:commentId (Author/Admin)
+ * Cập nhật: Thêm logic cập nhật nội dung và trả về dữ liệu chuẩn Pipeline.
+ */
 export const updateComment = asyncHandler(
   async (
     req: AuthenticatedRequest<CommentParams, {}, { content: string }>,
@@ -196,27 +206,32 @@ export const updateComment = asyncHandler(
     const { commentId } = req.params;
     const { content } = req.body;
 
+    if (!content?.trim())
+      throw new AppError(400, "Nội dung không được để trống.");
+
     const comment = await Comment.findById(commentId);
     if (!comment || comment.is_deleted)
-      throw new AppError(404, "Comment not found.");
+      throw new AppError(404, "Không tìm thấy bình luận.");
 
-    // RBAC: Chỉ tác giả hoặc Admin mới được sửa
+    // Kiểm tra quyền sở hữu
     if (comment.userId.toString() !== req.userId && req.userRole !== "admin") {
-      throw new AppError(403, "Permission denied.");
+      throw new AppError(403, "Bạn không có quyền sửa bình luận này.");
     }
 
-    const updatedComment = await Comment.findOneAndUpdate(
+    // Thực hiện Update
+    await Comment.updateOne(
       { _id: commentId },
-      { $set: { content: content.trim(), status: "approved" } },
-      { new: true }
+      { $set: { content: content.trim(), updatedAt: new Date() } }
     );
 
+    // Lấy lại dữ liệu sau khi update thông qua Pipeline để đồng bộ Format với GET
     const commentArray = await Comment.aggregate(
       buildCommentAggregationPipeline(
-        { _id: updatedComment!._id },
+        { _id: new Types.ObjectId(commentId) },
         { includeUser: true, includeProjection: true }
       )
     );
+
     res.json(commentArray[0]);
   }
 );
@@ -239,9 +254,17 @@ export const deleteComment = asyncHandler(
     await Comment.updateOne({ _id: commentId }, { $set: { is_deleted: true } });
 
     // Giảm count ngầm
-    comment.parentId
-      ? addCountJob("Comment", comment.parentId.toString(), -1)
-      : addCountJob("Post", comment.postId.toString(), -1);
+    if (comment.parentId) {
+      // Cập nhật trực tiếp cho Comment cha thay vì dùng Job
+      await Comment.findByIdAndUpdate(comment.parentId, {
+        $inc: { replies_count: -1 },
+      });
+    } else {
+      // Cập nhật trực tiếp cho Post
+      await Post.findByIdAndUpdate(comment.postId, {
+        $inc: { comments_count: -1 },
+      });
+    }
 
     res.json({ message: "Comment deleted successfully." });
   }

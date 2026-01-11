@@ -43,32 +43,32 @@ export const buildCommentAggregationPipeline = (
   }
 
   // 2. $lookup REPLIES (Lấy các comment con lồng vào bên trong)
-  pipeline.push({
-    $lookup: {
-      from: "comments",
-      let: { parent_id: "$_id" },
-      pipeline: [
-        {
-          $match: {
-            $expr: { $eq: ["$parentId", "$$parent_id"] },
-            is_deleted: { $ne: true }, // Chỉ lấy reply chưa xóa (trừ khi là admin)
-          },
-        },
-        // Lookup User cho từng reply con
-        {
-          $lookup: {
-            from: "users",
-            localField: "userId",
-            foreignField: "_id",
-            as: "replyUser",
-          },
-        },
-        { $unwind: { path: "$replyUser", preserveNullAndEmptyArrays: true } },
-        { $sort: { createdAt: 1 } }, // Phản hồi cũ hiện trước
-      ],
-      as: "repliesData",
-    },
-  });
+  // pipeline.push({
+  //   $lookup: {
+  //     from: "comments",
+  //     let: { parent_id: "$_id" },
+  //     pipeline: [
+  //       {
+  //         $match: {
+  //           $expr: { $eq: ["$parentId", "$$parent_id"] },
+  //           is_deleted: { $ne: true }, // Chỉ lấy reply chưa xóa (trừ khi là admin)
+  //         },
+  //       },
+  //       // Lookup User cho từng reply con
+  //       {
+  //         $lookup: {
+  //           from: "users",
+  //           localField: "userId",
+  //           foreignField: "_id",
+  //           as: "replyUser",
+  //         },
+  //       },
+  //       { $unwind: { path: "$replyUser", preserveNullAndEmptyArrays: true } },
+  //       { $sort: { createdAt: 1 } }, // Phản hồi cũ hiện trước
+  //     ],
+  //     as: "repliesData",
+  //   },
+  // });
 
   // 3. $lookup Post & Parent (Giữ nguyên logic cũ của bạn)
   if (includePost) {
@@ -130,23 +130,23 @@ export const buildCommentAggregationPipeline = (
           : "$userId",
 
         // Map lại mảng replies lồng bên trong
-        replies: {
-          $map: {
-            input: "$repliesData",
-            as: "r",
-            in: {
-              commentId: "$$r._id",
-              content: "$$r.content",
-              createdAt: "$$r.createdAt",
-              likes_count: "$$r.likes_count",
-              user: {
-                userId: "$$r.replyUser._id",
-                name: "$$r.replyUser.name",
-                avatar: "$$r.replyUser.avatar",
-              },
-            },
-          },
-        },
+        // replies: {
+        //   $map: {
+        //     input: "$repliesData",
+        //     as: "r",
+        //     in: {
+        //       commentId: "$$r._id",
+        //       content: "$$r.content",
+        //       createdAt: "$$r.createdAt",
+        //       likes_count: "$$r.likes_count",
+        //       user: {
+        //         userId: "$$r.replyUser._id",
+        //         name: "$$r.replyUser.name",
+        //         avatar: "$$r.replyUser.avatar",
+        //       },
+        //     },
+        //   },
+        // },
 
         postId: includePost ? { $arrayElemAt: ["$post", 0] } : "$postId",
       },

@@ -10,18 +10,23 @@ import { useLike } from "../../hooks/useLike";
 import { IComment } from "../../types";
 import { useDeleteComment } from "../../hooks/useDeleteComment";
 import { useAuthStore } from "@/stores/useAuthStore";
-import { Trash2 } from "lucide-react";
-import { Button } from "@base-ui/react";
+import { MessageSquareReply, Pencil, Trash2 } from "lucide-react";
 import { LoginGuard } from "@/components/shared/LoginGuarđialog";
+import { Button } from "@/components/ui/button";
+import { ReplyList } from "./ReplyList";
 
 export function CommentItem({
   comment,
   onReply,
+  onUpdate,
 }: {
   comment: IComment;
   onReply: (content: string, parentId: string) => Promise<unknown>;
+  onUpdate: (content: string, commentId: string) => Promise<unknown>; // Định nghĩa type
 }) {
   const [isReplying, setIsReplying] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [showReplies, setShowReplies] = useState(false);
   const { user } = useAuthStore();
   const deleteMutation = useDeleteComment();
 
@@ -52,18 +57,48 @@ export function CommentItem({
             <p className="text-sm font-bold mb-1 text-foreground">
               {comment.user.name}
             </p>
-            <div className="text-sm leading-relaxed whitespace-pre-wrap">
-              {comment.content}
-            </div>
 
-            {isOwner && (
-              <Button
-                onClick={handleDelete}
-                disabled={deleteMutation.isPending}
-                className="absolute top-2 right-2 p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </Button>
+            {isEditing ? (
+              <div className="mt-2 space-y-2">
+                <CommentInput
+                  initialValue={comment.content}
+                  autoFocus
+                  onSubmit={async (val) => {
+                    await onUpdate(val, comment.commentId);
+                    setIsEditing(false);
+                  }}
+                  onCancel={() => setIsEditing(false)}
+                />
+              </div>
+            ) : (
+              <div className="text-sm leading-relaxed whitespace-pre-wrap">
+                {comment.content}
+              </div>
+            )}
+
+            {isOwner && !isEditing && (
+              <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                {/* Nút Chỉnh sửa */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setIsEditing(true)}
+                  className="h-7 w-7 text-muted-foreground hover:text-primary"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                </Button>
+
+                {/* Nút Xóa */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleDelete}
+                  disabled={deleteMutation.isPending}
+                  className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </Button>
+              </div>
             )}
           </div>
 
@@ -96,6 +131,7 @@ export function CommentItem({
               className="flex items-center"
             >
               <Button
+                variant={"ghost"}
                 onClick={() => setIsReplying(!isReplying)}
                 className="h-full text-xs font-bold text-muted-foreground hover:text-primary transition-colors"
               >
@@ -106,6 +142,7 @@ export function CommentItem({
 
             {isOwner && (
               <Button
+                variant={"ghost"}
                 onClick={handleDelete}
                 className="text-xs font-bold text-muted-foreground hover:text-destructive transition-colors"
               >
@@ -122,20 +159,33 @@ export function CommentItem({
                 onSubmit={async (val) => {
                   await onReply(val, comment.commentId);
                   setIsReplying(false);
+                  setShowReplies(true);
                 }}
+                onCancel={() => setIsReplying(false)}
               />
             </div>
           )}
 
-          {comment.replies && comment.replies.length > 0 && (
+          {comment.replies_count > 0 && !showReplies && (
+            <Button
+              variant="ghost"
+              className="mt-2 ml-1 flex items-center gap-2 text-[12px] font-bold text-primary hover:bg-transparent p-0 h-auto"
+              onClick={() => setShowReplies(true)}
+            >
+              <MessageSquareReply className="w-3.5 h-3.5" />
+              Xem {comment.replies_count} phản hồi
+            </Button>
+          )}
+
+          {/* Danh sách phản hồi con (Đệ quy) */}
+          {showReplies && (
             <div className="mt-4 space-y-5 ml-2 border-l-2 border-muted/50 pl-4">
-              {comment.replies.map((reply) => (
-                <CommentItem
-                  key={reply.commentId}
-                  comment={reply}
-                  onReply={onReply}
-                />
-              ))}
+              <ReplyList
+                onUpdate={onUpdate}
+                postId={comment.postId}
+                parentId={comment.commentId}
+                onReply={onReply}
+              />
             </div>
           )}
         </div>

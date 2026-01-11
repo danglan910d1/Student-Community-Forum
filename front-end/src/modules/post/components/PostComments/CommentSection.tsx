@@ -8,6 +8,7 @@ interface CommentSectionProps {
   comments: IComment[];
   total: number;
   onAddComment: (content: string, parentId?: string | null) => Promise<unknown>;
+  onUpdateComment: (content: string, commentId: string) => Promise<unknown>; // Định nghĩa type
   hasNextPage: boolean;
   onLoadMore: () => void;
   isFetchingNextPage: boolean;
@@ -20,6 +21,7 @@ export function CommentSection({
   hasNextPage,
   onLoadMore,
   isFetchingNextPage,
+  onUpdateComment,
 }: CommentSectionProps) {
   return (
     <div className="space-y-8">
@@ -39,6 +41,7 @@ export function CommentSection({
       <div className="space-y-6 pt-2">
         {comments.map((comment) => (
           <CommentItem
+            onUpdate={onUpdateComment}
             key={comment.commentId}
             comment={comment}
             onReply={(val, pId) => onAddComment(val, pId)}

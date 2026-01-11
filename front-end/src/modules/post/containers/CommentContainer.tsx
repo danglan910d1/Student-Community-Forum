@@ -14,10 +14,12 @@ export function PostCommentsContainer({ postId }: { postId: string }) {
     fetchNextPage,
     isFetchingNextPage,
     createComment,
+    updateComment,
   } = useComments(postId);
 
   // Trạng thái load lần đầu tiên
   if (isLoading) return <CommentLoadingSkeleton />;
+  console.log(comments);
 
   return (
     <div className="animate-in fade-in duration-500">
@@ -26,6 +28,9 @@ export function PostCommentsContainer({ postId }: { postId: string }) {
         total={totalItems}
         onAddComment={(content, parentId) =>
           createComment(content, parentId ?? null)
+        }
+        onUpdateComment={(content, commentId) =>
+          updateComment(commentId, content)
         }
         hasNextPage={!!hasNextPage}
         onLoadMore={fetchNextPage}
