@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -27,6 +28,7 @@ export function SearchBar({ className }: { className?: string }) {
   const [query, setQuery] = React.useState("");
   const router = useRouter();
 
+  // Hook này đã được fix types ở bước trước
   const { results, isLoading, mode } = useGlobalSearch(query);
 
   const navigate = (url: string) => {
@@ -34,100 +36,123 @@ export function SearchBar({ className }: { className?: string }) {
     setQuery("");
     router.push(url);
   };
+  console.log(results);
 
   return (
     <>
-      {/* Trigger – 100% width, không icon dư */}
+      {/* Trigger */}
       <div className={className} onClick={() => setOpen(true)}>
         <Input
           readOnly
-          placeholder="Tìm kiếm..."
-          className="w-full cursor-pointer"
+          placeholder="Tìm kiếm bài viết, [thẻ], chủ đề..."
+          className="w-full cursor-pointer bg-muted/50 hover:bg-muted transition-colors"
         />
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="p-0 max-w-2xl">
+        <DialogContent className="p-0 max-w-2xl overflow-hidden">
           <DialogHeader>
             <VisuallyHidden>
-              <DialogTitle>Tìm kiếm</DialogTitle>
+              <DialogTitle>Tìm kiếm hệ thống</DialogTitle>
+              {/* Thêm dòng này để fix lỗi aria-describedby */}
+              <DialogDescription>
+                Tìm kiếm bài viết theo từ khóa, thẻ, chủ đề hoặc tác giả.
+              </DialogDescription>
             </VisuallyHidden>
           </DialogHeader>
 
-          <Command shouldFilter={false} className="p-3 mt-2">
-            {/* Input search */}
+          <Command
+            shouldFilter={false}
+            className="rounded-none border-none mt-5 px-3"
+          >
             <CommandInput
               value={query}
               onValueChange={setQuery}
-              placeholder="Tìm bài viết, [tag], user:id, topic:name"
+              placeholder="Gõ để tìm kiếm hoặc [tag], topic:slug..."
+              className="h-12"
             />
 
-            <CommandList>
-              {/* Khi chưa nhập gì → hướng dẫn */}
+            <CommandList className="max-h-[450px] border-t mt-2">
               {query.length === 0 && <SearchHelp />}
 
-              {/* Loading state KHÔNG làm mất layout */}
+              {/* 2. Tiếp theo là Loading - Luôn hiện Loader ngay khi đang fetch hoặc đang chờ debounce */}
               {isLoading && (
-                <div className="flex justify-center py-6">
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                <div className="flex items-center justify-center py-10">
+                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
                 </div>
               )}
 
+              {/* 3. Logic "Không tìm thấy" - Chỉ hiện khi KHÔNG load, CÓ query và KHÔNG có data */}
               {!isLoading &&
+                query.trim().length > 0 &&
                 results.posts.length === 0 &&
                 results.tags.length === 0 &&
-                results.topics.length === 0 &&
-                query.length > 0 && (
-                  <CommandEmpty>Không tìm thấy kết quả</CommandEmpty>
+                results.topics.length === 0 && (
+                  <CommandEmpty className="py-10 text-center text-muted-foreground">
+                    Không tìm thấy kết quả cho &quot;{query}&quot;
+                  </CommandEmpty>
                 )}
 
-              {!mode.isUserSearch &&
-                !mode.isTopicSearch &&
-                results.posts.length > 0 && (
-                  <CommandGroup heading="Bài viết">
-                    {results.posts.map((p) => (
-                      <CommandItem
-                        key={p.postId}
-                        onSelect={() =>
-                          navigate(`/posts/${p.postId}/${p.slug}`)
-                        }
-                      >
-                        <FileText className="mr-2 h-4 w-4" />
-                        {p.title}
-                      </CommandItem>
-                    ))}
-                  </CommandGroup>
-                )}
-
-              {!mode.isUserSearch && results.tags.length > 0 && (
-                <CommandGroup heading="Thẻ">
-                  {results.tags.map((t) => (
+              {/* 4. Nhóm kết quả: Bài viết */}
+              {!isLoading && results.posts.length > 0 && (
+                <CommandGroup
+                  heading={mode.isTag ? "Bài viết gắn thẻ này" : "Bài viết"}
+                >
+                  {results.posts.map((post) => (
                     <CommandItem
-                      key={t.tagId}
-                      onSelect={() => navigate(`/posts?tag=${t.slug}`)}
+                      key={post.postId}
+                      onSelect={() =>
+                        navigate(`/posts/${post.postId}/${post.slug}`)
+                      }
+                      className="cursor-pointer py-3"
                     >
-                      <Tag className="mr-2 h-4 w-4" />
-                      {t.name}
+                      <FileText className="mr-2 h-4 w-4 text-muted-foreground" />
+                      <div className="flex flex-col">
+                        <span className="font-medium line-clamp-1">
+                          {post.title}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          bởi {post.user?.name} • {post.views_count} lượt xem
+                        </span>
+                      </div>
                     </CommandItem>
                   ))}
                 </CommandGroup>
               )}
 
-              {!mode.isTagSearch &&
-                !mode.isUserSearch &&
-                results.topics.length > 0 && (
-                  <CommandGroup heading="Chủ đề">
-                    {results.topics.map((tp) => (
-                      <CommandItem
-                        key={tp.topicId}
-                        onSelect={() => navigate(`/posts?topics=${tp.slug}`)}
-                      >
-                        <Hash className="mr-2 h-4 w-4" />
-                        {tp.name}
-                      </CommandItem>
-                    ))}
-                  </CommandGroup>
-                )}
+              {/* 5. Nhóm kết quả: Thẻ (Ẩn khi đang ở chế độ search tag cụ thể) */}
+              {!mode.isTag && results.tags.length > 0 && (
+                <CommandGroup heading="Thẻ liên quan">
+                  {results.tags.map((tag) => (
+                    <CommandItem
+                      key={tag.tagId}
+                      onSelect={() => navigate(`/posts?tagSlug=${tag.slug}`)}
+                      className="cursor-pointer"
+                    >
+                      <Tag className="mr-2 h-4 w-4 text-blue-500" />
+                      <span>{tag.name}</span>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              )}
+
+              {/* 6. Nhóm kết quả: Chủ đề */}
+              {!mode.isTopic && results.topics.length > 0 && (
+                <CommandGroup heading="Chủ đề">
+                  {results.topics.map((topic) => (
+                    <CommandItem
+                      key={topic.topicId}
+                      onSelect={() =>
+                        navigate(`/posts?topicSlug=${topic.slug}`)
+                      }
+                      className="cursor-pointer"
+                    >
+                      <Hash className="mr-2 h-4 w-4 text-orange-500" />
+                      <span>{topic.name}</span>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              )}
             </CommandList>
           </Command>
         </DialogContent>
@@ -138,12 +163,24 @@ export function SearchBar({ className }: { className?: string }) {
 
 function SearchHelp() {
   return (
-    <div className="p-4 text-sm">
-      <div className="grid grid-cols-[90px_1fr] gap-x-4 gap-y-2">
-        <Hint syntax="[tag]" text="Tìm trong thẻ" />
-        <Hint syntax='"keyword"' text="Cụm từ chính xác" />
-        <Hint syntax="user:id" text="Theo tác giả" />
-        <Hint syntax="topic:name" text="Theo chủ đề" />
+    <div className="p-4 text-sm border-b">
+      <p className="mb-3 font-medium text-muted-foreground">
+        Cú pháp tìm kiếm nâng cao:
+      </p>
+      <div className="grid grid-cols-[100px_1fr] gap-x-4 gap-y-3">
+        <Hint
+          syntax="[tag-slug]"
+          text="Tìm bài viết theo nhãn (vd: [reactjs])"
+        />
+        <Hint
+          syntax="topic:slug"
+          text="Lọc theo chuyên mục (vd: topic:javascript)"
+        />
+        <Hint syntax="user:name" text="Tìm bài viết của tác giả cụ thể" />
+        <Hint
+          syntax="từ khoá"
+          text="Tìm kiếm toàn văn theo tiêu đề và nội dung"
+        />
       </div>
     </div>
   );
@@ -152,8 +189,10 @@ function SearchHelp() {
 function Hint({ syntax, text }: { syntax: string; text: string }) {
   return (
     <>
-      <code className="bg-muted px-2 py-0.5 rounded text-xs">{syntax}</code>
-      <span className="text-muted-foreground">{text}</span>
+      <code className="bg-muted px-2 py-0.5 rounded text-xs font-mono text-primary flex items-center justify-center">
+        {syntax}
+      </code>
+      <span className="text-muted-foreground flex items-center">{text}</span>
     </>
   );
 }
