@@ -11,10 +11,19 @@ import { format } from "date-fns";
 import { vi } from "date-fns/locale";
 import { getInitials } from "@/utils/string";
 import { getAssetUrl } from "@/lib/utils";
+import { IUser } from "../../types";
 
-export function UserHeader() {
-  const { data: user, isLoading } = useMe();
+interface UserHeaderProps {
+  user?: IUser | null;
+  isLoading?: boolean;
+  isMine?: boolean; // Để ẩn/hiện nút Edit hoặc các chỉ số riêng tư
+}
 
+export function UserHeader({
+  user,
+  isLoading,
+  isMine = false,
+}: UserHeaderProps) {
   if (isLoading) return <UserHeaderSkeleton />;
   if (!user) return null;
 
@@ -65,7 +74,7 @@ export function UserHeader() {
           {/* STATS */}
           <div className="flex gap-6">
             <StatItem label="Bài viết" value={user.postCount?.published || 0} />
-            {(user.postCount?.pending ?? 0) > 0 && (
+            {isMine && (user.postCount?.pending ?? 0) > 0 && (
               <StatItem
                 label="Đang chờ"
                 value={user.postCount?.pending}

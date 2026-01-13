@@ -1,9 +1,13 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useParams } from "next/navigation";
+import { useAuthStore } from "@/stores/useAuthStore";
+
 import { useMe } from "../hooks/useMe";
+import { useUserDetail } from "../hooks/useUserDetail";
 import { useUpdateProfile } from "../hooks/useUpdateProfile";
 
 import { Loader2 } from "lucide-react";
@@ -11,20 +15,30 @@ import { ProfileFormValues, profileSchema } from "../schemas/profileSchema";
 import { ProfileSection } from "../components/Profile/ProfileSection";
 
 export function ProfileContainer() {
-  const { data: user, isLoading: isFetching } = useMe();
+  const params = useParams();
+  const targetId = params.id as string;
+  const { user: currentUser } = useAuthStore();
+
+  // Xác định xem đây là trang cá nhân hay trang người khác
+  const isMine = useMemo(() => {
+    return !targetId || targetId === currentUser?.userId;
+  }, [targetId, currentUser?.userId]);
+
+  // Fetch dữ liệu dựa trên ngữ cảnh
+  const { data: me, isLoading: isMeFetching } = useMe();
+  const { data: otherUser, isLoading: isOtherFetching } =
+    useUserDetail(targetId);
+
+  const user = isMine ? me : otherUser;
+  const isFetching = isMine ? isMeFetching : isOtherFetching;
+
   const { mutate: updateProfile, isPending: isUpdating } = useUpdateProfile();
 
-  // Khởi tạo form với type chuẩn
   const form = useForm<ProfileFormValues>({
     resolver: zodResolver(profileSchema),
-    defaultValues: {
-      name: "",
-      email: "",
-      avatar: "",
-    },
+    defaultValues: { name: "", email: "", avatar: "" },
   });
 
-  // Đồng bộ dữ liệu từ API vào Form khi user có dữ liệu
   useEffect(() => {
     if (user) {
       form.reset({
@@ -35,17 +49,12 @@ export function ProfileContainer() {
     }
   }, [user, form]);
 
-  const handleSubmit = (values: ProfileFormValues) => {
-    // values ở đây tự động mang kiểu ProfileFormValues, không cần as any
-    updateProfile({ data: values });
-  };
-
   if (isFetching) {
     return (
       <div className="flex flex-col justify-center items-center h-[400px] gap-4">
         <Loader2 className="h-10 w-10 animate-spin text-primary/50" />
         <p className="text-sm text-muted-foreground animate-pulse">
-          Đang tải thông tin cá nhân...
+          Đang tải hồ sơ...
         </p>
       </div>
     );
@@ -53,9 +62,10 @@ export function ProfileContainer() {
 
   return (
     <ProfileSection
-      form={form} // Truyền form đã có type ProfileFormValues
-      onSubmit={handleSubmit}
+      form={form}
+      onSubmit={(values) => updateProfile({ data: values })}
       isUpdating={isUpdating}
+      isMine={isMine} // Quan trọng: Truyền quyền sở hữu xuống
     />
   );
 }

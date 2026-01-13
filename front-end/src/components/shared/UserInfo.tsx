@@ -1,10 +1,11 @@
 "use client";
 
-import { LogOut, Settings, User } from "lucide-react";
+import { LogOut, User } from "lucide-react";
 import { CardLayout } from "@/components/layout/CardLayout";
 import { cn, getAssetUrl } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuthStore } from "@/stores/useAuthStore";
+import Link from "next/link";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,14 +15,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Settings } from "lucide-react";
 
 export const UserInfo = () => {
-  // 1. Lấy dữ liệu và hàm logout từ Zustand Store
   const user = useAuthStore((state) => state.user);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const logout = useAuthStore((state) => state.logout);
 
-  // 2. Logic tạo chữ cái đầu cho Avatar Fallback
   const initials =
     user?.name
       ?.split(" ")
@@ -30,7 +30,6 @@ export const UserInfo = () => {
       .toUpperCase()
       .slice(0, 2) || "U";
 
-  // Nếu chưa đăng nhập thì ẩn component
   if (!isAuthenticated || !user) return null;
 
   return (
@@ -84,14 +83,12 @@ export const UserInfo = () => {
             <DropdownMenuLabel>Tài khoản của tôi</DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem className="cursor-pointer">
-                <User className="mr-2 h-4 w-4" />
-                <span>Hồ sơ cá nhân</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem className="cursor-pointer">
-                <Settings className="mr-2 h-4 w-4" />
-                <span>Cài đặt hệ thống</span>
-              </DropdownMenuItem>
+              <Link href="/dashboard/profile">
+                <DropdownMenuItem className="cursor-pointer">
+                  <User className="mr-2 h-4 w-4" />
+                  <span>Hồ sơ cá nhân</span>
+                </DropdownMenuItem>
+              </Link>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuItem

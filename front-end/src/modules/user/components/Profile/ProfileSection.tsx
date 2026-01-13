@@ -13,43 +13,47 @@ interface ProfileSectionProps {
   form: UseFormReturn<ProfileFormValues>;
   onSubmit: (values: ProfileFormValues) => void;
   isUpdating: boolean;
+  isMine: boolean; // Thêm prop này
 }
 
 export function ProfileSection({
   form,
   onSubmit,
   isUpdating,
+  isMine,
 }: ProfileSectionProps) {
   return (
     <main className="animate-in fade-in duration-500">
       <Tabs defaultValue="profile" className="w-full">
         <CardLayout className="p-0 border-none shadow-sm overflow-hidden flex flex-col h-[650px]">
           <div className="px-6 pt-6 flex-none">
-            <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-              <div>
-                <h2 className="text-2xl font-bold uppercase tracking-tight">
-                  Thiết lập tài khoản
-                </h2>
-                <p className="text-sm text-muted-foreground">
-                  Quản lý định danh và bảo mật cá nhân.
-                </p>
-              </div>
+            <header className="mb-6">
+              <h2 className="text-2xl font-bold uppercase tracking-tight">
+                {isMine ? "Thiết lập tài khoản" : "Thông tin cá nhân"}
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                {isMine
+                  ? "Quản lý định danh và bảo mật."
+                  : "Thông tin công khai của thành viên."}
+              </p>
             </header>
 
-            <TabsList className="grid w-full grid-cols-2 mb-3">
-              {PROFILE_TABS.map((tab) => (
-                <TabsTrigger
-                  key={tab.value}
-                  value={tab.value}
-                  className="font-semibold transition-all cursor-pointer"
-                >
-                  {tab.label}
-                </TabsTrigger>
-              ))}
-            </TabsList>
+            {/* Chỉ hiển thị Tab điều hướng nếu là chính chủ */}
+            {isMine && (
+              <TabsList className="grid w-full grid-cols-2 mb-3">
+                {PROFILE_TABS.map((tab) => (
+                  <TabsTrigger
+                    key={tab.value}
+                    value={tab.value}
+                    className="font-semibold"
+                  >
+                    {tab.label}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            )}
           </div>
 
-          {/* 3. Phần nội dung này sẽ nhận hết diện tích còn lại và TỰ SCROLL */}
           <div className="flex-1 overflow-y-auto px-6">
             <TabsContent value="profile" className="mt-0 outline-none">
               <ProfileTabContent
@@ -57,20 +61,15 @@ export function ProfileSection({
                 onSubmit={onSubmit}
                 isUpdating={isUpdating}
                 fields={PROFILE_FIELDS}
+                isMine={isMine} // Truyền xuống tầng cuối
               />
             </TabsContent>
 
-            <TabsContent value="password" className="mt-0 outline-none">
-              <PasswordTabContent />
-            </TabsContent>
-
-            {/* Vùng đệm test height nằm bên trong vùng scroll */}
-            <div className="mt-10 p-4 border-2 border-dashed border-muted rounded-lg opacity-50">
-              <p className="text-xs text-center text-muted-foreground italic">
-                Nội dung dài sẽ scroll bên trong Card này
-              </p>
-              <div className="h-[500px]" />
-            </div>
+            {isMine && (
+              <TabsContent value="password" className="mt-0 outline-none">
+                <PasswordTabContent />
+              </TabsContent>
+            )}
           </div>
         </CardLayout>
       </Tabs>

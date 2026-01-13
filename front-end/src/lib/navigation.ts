@@ -14,5 +14,9 @@ export const determineActiveLabel = (
   if (pathname === "/" || pathname.startsWith("/posts")) return "Bài viết";
   if (pathname.startsWith("/topics")) return "Chủ đề";
 
+  if (pathname.match(/\/profile\/[^/]+$/)) return "Thông tin cá nhân"; // /profile/abc
+  if (pathname.includes("/posts") && pathname.startsWith("/profile/"))
+    return "Bài viết công khai"; // /profile/abc/posts
+
   return "";
 };

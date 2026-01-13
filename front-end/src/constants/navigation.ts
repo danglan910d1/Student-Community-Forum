@@ -42,3 +42,21 @@ export const DASHBOARD_NAV_ITEMS = [
     iconColor: "text-slate-600",
   },
 ];
+
+// constants/navigation.ts
+export const PUBLIC_PROFILE_NAV_ITEMS = (userId: string) => [
+  {
+    label: "Thông tin cá nhân",
+    href: `/profile/${userId}`,
+    icon: UserCircle,
+    iconBg: "bg-blue-100",
+    iconColor: "text-blue-600",
+  },
+  {
+    label: "Bài viết công khai",
+    href: `/profile/${userId}/posts`,
+    icon: FileText,
+    iconBg: "bg-purple-100",
+    iconColor: "text-purple-600",
+  },
+];

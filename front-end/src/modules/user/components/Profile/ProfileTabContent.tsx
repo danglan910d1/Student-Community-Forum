@@ -30,62 +30,47 @@ export function ProfileTabContent({
   onSubmit,
   isUpdating,
   fields,
-}: ProfileTabContentProps) {
+  isMine,
+}: ProfileTabContentProps & { isMine: boolean }) {
   const [isEditing, setIsEditing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Xử lý xem trước ảnh khi chọn file
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-
-  const handleInternalSubmit = (values: ProfileFormValues) => {
-    onSubmit(values);
-    setIsEditing(false);
-
-    // Giải phóng bộ nhớ của URL tạm thời
-    if (previewUrl) {
-      URL.revokeObjectURL(previewUrl);
-      setPreviewUrl(null);
-    }
-  };
-
+  const visibleFields = fields.filter((field) => {
+    if (isMine) return true; // Nếu là tôi, xem hết
+    return field.name !== "email"; // Nếu là khách, ẩn email đi (vì backend cũng không trả về)
+  });
   return (
     <div className="space-y-6">
-      <div className="flex justify-end mb-4">
-        {!isEditing ? (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setIsEditing(true)}
-          >
-            <Edit3 className="mr-2 h-4 w-4" />
-            Chỉnh sửa hồ sơ
-          </Button>
-        ) : (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              setIsEditing(false);
-              form.reset();
-              if (previewUrl) {
-                URL.revokeObjectURL(previewUrl);
-                setPreviewUrl(null);
-              }
-            }}
-          >
-            <X className="mr-2 h-4 w-4" />
-            Hủy bỏ
-          </Button>
-        )}
-      </div>
+      {/* 1. Nút điều khiển Edit chỉ hiện khi là chính chủ */}
+      {isMine && (
+        <div className="flex justify-end mb-4">
+          {!isEditing ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsEditing(true)}
+            >
+              <Edit3 className="mr-2 h-4 w-4" /> Chỉnh sửa hồ sơ
+            </Button>
+          ) : (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setIsEditing(false);
+                form.reset();
+              }}
+            >
+              <X className="mr-2 h-4 w-4" /> Hủy bỏ
+            </Button>
+          )}
+        </div>
+      )}
 
       <Form {...form}>
-        <form
-          onSubmit={form.handleSubmit(handleInternalSubmit)}
-          className="space-y-6"
-        >
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {fields.map((field) => (
+            {visibleFields.map((field) => (
               <FormField
                 key={field.name}
                 control={form.control}
@@ -94,7 +79,7 @@ export function ProfileTabContent({
                   <FormItem
                     className={field.name === "avatar" ? "md:col-span-2" : ""}
                   >
-                    <FormLabel className="text-[11px] font-bold uppercase text-muted-foreground tracking-wider">
+                    <FormLabel className="text-[11px] font-bold uppercase text-muted-foreground">
                       {field.label}
                     </FormLabel>
                     <FormControl>
@@ -103,34 +88,32 @@ export function ProfileTabContent({
                           <Avatar className="h-20 w-20 border-2 border-primary/20">
                             <AvatarImage
                               src={
-                                previewUrl || // Nếu có ảnh mới chọn thì dùng link blob (không cần xử lý)
+                                previewUrl ||
                                 (typeof value === "string" && value
-                                  ? getAssetUrl(value) // BẮT BUỘC dùng hàm này để nối port 5000
+                                  ? getAssetUrl(value)
                                   : undefined)
                               }
-                              alt={form.getValues("name")}
                               className="object-cover"
                             />
-                            <AvatarFallback className="bg-primary/5 text-lg">
+                            <AvatarFallback>
                               {form
                                 .getValues("name")
                                 ?.substring(0, 2)
                                 .toUpperCase()}
                             </AvatarFallback>
                           </Avatar>
-
-                          {isEditing && (
+                          {/* 2. Chỉ hiện nút thay ảnh khi isMine và đang isEditing */}
+                          {isMine && isEditing && (
                             <div className="space-y-2">
                               <Input
                                 type="file"
-                                accept="image/*"
                                 className="hidden"
                                 ref={fileInputRef}
                                 onChange={(e) => {
                                   const file = e.target.files?.[0];
                                   if (file) {
-                                    onChange(file); // Lưu File object vào Form
-                                    setPreviewUrl(URL.createObjectURL(file)); // Tạo link xem tạm thời
+                                    onChange(file);
+                                    setPreviewUrl(URL.createObjectURL(file));
                                   }
                                 }}
                               />
@@ -140,12 +123,8 @@ export function ProfileTabContent({
                                 size="sm"
                                 onClick={() => fileInputRef.current?.click()}
                               >
-                                <Camera className="mr-2 h-4 w-4" />
-                                Thay đổi ảnh đại diện
+                                <Camera className="mr-2 h-4 w-4" /> Thay đổi ảnh
                               </Button>
-                              <p className="text-[10px] text-muted-foreground">
-                                JPG, PNG hoặc WebP. Tối đa 2MB.
-                              </p>
                             </div>
                           )}
                         </div>
@@ -154,12 +133,12 @@ export function ProfileTabContent({
                           {...fieldProps}
                           value={value as string}
                           onChange={onChange}
-                          placeholder={field.placeholder}
-                          disabled={!field.editable || !isEditing}
+                          // 3. Khóa input nếu không có quyền sở hữu HOẶC không trong mode edit
+                          disabled={!isMine || !isEditing || !field.editable}
                           className={
-                            !field.editable || !isEditing
+                            !isMine || !isEditing || !field.editable
                               ? "bg-muted/40 cursor-not-allowed border-dashed"
-                              : "focus-visible:ring-primary"
+                              : ""
                           }
                         />
                       )}
@@ -171,8 +150,9 @@ export function ProfileTabContent({
             ))}
           </div>
 
-          {isEditing && (
-            <div className="flex justify-end pt-4 border-t animate-in slide-in-from-top-2">
+          {/* 4. Nút SAVE chỉ hiện khi isMine và isEditing */}
+          {isMine && isEditing && (
+            <div className="flex justify-end pt-4 border-t">
               <Button
                 type="submit"
                 disabled={isUpdating}
