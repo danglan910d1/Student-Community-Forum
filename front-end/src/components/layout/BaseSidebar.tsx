@@ -21,7 +21,7 @@ export function BaseSidebar({
     <Sidebar
       collapsible="none"
       variant="sidebar"
-      className={cn("border-r bg-background", className)}
+      className={cn("border-r bg-background h-full", className)}
       {...props}
     >
       <SidebarContent className="gap-4 p-2 custom-scrollbar">

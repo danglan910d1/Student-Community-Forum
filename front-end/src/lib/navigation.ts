@@ -1,18 +1,18 @@
+// src/lib/navigation.ts
 export const determineActiveLabel = (
   pathname: string,
   topic: string | null
 ): string => {
-  // Ưu tiên 1: Nếu có topic, chắc chắn là mục "Bài viết" đang được lọc
   if (topic) return "Bài viết";
 
-  // Ưu tiên 2: Kiểm tra chính xác đường dẫn
-  if (pathname === "/" || pathname.startsWith("/posts")) {
-    return "Bài viết";
-  }
+  // Logic Dashboard
+  if (pathname.startsWith("/dashboard/profile")) return "Thông tin tài khoản";
+  if (pathname.startsWith("/dashboard/posts")) return "Bài viết của tôi";
+  if (pathname.startsWith("/dashboard/settings")) return "Thiết lập";
 
-  if (pathname.startsWith("/topics")) {
-    return "Chủ đề"; // Phải khớp với label trong QUICK_NAV_ITEMS
-  }
+  // Logic Public
+  if (pathname === "/" || pathname.startsWith("/posts")) return "Bài viết";
+  if (pathname.startsWith("/topics")) return "Chủ đề";
 
   return "";
 };

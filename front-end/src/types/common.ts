@@ -10,6 +10,7 @@ export interface IAuthor {
   avatar?: string;
   role?: UserRole;
   email?: string; // Admin mới thấy
+  createdAt: string;
 }
 
 // --- 3. METADATA CHUNG ---
