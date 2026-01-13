@@ -19,10 +19,11 @@ export function useUpdateProfile() {
       requestId?: string;
     }) => userService.updateProfile(data, requestId),
     onSuccess: (updatedUser) => {
-      // Cập nhật cache của React Query ngay lập tức để UserHeader hiển thị data mới
+      // 1. Cập nhật React Query
       queryClient.setQueryData(["user", "me"], updatedUser);
 
-      // Đồng bộ vào Zustand Store
+      // 2. Cập nhật Zustand Store bằng dữ liệu MỚI NHẤT từ server
+      // Interceptor đã đảm bảo updatedUser.avatar là port 5000
       updateStore({
         name: updatedUser.name,
         avatar: updatedUser.avatar || undefined,

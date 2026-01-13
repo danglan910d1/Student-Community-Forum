@@ -6,6 +6,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { LoginGuard } from "@/components/shared/LoginGuarđialog";
+import { getAssetUrl } from "@/lib/utils";
 
 export function CommentInput({
   onSubmit,
@@ -46,7 +47,7 @@ export function CommentInput({
   return (
     <div className="flex gap-3">
       <Avatar className="h-9 w-9 border">
-        <AvatarImage src={user?.avatar} />
+        <AvatarImage src={getAssetUrl(user?.avatar)} />
         <AvatarFallback>{user?.name?.[0] || "U"}</AvatarFallback>
       </Avatar>
 

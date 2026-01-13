@@ -10,6 +10,7 @@ import Link from "next/link";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
 import { getInitials } from "@/utils/string";
+import { getAssetUrl } from "@/lib/utils";
 
 export function UserHeader() {
   const { data: user, isLoading } = useMe();
@@ -23,7 +24,7 @@ export function UserHeader() {
         {/* AVATAR */}
         <Avatar className="h-24 w-24 rounded-lg border-2 border-background md:h-28 md:w-28">
           <AvatarImage
-            src={user.avatar ?? undefined}
+            src={getAssetUrl(user.avatar)}
             alt={user.name}
             className="object-cover"
           />

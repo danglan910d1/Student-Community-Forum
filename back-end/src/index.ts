@@ -11,6 +11,8 @@ import notificationRoutes from "./routes/notificationRoutes";
 import { initializeConfig } from "./config";
 import { globalErrorHandler } from "./middleware/error";
 import { initSyncStatsJob } from "./core/scheduler";
+import path from "path";
+import { UPLOADS_DIR } from "./middleware/multer";
 
 // Khởi tạo ứng dụng Express
 const app = express();
@@ -23,6 +25,7 @@ app.use(
 );
 app.use(express.json());
 
+app.use("/uploads", express.static(UPLOADS_DIR));
 // --- 2. ĐỊNH TUYẾN (ROUTING) ---
 // Áp dụng Rate Limiter cho các route nhạy cảm (Auth)
 app.use("/api/auth", authRoutes); // Áp dụng Rate Limiter

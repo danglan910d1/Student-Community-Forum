@@ -2,7 +2,7 @@
 
 import { LogOut, Settings, User } from "lucide-react";
 import { CardLayout } from "@/components/layout/CardLayout";
-import { cn } from "@/lib/utils";
+import { cn, getAssetUrl } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuthStore } from "@/stores/useAuthStore";
 import {
@@ -40,7 +40,7 @@ export const UserInfo = () => {
         <div className="relative flex-shrink-0">
           <Avatar className="w-12 h-12 border border-gray-100">
             <AvatarImage
-              src={user.avatar}
+              src={getAssetUrl(user.avatar)}
               alt={user.name}
               className="object-cover"
             />

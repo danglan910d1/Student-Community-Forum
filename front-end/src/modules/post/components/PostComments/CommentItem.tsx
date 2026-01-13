@@ -14,6 +14,7 @@ import { MessageSquareReply, Pencil, Trash2 } from "lucide-react";
 import { LoginGuard } from "@/components/shared/LoginGuarđialog";
 import { Button } from "@/components/ui/button";
 import { ReplyList } from "./ReplyList";
+import { getAssetUrl } from "@/lib/utils";
 
 export function CommentItem({
   comment,
@@ -48,7 +49,10 @@ export function CommentItem({
     <div className="flex flex-col gap-3 animate-in fade-in duration-300">
       <div className="flex gap-3">
         <Avatar className="h-8 w-8 shrink-0 border">
-          <AvatarImage src={comment.user.avatar} alt={comment.user.name} />
+          <AvatarImage
+            src={getAssetUrl(comment.user.avatar)}
+            alt={comment.user.name}
+          />
           <AvatarFallback>{comment.user.name[0]}</AvatarFallback>
         </Avatar>
 

@@ -3,6 +3,7 @@ import { vi } from "date-fns/locale";
 import Link from "next/link";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { getInitials } from "@/utils/string";
+import { getAssetUrl } from "@/lib/utils";
 
 interface AuthorCardProps {
   user: {
@@ -32,7 +33,7 @@ export function AuthorCard({
       <div className="flex items-center gap-3">
         <Avatar className="w-9 h-9 rounded shrink-0">
           <AvatarImage
-            src={user.avatar}
+            src={getAssetUrl(user.avatar)}
             alt={user.name}
             className="object-cover"
           />
