@@ -1,0 +1,33 @@
+"use client";
+
+import * as React from "react";
+
+import { cn } from "@/lib/utils";
+
+const Input = React.forwardRef<
+  React.ComponentRef<"input">,
+  React.ComponentPropsWithoutRef<"input">
+>(({ className, type, ...props }, ref) => {
+  return (
+    <input
+      type={type}
+      data-slot="input"
+      className={cn(
+        // Layout cơ bản
+        "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-sm transition-colors",
+        // File input styling
+        "file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground",
+        // Placeholder & States
+        "placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
+        // Typography (Hỗ trợ mobile tránh bị tự động zoom nếu font-size < 16px)
+        "md:text-sm",
+        className
+      )}
+      ref={ref}
+      {...props}
+    />
+  );
+});
+Input.displayName = "Input";
+
+export { Input };

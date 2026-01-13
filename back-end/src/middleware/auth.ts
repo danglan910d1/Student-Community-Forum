@@ -17,9 +17,18 @@ const JWT_SECRET = process.env.JWT_SECRET || "secret";
 interface JwtPayload {
   id: string;
   role: "user" | "admin";
-  // 💡 THÊM TRƯỜNG JTI (JWT ID) ĐỂ PHỤC VỤ VIỆC THU HỒI
+  // THÊM TRƯỜNG JTI (JWT ID) ĐỂ PHỤC VỤ VIỆC THU HỒI
   jti?: string; // JTI là ID duy nhất của token (cần phải thêm khi generate token)
 }
+
+/**
+ * MIDDLEWARE: authMiddleware (Bắt buộc)
+ * * @description Xác thực JWT, kiểm tra danh sách thu hồi (Redis) và gán danh tính vào Request.
+ * @param {Request} req - Đối tượng Request chứa Header Authorization.
+ * @param {Response} res - Đối tượng Response trả về lỗi 401 nếu Token không hợp lệ.
+ * @param {NextFunction} next - Hàm callback chuyển tiếp.
+ * @throws {JsonWebTokenError} Nếu token sai hoặc hết hạn.
+ */
 
 // Middleware kiểm tra và xác thực token JWT
 export const authMiddlewareImpl = async (

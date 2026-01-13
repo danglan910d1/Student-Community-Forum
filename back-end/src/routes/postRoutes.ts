@@ -1,81 +1,89 @@
+// src/routes/postRoutes.ts
 import { Router } from "express";
-import {
-  createPost,
-  getPosts,
-  getPostById,
-  updatePost,
-  deletePost,
-  getPostByIdForAdmin,
-  adminApprovePostController,
-} from "../controllers/postController";
-import { authMiddleware } from "../middleware/auth"; // auth.ts
-import { adminMiddleware } from "../middleware/admin"; // Dùng để kiểm tra vai trò
+import * as postCtrl from "../controllers/postController";
+import { authMiddleware } from "../middleware/auth";
+import { adminMiddleware } from "../middleware/admin";
+import { optionalAuth } from "../middleware/optionalAuth";
 import { generalLimiter, sensitiveLimiter } from "../middleware/ratelimit";
 import { preventDuplicateRequest } from "../middleware/idempotency";
 
 const router = Router();
 
-// --- [ ADMIN ONLY ACCESS ] ---
-// LƯU Ý: Đặt route có tiền tố Admin lên trước route Public/User để tránh xung đột
-// Vì Express sẽ hiểu '/admin' là tham số ':id'
-router.get(
-  "/admin/:id", // GET /api/posts/admin/:id (Lấy chi tiết Bài viết bất kể status)
-  generalLimiter,
-  authMiddleware,
-  adminMiddleware,
-  getPostByIdForAdmin
-);
-// POST /api/posts/admin/approve/:id (DUYỆT BÀI VÀ PENDING TAGS - GIAI ĐOẠN 3)
+/**
+ * NHÓM 1: ADMIN ONLY
+ * Đặt lên đầu để không bị trùng với route GET /:id
+ */
+
+// POST /api/posts/admin/approve/:id - Duyệt bài & xử lý Tag đề xuất
 router.post(
   "/admin/approve/:id",
+  authMiddleware,
+  adminMiddleware,
   sensitiveLimiter,
-  authMiddleware,
-  adminMiddleware,
   preventDuplicateRequest,
-  adminApprovePostController
+  postCtrl.adminApprovePostController
 );
 
-// --- [ PUBLIC / USER ACCESS ] ---
-// GET /api/posts (Lấy danh sách, phân trang, lọc theo topic/tag, và giờ là status)
-router.get(
-  "/", // KHÔNG CẦN authMiddleware bắt buộc (Optional Auth)
-  generalLimiter,
-  // authMiddleware,
-  // adminMiddleware,
-  getPosts
-);
-
-// GET /api/posts (Lấy danh sách, phân trang, lọc theo topic/tag, và giờ là status)
-router.get(
-  "/", // KHÔNG CÓ /me
-  generalLimiter,
+// PUT /api/posts/admin/restore/:id - Khôi phục bài từ thùng rác
+router.put(
+  "/admin/restore/:id",
   authMiddleware,
   adminMiddleware,
-  getPosts
+  sensitiveLimiter,
+  postCtrl.restorePost
 );
 
-// GET /api/posts/:id (Lấy chi tiết và tăng view)
-router.get("/:id", sensitiveLimiter, getPostById);
+// PUT /api/posts/admin/sticky/:id - Ghim/Bỏ ghim bài viết
+router.put(
+  "/admin/sticky/:id",
+  authMiddleware,
+  adminMiddleware,
+  sensitiveLimiter,
+  postCtrl.togglePostStickyController
+);
 
-// POST /api/posts (User tạo bài viết mới)
+// GET /api/posts/admin/:id - Xem chi tiết mọi trạng thái bài viết
+router.get(
+  "/admin/:id",
+  authMiddleware,
+  adminMiddleware,
+  generalLimiter,
+  postCtrl.getPostByIdForAdmin
+);
+
+/**
+ * NHÓM 2: PUBLIC / OPTIONAL AUTH
+ */
+
+// GET /api/posts - Danh sách bài viết (Filter theo Approved/User/Search)
+router.get("/", generalLimiter, optionalAuth, postCtrl.getPosts);
+
+// GET /api/posts/:id - Xem chi tiết bài viết công khai & Tăng View
+router.get("/:id", generalLimiter, postCtrl.getPostById);
+
+/**
+ * NHÓM 3: AUTHORIZED USERS (Author/Admin)
+ */
+
+// POST /api/posts - Tạo bài viết mới (Status mặc định: pending)
 router.post(
   "/",
-  sensitiveLimiter,
   authMiddleware,
+  sensitiveLimiter,
   preventDuplicateRequest,
-  createPost
+  postCtrl.createPost
 );
 
-// PUT /api/posts/:id (User sửa bài của mình, Admin sửa bất kỳ)
+// PUT /api/posts/:id - Cập nhật nội dung bài viết
 router.put(
   "/:id",
+  authMiddleware,
   sensitiveLimiter,
-  authMiddleware, // Cần xác thực để kiểm tra quyền hạn (isAuthor/isAdmin)
   preventDuplicateRequest,
-  updatePost
+  postCtrl.updatePost
 );
 
-// DELETE /api/posts/:id (User xóa bài của mình, Admin xóa bất kỳ)
-router.delete("/:id", sensitiveLimiter, authMiddleware, deletePost);
+// DELETE /api/posts/:id - Xóa mềm bài viết
+router.delete("/:id", authMiddleware, sensitiveLimiter, postCtrl.deletePost);
 
 export default router;

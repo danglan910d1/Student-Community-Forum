@@ -1,0 +1,193 @@
+"use client";
+
+import * as React from "react";
+import { type DialogProps } from "@radix-ui/react-dialog";
+import { Command as CommandPrimitive } from "cmdk";
+import { SearchIcon } from "lucide-react";
+
+import { cn } from "@/lib/utils";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+
+// --- Main Command Component ---
+// Dùng typeof để bảo vệ logic nội bộ của cmdk
+const Command = React.forwardRef<
+  React.ComponentRef<typeof CommandPrimitive>,
+  React.ComponentPropsWithoutRef<typeof CommandPrimitive>
+>(({ className, ...props }, ref) => (
+  <CommandPrimitive
+    ref={ref}
+    data-slot="command"
+    className={cn(
+      "bg-popover text-popover-foreground flex size-full flex-col overflow-hidden rounded-xl",
+      className
+    )}
+    {...props}
+  />
+));
+Command.displayName = CommandPrimitive.displayName;
+
+// --- Command Dialog ---
+const CommandDialog = ({
+  children,
+  title = "Search Commands",
+  description = "Search for a command or tool...",
+  ...props
+}: DialogProps & { title?: string; description?: string }) => {
+  return (
+    <Dialog {...props}>
+      <DialogHeader className="sr-only">
+        <DialogTitle>{title}</DialogTitle>
+        <DialogDescription>{description}</DialogDescription>
+      </DialogHeader>
+      <DialogContent
+        data-slot="command-dialog-content"
+        className="overflow-hidden p-0 shadow-lg rounded-xl!"
+      >
+        <Command className="[&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-group]]:px-2 [&_[cmdk-input-wrapper]_svg]:size-4 [&_[cmdk-input]]:h-11 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-2.5 [&_[cmdk-item]_svg]:size-4">
+          {children}
+        </Command>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+// --- Command Input ---
+// Tinh chỉnh dùng "input" tag chuẩn
+const CommandInput = React.forwardRef<
+  React.ComponentRef<"input">,
+  React.ComponentPropsWithoutRef<typeof CommandPrimitive.Input>
+>(({ className, ...props }, ref) => (
+  <div
+    className="flex items-center border-b px-3"
+    data-slot="command-input-wrapper"
+    cmdk-input-wrapper=""
+  >
+    <SearchIcon className="mr-2 size-4 shrink-0 opacity-50" />
+    <CommandPrimitive.Input
+      ref={ref}
+      data-slot="command-input"
+      className={cn(
+        "placeholder:text-muted-foreground flex h-10 w-full rounded-md bg-transparent py-3 text-sm outline-hidden disabled:cursor-not-allowed disabled:opacity-50",
+        className
+      )}
+      {...props}
+    />
+  </div>
+));
+CommandInput.displayName = CommandPrimitive.Input.displayName;
+
+// --- Command List ---
+const CommandList = React.forwardRef<
+  React.ComponentRef<"div">,
+  React.ComponentPropsWithoutRef<typeof CommandPrimitive.List>
+>(({ className, ...props }, ref) => (
+  <CommandPrimitive.List
+    ref={ref}
+    data-slot="command-list"
+    className={cn(
+      "no-scrollbar max-h-72 overflow-y-auto overflow-x-hidden outline-hidden",
+      className
+    )}
+    {...props}
+  />
+));
+CommandList.displayName = CommandPrimitive.List.displayName;
+
+// --- Command Empty ---
+const CommandEmpty = React.forwardRef<
+  React.ComponentRef<"div">,
+  React.ComponentPropsWithoutRef<typeof CommandPrimitive.Empty>
+>((props, ref) => (
+  <CommandPrimitive.Empty
+    ref={ref}
+    data-slot="command-empty"
+    className="py-6 text-center text-sm"
+    {...props}
+  />
+));
+CommandEmpty.displayName = CommandPrimitive.Empty.displayName;
+
+// --- Command Group ---
+const CommandGroup = React.forwardRef<
+  React.ComponentRef<"div">,
+  React.ComponentPropsWithoutRef<typeof CommandPrimitive.Group>
+>(({ className, ...props }, ref) => (
+  <CommandPrimitive.Group
+    ref={ref}
+    data-slot="command-group"
+    className={cn(
+      "text-foreground [&_[cmdk-group-heading]]:text-muted-foreground overflow-hidden p-1 [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-medium",
+      className
+    )}
+    {...props}
+  />
+));
+CommandGroup.displayName = CommandPrimitive.Group.displayName;
+
+// --- Command Separator ---
+const CommandSeparator = React.forwardRef<
+  React.ComponentRef<"div">,
+  React.ComponentPropsWithoutRef<typeof CommandPrimitive.Separator>
+>(({ className, ...props }, ref) => (
+  <CommandPrimitive.Separator
+    ref={ref}
+    data-slot="command-separator"
+    className={cn("bg-border -mx-1 h-px", className)}
+    {...props}
+  />
+));
+CommandSeparator.displayName = CommandPrimitive.Separator.displayName;
+
+// --- Command Item ---
+const CommandItem = React.forwardRef<
+  React.ComponentRef<"div">,
+  React.ComponentPropsWithoutRef<typeof CommandPrimitive.Item>
+>(({ className, ...props }, ref) => (
+  <CommandPrimitive.Item
+    ref={ref}
+    data-slot="command-item"
+    className={cn(
+      "data-selected:bg-accent data-selected:text-accent-foreground relative flex cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-hidden select-none data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+      className
+    )}
+    {...props}
+  />
+));
+CommandItem.displayName = CommandPrimitive.Item.displayName;
+
+// --- Command Shortcut ---
+const CommandShortcut = React.forwardRef<
+  React.ComponentRef<"span">,
+  React.HTMLAttributes<HTMLSpanElement>
+>(({ className, ...props }, ref) => {
+  return (
+    <span
+      ref={ref}
+      data-slot="command-shortcut"
+      className={cn(
+        "text-muted-foreground ml-auto text-xs tracking-widest",
+        className
+      )}
+      {...props}
+    />
+  );
+});
+CommandShortcut.displayName = "CommandShortcut";
+
+export {
+  Command,
+  CommandDialog,
+  CommandInput,
+  CommandList,
+  CommandEmpty,
+  CommandGroup,
+  CommandItem,
+  CommandShortcut,
+  CommandSeparator,
+};

@@ -1,10 +1,6 @@
+// src/routes/topicRoutes.ts
 import { Router } from "express";
-import {
-  getTopicsList, // <-- Hàm mới thay thế cho cả hai
-  createTopic,
-  getTopicById,
-  updateTopic,
-} from "../controllers/topicController";
+import * as topicCtrl from "../controllers/topicController";
 import { authMiddleware } from "../middleware/auth";
 import { adminMiddleware } from "../middleware/admin";
 import { generalLimiter, sensitiveLimiter } from "../middleware/ratelimit";
@@ -12,48 +8,72 @@ import { preventDuplicateRequest } from "../middleware/idempotency";
 
 const router = Router();
 
-// --- [ PUBLIC ] ---
-// GET /api/topics (Lấy tất cả topics đã được duyệt)
-router.get("/", generalLimiter, getTopicsList); // Gọi hàm gộp chung
+/**
+ * NHÓM 1: ADMIN ONLY
+ * Quản lý danh mục (Topics) hệ thống
+ */
 
-// --- [ ADMIN ONLY ] ---
-// Tất cả các route admin đều cần authMiddleware và adminMiddleware
-// POST /api/topics/admin (Tạo topic mới)
-router.post(
-  "/admin",
-  sensitiveLimiter,
-  authMiddleware,
-  adminMiddleware,
-  preventDuplicateRequest,
-  createTopic
-);
-
-// GET /api/topics/admin (Lấy tất cả topics, bao gồm cả pending/rejected) <-- Dùng lại hàm gộp
+// GET /api/topics/admin - Lấy toàn bộ danh sách (Admin View)
 router.get(
   "/admin",
-  generalLimiter,
   authMiddleware,
   adminMiddleware,
-  getTopicsList
+  generalLimiter,
+  topicCtrl.getTopicsList
 );
 
-// GET /api/topics/admin/:id (Lấy chi tiết Topic bằng ID)
+// POST /api/topics/admin - Tạo Topic chính thống mới
+router.post(
+  "/admin",
+  authMiddleware,
+  adminMiddleware,
+  sensitiveLimiter,
+  preventDuplicateRequest,
+  topicCtrl.createTopic
+);
+
+// PUT /api/topics/admin/restore/:id - Khôi phục Topic đã xóa mềm
+router.put(
+  "/admin/restore/:id",
+  authMiddleware,
+  adminMiddleware,
+  sensitiveLimiter,
+  topicCtrl.restoreTopic
+);
+
+// GET /api/topics/admin/:id - Chi tiết Topic (Admin View)
 router.get(
   "/admin/:id",
   authMiddleware,
-  generalLimiter,
   adminMiddleware,
-  getTopicById
+  generalLimiter,
+  topicCtrl.getTopicById
 );
 
-// PUT /api/topics/admin/:id (Cập nhật topic, bao gồm cả duyệt status)
+// PUT /api/topics/admin/:id - Cập nhật thông tin/trạng thái Topic
 router.put(
   "/admin/:id",
   authMiddleware,
-  sensitiveLimiter,
   adminMiddleware,
+  sensitiveLimiter,
   preventDuplicateRequest,
-  updateTopic
+  topicCtrl.updateTopic
 );
+
+// DELETE /api/topics/admin/:id - Xóa mềm Topic
+router.delete(
+  "/admin/:id",
+  authMiddleware,
+  adminMiddleware,
+  sensitiveLimiter,
+  topicCtrl.deleteTopic
+);
+
+/**
+ * NHÓM 2: PUBLIC ACCESS
+ */
+
+// GET /api/topics - Danh sách Topic đã duyệt (Cho User chọn hoặc xem danh mục)
+router.get("/", generalLimiter, topicCtrl.getTopicsList);
 
 export default router;

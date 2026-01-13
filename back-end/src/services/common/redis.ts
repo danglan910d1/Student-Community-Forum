@@ -59,11 +59,22 @@ export async function setCache(
  */
 export async function invalidateCache(pattern: string): Promise<void> {
   try {
-    const keys = await redisClient.keys(pattern);
-    if (keys.length > 0) {
-      await redisClient.del(keys);
-      console.log(`Invalidated ${keys.length} keys matching ${pattern}`);
-    }
+    let cursor = "0";
+    do {
+      // SCAN giúp tìm key mà không làm treo hệ thống
+      const reply = await redisClient.scan(cursor, {
+        MATCH: pattern,
+        COUNT: 100, // Mỗi lần quét 100 keys
+      });
+      cursor = reply.cursor;
+      const keys = reply.keys;
+
+      if (keys.length > 0) {
+        await redisClient.del(keys);
+      }
+    } while (cursor !== "0");
+
+    console.log(`Invalidated keys matching ${pattern}`);
   } catch (e) {
     console.error(`Error invalidating cache for pattern ${pattern}:`, e);
   }

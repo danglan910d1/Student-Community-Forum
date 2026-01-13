@@ -1,10 +1,6 @@
+// src/routes/tagRoutes.ts
 import { Router } from "express";
-import {
-  getTagsList,
-  updateTag,
-  getTagById,
-  deleteTag,
-} from "../controllers/tagController";
+import * as tagCtrl from "../controllers/tagController";
 import { authMiddleware } from "../middleware/auth";
 import { adminMiddleware } from "../middleware/admin";
 import { generalLimiter, sensitiveLimiter } from "../middleware/ratelimit";
@@ -12,47 +8,82 @@ import { preventDuplicateRequest } from "../middleware/idempotency";
 
 const router = Router();
 
-// --- [ PUBLIC/USER ] ---
-// GET /api/tags (Lấy tất cả tags đã được duyệt, có thể lọc theo topicId)
-router.get("/", generalLimiter, getTagsList); // Gọi hàm gộp chung (Public)
+/**
+ * NHÓM 1: ADMIN ONLY
+ * Quản lý kho dữ liệu Tag hệ thống
+ */
 
-// --- [ ADMIN ONLY ] ---
-// GET /api/tags/admin (Lấy tất cả tags, bao gồm cả pending) <-- Dùng lại hàm gộp
+// GET /api/tags/admin - Lấy toàn bộ danh sách (Admin View)
 router.get(
   "/admin",
-  generalLimiter,
   authMiddleware,
   adminMiddleware,
-  getTagsList
+  generalLimiter,
+  tagCtrl.getTagsList
 );
 
-// GET /api/tags/admin/:id (Lấy chi tiết Tag bằng ID)
+// POST /api/tags/admin - Admin tạo Tag chính thống
+router.post(
+  "/admin",
+  authMiddleware,
+  adminMiddleware,
+  sensitiveLimiter,
+  preventDuplicateRequest,
+  tagCtrl.createTagByAdmin
+);
+
+// PATCH /api/tags/admin/bulk - Duyệt/Từ chối hàng loạt Tags
+router.patch(
+  "/admin/bulk",
+  authMiddleware,
+  adminMiddleware,
+  sensitiveLimiter,
+  preventDuplicateRequest,
+  tagCtrl.bulkUpdateTags
+);
+
+// PUT /api/tags/admin/restore/:id - Khôi phục Tag đã xóa
+router.put(
+  "/admin/restore/:id",
+  authMiddleware,
+  adminMiddleware,
+  sensitiveLimiter,
+  tagCtrl.restoreTag
+);
+
+// GET /api/tags/admin/:id - Chi tiết Tag (Admin View)
 router.get(
   "/admin/:id",
-  generalLimiter,
   authMiddleware,
   adminMiddleware,
-  getTagById
+  generalLimiter,
+  tagCtrl.getTagById
 );
 
-// PUT /api/tags/admin/:id (Cập nhật tag, bao gồm cả duyệt status)
+// PUT /api/tags/admin/:id - Cập nhật Tag lẻ
 router.put(
   "/admin/:id",
-  sensitiveLimiter,
   authMiddleware,
   adminMiddleware,
+  sensitiveLimiter,
   preventDuplicateRequest,
-  updateTag
+  tagCtrl.updateTag
 );
 
-// DELETE /api/tags/admin/:id (Xóa Tag)
+// DELETE /api/tags/admin/:id - Xóa mềm Tag
 router.delete(
   "/admin/:id",
-  sensitiveLimiter,
   authMiddleware,
   adminMiddleware,
-  preventDuplicateRequest,
-  deleteTag
+  sensitiveLimiter,
+  tagCtrl.deleteTag
 );
+
+/**
+ * NHÓM 2: PUBLIC ACCESS
+ */
+
+// GET /api/tags - Lấy danh sách Tag đã duyệt (Gợi ý cho User/Khách)
+router.get("/", generalLimiter, tagCtrl.getTagsList);
 
 export default router;

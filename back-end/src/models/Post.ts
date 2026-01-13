@@ -14,6 +14,7 @@ export interface IPost extends Document {
   slug: string;
   content: string;
   status: PostStatus; // Trạng thái duyệt bài
+  is_resolved: boolean;
   is_sticky: boolean; // Ghim bài viết
   views_count: number;
   likes_count: number;
@@ -42,6 +43,7 @@ const postSchema = new Schema<IPost>(
       type: Schema.Types.ObjectId,
       ref: "User",
       required: true,
+      index: true,
     },
     topicId: {
       type: Schema.Types.ObjectId,
@@ -73,6 +75,7 @@ const postSchema = new Schema<IPost>(
       default: "pending", // QUY TẮC: User tạo -> Mặc định chờ duyệt
     },
     is_sticky: { type: Boolean, default: false }, // Chỉ Admin mới có thể ghim
+    is_resolved: { type: Boolean, default: false },
     views_count: { type: Number, default: 0 },
     likes_count: { type: Number, default: 0 },
     comments_count: { type: Number, default: 0 },
@@ -94,22 +97,30 @@ const postSchema = new Schema<IPost>(
   }
 );
 
-// PRE-SAVE HOOK: Tự động tạo slug trước khi lưu
+// PRE-SAVE HOOK: Chỉ tạo slug nếu chưa có slug nào được cung cấp
 postSchema.pre<IPost & Document>("save", function (next) {
-  if (this.isModified("title") || !this.slug) {
-    // Sử dụng hàm tiện ích đã tách ra
+  // Chỉ tự động tạo slug nếu slug hoàn toàn trống
+  // KHÔNG kiểm tra isModified("title") ở đây vì Controller đã đảm nhận việc xử lý slug khi title đổi
+  if (!this.slug) {
     this.slug = generateSlug(this.title);
   }
   next();
 });
 
 // --- CẬP NHẬT INDEX ĐỂ CHỐNG DUP LEVEL DB---
-// Thêm Index kép để chống trùng lặp SLUG cho CÙNG một USER
-postSchema.index({ slug: 1, userId: 1 }, { unique: true });
+// Slug duy nhất trên toàn hệ thống nhưng chỉ tính các bài chưa xóa
+postSchema.index(
+  { slug: 1 },
+  { unique: true, partialFilterExpression: { is_deleted: false } }
+);
 
 // Tạo Index cho các trường thường dùng để truy vấn/lọc
 postSchema.index({ topicId: 1, status: 1 });
 postSchema.index({ tags: 1, status: 1 });
-postSchema.index({ title: "text", content: "text" });
+postSchema.index(
+  { title: "text", content: "text" },
+  { weights: { title: 10, content: 1 } }
+);
+postSchema.index({ is_sticky: -1, views_count: -1, createdAt: -1 });
 
 export default model<IPost>("Post", postSchema);

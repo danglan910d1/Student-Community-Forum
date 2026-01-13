@@ -4,41 +4,35 @@ import {
   buildCommonFilter,
   CommonQuery,
 } from "../common/buildCommonFilter"; // Sử dụng CommonQuery
+import Topic from "../../models/Topic";
 
 // Giả định GetTagsQuery được mở rộng từ CommonQuery
 export interface GetTagsQuery extends CommonQuery {
   topicId?: string;
+  topicSlug?: string;
 }
 
 /**
  * Xây dựng đối tượng filter MongoDB đặc thù cho Tag.
  * Sử dụng buildCommonFilter để xử lý logic Status, Search, và MyPosts (nếu có).
  */
-export const buildTagFilter = (
+export const buildTagFilter = async (
   queryParams: GetTagsQuery,
   authContext: AuthContext
-): any => {
-  // 1. TẠO OBJECT CHUNG BẰNG CÁCH SỬ DỤNG CONDITIONAL SPREAD
-  const { status, search, myPosts, page, limit, topicId } = queryParams;
+) => {
+  const filter = buildCommonFilter(queryParams, authContext, "tag");
+  const { topicId, topicSlug } = queryParams;
 
-  const commonQuery: CommonQuery = {
-    ...(status && { status }),
-    ...(search && { search }),
-    ...(myPosts && { myPosts }),
-    ...(page && { page }),
-    ...(limit && { limit }),
-  };
-
-  // 2. Lấy bộ lọc chung (Status, Search, MyPosts)
-  // Giả định trường người tạo là 'createdBy' cho Tag Model
-  const filter = buildCommonFilter(commonQuery, authContext, "tag");
-
-  // 3. XỬ LÝ LỌC ĐẶC THÙ (TOPIC ID)
-  if (topicId && Types.ObjectId.isValid(topicId as string)) {
-    filter.topicId = new Types.ObjectId(topicId as string);
-  } else if (topicId === "null") {
-    // Hỗ trợ lọc Free Tags (tags không gán topicId)
-    filter.topicId = null;
+  if (topicId) {
+    if (topicId === "null") {
+      filter.topicId = null; // Tìm các tag không thuộc topic nào
+    } else if (Types.ObjectId.isValid(topicId)) {
+      filter.topicId = new Types.ObjectId(topicId);
+    }
+  } else if (topicSlug) {
+    // Tìm ID của Topic trước khi lọc Tag
+    const topic = await Topic.findOne({ slug: topicSlug }).select("_id");
+    filter.topicId = topic ? topic._id : new Types.ObjectId();
   }
 
   return filter;

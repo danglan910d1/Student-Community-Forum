@@ -7,6 +7,15 @@ import { Request, Response, NextFunction } from "express";
 import { AuthenticatedRequest } from "../types/express";
 // KHÔNG cần import Users, KHÔNG cần truy vấn DB (Zero-Lookup)
 
+/**
+ * MIDDLEWARE: adminMiddleware
+ * * @description Kiểm tra quyền Admin dựa trên userRole đã được gán từ authMiddleware.
+ * @param {Request} req - Đối tượng Request từ Express (Phải được ép kiểu về AuthenticatedRequest).
+ * @param {Response} res - Đối tượng Response để trả về lỗi 403 nếu không đủ quyền.
+ * @param {NextFunction} next - Hàm callback để chuyển sang Middleware/Controller tiếp theo.
+ * @returns {void}
+ */
+
 // Middleware kiểm tra quyền Admin (Zero-Lookup)
 export const adminMiddleware = (
   req: Request,

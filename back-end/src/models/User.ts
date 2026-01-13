@@ -48,7 +48,6 @@ const userSchema = new Schema<IUser>(
     email: {
       type: String,
       required: true,
-      unique: true,
       trim: true,
       lowercase: true,
     },
@@ -60,10 +59,10 @@ const userSchema = new Schema<IUser>(
     role: { type: String, enum: ["user", "admin"], default: "user" },
     avatar: {
       type: String,
-      default: "https://placehold.co/100x100/CCCCCC/000000?text=A",
+      default: "",
     },
     status: { type: String, enum: ["active", "banned"], default: "active" },
-    is_deleted: { type: Boolean, default: false },
+    is_deleted: { type: Boolean, default: false, index: true },
     // Loại bỏ định nghĩa thủ công
     // createdAt: { type: Date, default: Date.now },
     // updatedAt: { type: Date, default: Date.now },

@@ -2,13 +2,14 @@ import { PipelineStage } from "mongoose";
 
 interface TagPipelineConfig {
   includeTopic?: boolean;
-  includeCreator?: boolean;
+  includeUser?: boolean;
   includeProjection?: boolean;
+  isAdminView?: boolean;
 }
 
 /**
  * Xây dựng các Aggregation Pipeline Stages cho Tag Model.
- * FIX N+1 Query bằng cách sử dụng $lookup.
+ * Cập nhật để bỏ _id và đồng nhất tagId theo Model Transform.
  */
 export const buildTagAggregationPipeline = (
   filter: any,
@@ -16,54 +17,110 @@ export const buildTagAggregationPipeline = (
 ): PipelineStage[] => {
   const {
     includeTopic = true,
-    includeCreator = true,
+    includeUser = true,
     includeProjection = true,
+    isAdminView = false,
   } = config;
 
-  const pipeline: PipelineStage[] = [
-    // Stage 1: Lọc dữ liệu thô (BẮT BUỘC)
-    { $match: filter },
-  ];
+  const pipeline: PipelineStage[] = [{ $match: filter }];
 
-  // Stage 2: $lookup Topic
   if (includeTopic) {
     pipeline.push({
       $lookup: {
         from: "topics",
-        localField: "topicId",
-        foreignField: "_id",
-        as: "topic",
+        let: { tId: "$topicId" },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  { $eq: ["$_id", "$$tId"] },
+                  { $ne: ["$is_deleted", true] },
+                ],
+              },
+            },
+          },
+        ],
+        as: "topicData",
       },
     });
   }
 
-  // Stage 3: $lookup Creator
-  if (includeCreator) {
+  if (includeUser) {
     pipeline.push({
       $lookup: {
-        from: "users", // Giả định collection tên là users
+        from: "users",
         localField: "createdBy",
         foreignField: "_id",
-        as: "creator",
+        as: "userData",
       },
     });
   }
 
-  // Stage 4: Project/Format kết quả cuối cùng (Đồng nhất ID)
+  pipeline.push({
+    $lookup: {
+      from: "posts",
+      localField: "_id",
+      foreignField: "tags",
+      as: "postsUsingThisTag",
+    },
+  });
+
+  // Thêm field postCount
+  pipeline.push({
+    $addFields: {
+      postCount: { $size: "$postsUsingThisTag" },
+    },
+  });
+
   if (includeProjection) {
     pipeline.push({
       $project: {
         _id: 0,
-        tagId: "$_id", // Đồng nhất ID
+        tagId: "$_id",
         name: 1,
         slug: 1,
-        status: 1,
         createdAt: 1,
         updatedAt: 1,
-        // Định dạng các trường lookup
-        topicId: includeTopic ? { $arrayElemAt: ["$topic", 0] } : "$topicId",
-        createdBy: includeCreator
-          ? { $arrayElemAt: ["$creator", 0] }
+        postCount: 1,
+        status: { $cond: [isAdminView, "$status", "$$REMOVE"] },
+
+        topic: includeTopic
+          ? {
+              $let: {
+                vars: { top: { $arrayElemAt: ["$topicData", 0] } },
+                in: {
+                  $cond: [
+                    { $ifNull: ["$$top", false] },
+                    {
+                      topicId: "$$top._id",
+                      name: "$$top.name",
+                      slug: "$$top.slug",
+                    },
+                    null,
+                  ],
+                },
+              },
+            }
+          : "$topicId",
+
+        user: includeUser
+          ? {
+              $let: {
+                vars: { user: { $arrayElemAt: ["$userData", 0] } },
+                in: {
+                  $cond: [
+                    { $ifNull: ["$$user", false] },
+                    {
+                      userId: "$$user._id",
+                      name: "$$user.name",
+                      avatar: "$$user.avatar",
+                    },
+                    null,
+                  ],
+                },
+              },
+            }
           : "$createdBy",
       },
     });

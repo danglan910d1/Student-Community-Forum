@@ -1,14 +1,16 @@
 import { PipelineStage } from "mongoose";
 
 interface CommentPipelineConfig {
-  includeUser?: boolean; // Người bình luận
-  includePost?: boolean; // Bài viết liên quan
-  includeParent?: boolean; // Bình luận cha
+  includeUser?: boolean;
+  includePost?: boolean;
+  includeParent?: boolean;
   includeProjection?: boolean;
+  isAdminView?: boolean;
 }
 
 /**
- * Xây dựng Aggregation Pipeline cho Comment Model (FIX N+1 Query).
+ * Xây dựng Aggregation Pipeline cho Comment Model.
+ * Hỗ trợ hiển thị content và tự động lookup danh sách replies.
  */
 export const buildCommentAggregationPipeline = (
   filter: any,
@@ -19,23 +21,56 @@ export const buildCommentAggregationPipeline = (
     includePost = false,
     includeParent = false,
     includeProjection = true,
+    isAdminView = false,
   } = config;
 
   const pipeline: PipelineStage[] = [{ $match: filter }];
 
-  // $lookup User
+  // 1. $lookup User chính (Người viết comment cha)
   if (includeUser) {
-    pipeline.push({
-      $lookup: {
-        from: "users",
-        localField: "userId",
-        foreignField: "_id",
-        as: "user",
+    pipeline.push(
+      {
+        $lookup: {
+          from: "users",
+          localField: "userId",
+          foreignField: "_id",
+          pipeline: [{ $match: { is_deleted: { $ne: true } } }],
+          as: "userData",
+        },
       },
-    });
+      { $unwind: { path: "$userData", preserveNullAndEmptyArrays: true } }
+    );
   }
 
-  // $lookup Post
+  // 2. $lookup REPLIES (Lấy các comment con lồng vào bên trong)
+  // pipeline.push({
+  //   $lookup: {
+  //     from: "comments",
+  //     let: { parent_id: "$_id" },
+  //     pipeline: [
+  //       {
+  //         $match: {
+  //           $expr: { $eq: ["$parentId", "$$parent_id"] },
+  //           is_deleted: { $ne: true }, // Chỉ lấy reply chưa xóa (trừ khi là admin)
+  //         },
+  //       },
+  //       // Lookup User cho từng reply con
+  //       {
+  //         $lookup: {
+  //           from: "users",
+  //           localField: "userId",
+  //           foreignField: "_id",
+  //           as: "replyUser",
+  //         },
+  //       },
+  //       { $unwind: { path: "$replyUser", preserveNullAndEmptyArrays: true } },
+  //       { $sort: { createdAt: 1 } }, // Phản hồi cũ hiện trước
+  //     ],
+  //     as: "repliesData",
+  //   },
+  // });
+
+  // 3. $lookup Post & Parent (Giữ nguyên logic cũ của bạn)
   if (includePost) {
     pipeline.push({
       $lookup: {
@@ -46,8 +81,6 @@ export const buildCommentAggregationPipeline = (
       },
     });
   }
-
-  // $lookup Parent
   if (includeParent) {
     pipeline.push({
       $lookup: {
@@ -59,26 +92,63 @@ export const buildCommentAggregationPipeline = (
     });
   }
 
-  // Projection
+  // 4. Projection cuối cùng
   if (includeProjection) {
     pipeline.push({
       $project: {
         _id: 0,
         commentId: "$_id",
-        content: 1,
         likes_count: 1,
         replies_count: 1,
-        is_deleted: 1,
-        status: 1,
         createdAt: 1,
         updatedAt: 1,
+        parentId: 1,
+        status: { $cond: [isAdminView, "$status", "$$REMOVE"] },
 
-        // Định dạng các trường lookup
-        userId: includeUser ? { $arrayElemAt: ["$user", 0] } : "$userId",
+        // Hiển thị nội dung thực tế hoặc thông báo xóa
+        content: {
+          $cond: [
+            {
+              $and: [
+                { $eq: ["$is_deleted", true] },
+                { $ne: [isAdminView, true] },
+              ],
+            },
+            "Bình luận này đã bị xóa.",
+            "$content",
+          ],
+        },
+
+        // Format User cha
+        user: includeUser
+          ? {
+              userId: "$userData._id",
+              name: "$userData.name",
+              avatar: "$userData.avatar",
+              email: { $cond: [isAdminView, "$userData.email", "$$REMOVE"] },
+            }
+          : "$userId",
+
+        // Map lại mảng replies lồng bên trong
+        // replies: {
+        //   $map: {
+        //     input: "$repliesData",
+        //     as: "r",
+        //     in: {
+        //       commentId: "$$r._id",
+        //       content: "$$r.content",
+        //       createdAt: "$$r.createdAt",
+        //       likes_count: "$$r.likes_count",
+        //       user: {
+        //         userId: "$$r.replyUser._id",
+        //         name: "$$r.replyUser.name",
+        //         avatar: "$$r.replyUser.avatar",
+        //       },
+        //     },
+        //   },
+        // },
+
         postId: includePost ? { $arrayElemAt: ["$post", 0] } : "$postId",
-        parentId: includeParent
-          ? { $arrayElemAt: ["$parent", 0] }
-          : "$parentId",
       },
     });
   }

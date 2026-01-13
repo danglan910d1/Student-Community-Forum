@@ -1,62 +1,92 @@
-import { forwardRef, ReactNode } from "react";
+import * as React from "react";
+import { cva, type VariantProps } from "class-variance-authority";
+import { Slot } from "radix-ui";
 
+import { cn } from "@/lib/utils";
+import { Spinner } from "@/components/ui/spinner";
 
-// Định nghĩa các kiểu nút
-type ButtonVariant = 'primary' | 'secondary' | 'accent' | 'ghost';
-
-
-interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  children: ReactNode;
-  variant?: ButtonVariant;
-  className?: string;
-}
-
-
-// 1. DÙNG OBJECT LOOKUP ĐỂ ÁNH XẠ VARIANT SANG CHUỖI CSS
-const variantStyles: Record<ButtonVariant, string> = {
- 
-  // Nút 'New Post': Kích thước nhỏ hơn, bo góc vừa phải (rounded-lg), bóng nhẹ hơn (shadow-md)
-  primary: 'bg-nav-bg text-text-light hover:bg-btn-hover shadow-md',
- 
-  // Nút 'Tag/Accent' (ví dụ: Nút hành động nổi bật): giữ nguyên style nổi bật
-  accent: 'bg-icon-color text-text-light hover:bg-[#d47639] shadow-md',
- 
-  // Nút Lọc (ví dụ: 'Mới nhất', 'Phổ biến'): KHÔNG VIỀN, chỉ có nền trắng, hover nhẹ
-  // Lưu ý: 'Mới nhất' khi được chọn cần xử lý state active bên ngoài component này.
-  secondary: 'bg-white text-text-title hover:bg-highlight/50 shadow-none',
- 
-  // Nút Ghost: Dùng cho các nút không màu nền, text đậm
-  ghost: 'bg-transparent text-text-title hover:bg-highlight/50 shadow-none',
-};
-
-
-// 2. Component sử dụng ForwardRef
-const Button = forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ children, variant = 'primary', className = '', ...props }, ref) => {
-   
-    // Base style áp dụng cho tất cả các nút
-    // Điều chỉnh Padding và Text Size xuống `text-sm` hoặc `text-base`
-    const baseStyle = ' py-2 px-4 text-white font-medium rounded-lg text-base transition duration-150 shadow-lg';
-   
-    // Lấy chuỗi style dựa trên variant
-    const variantStyle = variantStyles[variant] || variantStyles.primary;
-
-
-    return (
-      <button
-        ref={ref}
-        className={`${baseStyle} ${variantStyle} ${className} cursor-pointer`}
-        {...props}
-        disabled={props.disabled}
-      >
-        {children}
-      </button>
-    );
+const buttonVariants = cva(
+  "focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:aria-invalid:border-destructive/50 rounded-md border border-transparent bg-clip-padding text-sm font-medium focus-visible:ring-[3px] aria-invalid:ring-[3px] [&_svg:not([class*='size-'])]:size-4 inline-flex items-center justify-center whitespace-nowrap transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none shrink-0 [&_svg]:shrink-0 outline-none group/button select-none",
+  {
+    variants: {
+      variant: {
+        default: "bg-primary text-primary-foreground hover:bg-primary/80",
+        outline:
+          "border-border bg-background hover:bg-muted hover:text-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50 aria-expanded:bg-muted aria-expanded:text-foreground shadow-xs",
+        secondary:
+          "bg-secondary text-secondary-foreground hover:bg-secondary/80 aria-expanded:bg-secondary aria-expanded:text-secondary-foreground",
+        ghost:
+          "hover:bg-muted hover:text-foreground dark:hover:bg-muted/50 aria-expanded:bg-muted aria-expanded:text-foreground focus:outline-none focus:ring-0 focus-visible:ring-0 border-none",
+        destructive:
+          "bg-destructive/10 hover:bg-destructive/20 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/20 text-destructive focus-visible:border-destructive/40 dark:hover:bg-destructive/30",
+        link: "text-primary underline-offset-4 hover:underline",
+      },
+      size: {
+        default:
+          "h-9 gap-1.5 px-2.5 in-data-[slot=button-group]:rounded-md has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2",
+        xs: "h-6 gap-1 rounded-[min(var(--radius-md),8px)] px-2 text-xs in-data-[slot=button-group]:rounded-md has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3",
+        sm: "h-8 gap-1 rounded-[min(var(--radius-md),10px)] px-2.5 in-data-[slot=button-group]:rounded-md has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5",
+        lg: "h-10 gap-1.5 px-2.5 has-data-[icon=inline-end]:pr-3 has-data-[icon=inline-start]:pl-3",
+        icon: "size-9",
+        "icon-xs":
+          "size-6 rounded-[min(var(--radius-md),8px)] in-data-[slot=button-group]:rounded-md [&_svg:not([class*='size-'])]:size-3",
+        "icon-sm":
+          "size-8 rounded-[min(var(--radius-md),10px)] in-data-[slot=button-group]:rounded-md",
+        "icon-lg": "size-10",
+      },
+    },
+    defaultVariants: {
+      variant: "default",
+      size: "default",
+    },
   }
 );
 
+interface ButtonProps
+  extends React.ComponentProps<"button">, VariantProps<typeof buttonVariants> {
+  asChild?: boolean;
+  isLoading?: boolean; // Thêm prop này
+  loadingText?: string; // Thêm prop để tùy biến chữ khi load
+}
 
-Button.displayName = 'Button';
+function Button({
+  className,
+  variant = "default",
+  size = "default",
+  asChild = false,
+  isLoading = false,
+  loadingText,
+  children,
+  disabled,
+  ...props
+}: ButtonProps) {
+  const Comp = asChild ? Slot.Root : "button";
 
+  return (
+    <Comp
+      data-slot="button"
+      data-variant={variant}
+      data-size={size}
+      className={cn(
+        "cursor-pointer",
+        buttonVariants({ variant, size, className })
+      )}
+      {...props}
+    >
+      {isLoading ? (
+        <div className="flex items-center justify-center gap-2 ">
+          <Spinner
+            className={cn(
+              variant === "default" ? "text-primary-foreground" : "text-current"
+            )}
+          />
+          {loadingText && <span>{loadingText}</span>}
+        </div>
+      ) : (
+        children
+      )}
+    </Comp>
+  );
+}
 
-export default Button;
+export { Button, buttonVariants };

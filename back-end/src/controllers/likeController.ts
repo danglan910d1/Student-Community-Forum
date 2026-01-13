@@ -1,189 +1,142 @@
 /**
  * CONTROLLER: likeController
- * * Trách nhiệm: Xử lý Business Logic (Logic Nghiệp vụ) liên quan đến Lượt Thích (Like/Unlike) cho Posts và Comments.
- * * Nguyên tắc áp dụng: HOF, Type Safety, Atomic Updates.
+ * Trách nhiệm: Xử lý Thích/Bỏ thích cho Post và Comment.
+ * Đã sửa lỗi: Bổ sung userId/postId vào select để không crash khi gửi thông báo.
  */
 import { Response, Request } from "express";
 import { Types, Model, Document } from "mongoose";
 import Like, { TargetType } from "../models/Like";
-import Post, { IPost } from "../models/Post";
-import Comment, { IComment } from "../models/Comment";
+import Post from "../models/Post";
+import Comment from "../models/Comment";
 import { AuthenticatedRequest } from "../types/express";
 import { asyncHandler } from "../utils/asyncHandler";
+import { AppError } from "../utils/appError";
 import { ToggleLikeParams, GetLikeStatusQuery } from "../types/like";
 import { addJobToQueue } from "../services/common/jobQueue";
+import { createNotification } from "../services/notifications/notificationService";
+import { NotificationType } from "../models/Notification";
 
-// INTERFACE NỘI BỘ: Định nghĩa một kiểu dữ liệu chung (Base) mà Post và Comment đều tuân thủ.
-type BaseLikableDocument = Document & {
+type LikableDocument = Document & {
+  userId: Types.ObjectId;
   status: string;
   is_deleted: boolean;
   likes_count: number;
+  postId?: Types.ObjectId;
 };
 
-// Map TargetType sang Model Mongoose tương ứng
-interface LikableModels {
-  post: Model<IPost | BaseLikableDocument>;
-  comment: Model<IComment | BaseLikableDocument>;
-}
-
-const likableModels: LikableModels = {
-  post: Post as LikableModels["post"],
-  comment: Comment as LikableModels["comment"],
+const likableModels: Record<TargetType, Model<LikableDocument>> = {
+  post: Post as unknown as Model<LikableDocument>,
+  comment: Comment as unknown as Model<LikableDocument>,
 };
 
-// Hàm trợ giúp để kiểm tra sự tồn tại của đối tượng mục tiêu (không thay đổi)
-const checkTargetExists = async (targetType: TargetType, targetId: string) => {
-  const Model = likableModels[
-    targetType as keyof LikableModels
-  ] as Model<BaseLikableDocument>;
-
-  if (!Model) {
-    throw new Error("Invalid target type.");
-  }
-
-  const target = await Model.findById(targetId);
-
-  if (!target) return false;
-
-  if (target.status !== "approved" || target.is_deleted) return false;
-
-  return true;
-};
-
-// --- [ JOB PRODUCER: Thêm Job đếm Likes ] ---
 const addLikeCountJob = (
   targetType: TargetType,
   targetId: string,
-  increment: 1 | -1 // Vẫn giữ kiểu dữ liệu này
+  increment: 1 | -1
 ) => {
-  // Xác định tên Model (Post hoặc Comment) để Job Queue biết nên update Collection nào
-  const targetModelName = targetType === "post" ? "Post" : "Comment";
-
   addJobToQueue("updateLikeCounts", {
-    targetId: targetId,
-    targetModelName: targetModelName, // <-- TRUYỀN TÊN MODEL
+    targetId,
+    targetModelName: targetType === "post" ? "Post" : "Comment",
     update: { $inc: { likes_count: increment } },
   });
 };
 
-// --- [ USER: Thích hoặc Bỏ Thích (Toggle) ] ---
-// Endpoint: POST /api/likes/:targetType/:targetId
+// --- [ 1. WRITE OPERATIONS ] ---
+
 export const toggleLike = asyncHandler(
   async (req: AuthenticatedRequest<ToggleLikeParams>, res: Response) => {
     const { targetType, targetId } = req.params;
-    const userId = req.userId;
+    const userId = req.userId!;
 
-    if (
-      !Types.ObjectId.isValid(targetId) ||
-      !likableModels.hasOwnProperty(targetType)
-    ) {
-      return res.status(400).json({ error: "Invalid target type or ID." });
-    }
+    const Model = likableModels[targetType as TargetType];
+    if (!Model) throw new AppError(400, "Invalid target type.");
 
-    if (!(await checkTargetExists(targetType, targetId))) {
-      return res.status(404).json({
-        error: `${targetType} not found or not available for liking.`,
-      });
-    }
+    const target = await Model.findOne({
+      _id: targetId,
+      is_deleted: false,
+      status: "approved",
+    }).select("likes_count userId postId");
 
-    const targetIdObj = new Types.ObjectId(targetId);
-    const userIdObj = new Types.ObjectId(userId);
+    if (!target) throw new AppError(404, `${targetType} không tồn tại.`);
 
-    // Khai báo biến increment để cho phép 0
-    let increment: 1 | -1 | 0 = 0;
-
-    // 1. Tìm kiếm nếu người dùng đã thích đối tượng này chưa
     const existingLike = await Like.findOne({
-      userId: userIdObj,
-      targetId: targetIdObj,
-      targetType: targetType,
+      userId: new Types.ObjectId(userId),
+      targetId: new Types.ObjectId(targetId),
+      targetType,
     });
 
-    let message = "";
-    let isLiked = false;
+    const isLiked = !existingLike;
+
+    // --- LOGIC BẢO VỆ GIÁ TRỊ ÂM ---
+    let increment: 1 | -1 | 0 = isLiked ? 1 : -1;
+
+    // Nếu hành động là Unlike nhưng số like hiện tại đã là 0 hoặc âm, set increment = 0
+    if (!isLiked && (target.likes_count || 0) <= 0) {
+      increment = 0;
+    }
 
     if (existingLike) {
-      // Đã thích -> Bỏ thích: XÓA VÀ GIẢM COUNT
       await existingLike.deleteOne();
-      message = `Unliked ${targetType} successfully.`;
-      increment = -1;
     } else {
-      // Chưa thích -> Thích: TẠO MỚI VÀ TĂNG COUNT
       await Like.create({
-        userId: userIdObj,
-        targetId: targetIdObj,
-        targetType: targetType,
+        userId: new Types.ObjectId(userId),
+        targetId: new Types.ObjectId(targetId),
+        targetType,
       });
-      message = `Liked ${targetType} successfully.`;
-      isLiked = true;
-      increment = 1;
     }
-
-    // Bỏ qua if (increment !== 0) vì nó luôn đúng
-
-    addLikeCountJob(
-      targetType as TargetType,
-      targetId,
-      increment as 1 | -1 // Dùng Type Assertion để vượt qua kiểm tra nghiêm ngặt
-    );
-
-    // Lấy count hiện tại (dùng findById - READ OP) để phản hồi
-    const Model = likableModels[
-      targetType as keyof LikableModels
-    ] as Model<BaseLikableDocument>;
-
-    const updatedTarget = await Model.findById(targetId).select("likes_count");
-    const likeCount = updatedTarget?.likes_count || 0;
-
-    // 3. Phản hồi (Client sẽ tự tăng/giảm count để nhất quán trải nghiệm)
-    res.json({ message, isLiked, likeCount });
-  }
-);
-
-// --- [ PUBLIC: Lấy Trạng thái Like của người dùng hiện tại & Tổng số Likes ] ---
-export const getLikeStatus = asyncHandler(
-  async (
-    req:
-      | Request<{}, {}, {}, GetLikeStatusQuery>
-      | AuthenticatedRequest<{}, {}, {}, GetLikeStatusQuery>,
-    res: Response
-  ) => {
-    const { targetType, targetId } = req.query;
-    const userId = "userId" in req ? req.userId : undefined;
 
     if (
-      !targetType ||
-      !targetId ||
-      !Types.ObjectId.isValid(targetId as string)
+      isLiked &&
+      target.userId &&
+      target.userId.toString() !== userId.toString()
     ) {
-      return res.status(400).json({ error: "Invalid target type or ID." });
+      createNotification({
+        recipientId: target.userId,
+        senderId: userId,
+        type: NotificationType.NEW_LIKE,
+        entityId: targetType === "post" ? target._id : (target as any).postId,
+        entityType: "post",
+        content: `đã thích ${
+          targetType === "post" ? "bài viết" : "bình luận"
+        } của bạn.`,
+      }).catch((err) => console.error(err));
     }
 
-    if (!likableModels.hasOwnProperty(targetType)) {
-      return res.status(400).json({ error: "Unsupported target type." });
+    // Chỉ đẩy Job vào Queue nếu có sự thay đổi (increment != 0)
+    if (increment !== 0) {
+      addLikeCountJob(targetType as TargetType, targetId, increment);
     }
 
-    const validTargetType = targetType as keyof LikableModels;
-    const targetIdObj = new Types.ObjectId(targetId as string);
-    let likes_count = 0;
+    res.json({
+      message: isLiked ? "Liked successfully." : "Unliked successfully.",
+      isLiked,
+      // Trả về giá trị đã được bảo vệ tối thiểu là 0
+      likeCount: Math.max(0, (target.likes_count || 0) + increment),
+    });
+  }
+);
+// --- [ 2. READ OPERATIONS ] ---
+
+export const getLikeStatus = asyncHandler(
+  async (req: Request<{}, {}, {}, GetLikeStatusQuery>, res: Response) => {
+    const { targetType, targetId } = req.query;
+    const userId = (req as any).userId;
+
+    const Model = likableModels[targetType as TargetType];
+    if (!Model) throw new AppError(400, "Invalid target type.");
+
+    const target = await Model.findById(targetId).select("likes_count");
+    if (!target) throw new AppError(404, "Target not found.");
+
     let isLiked = false;
-
-    const Model = likableModels[validTargetType] as Model<BaseLikableDocument>;
-
-    const target = await Model.findById(targetId as string).select(
-      "likes_count"
-    );
-    likes_count = target?.likes_count || 0;
-
-    if (userId) {
-      const existingLike = await Like.findOne({
+    if (userId && Types.ObjectId.isValid(userId as string)) {
+      isLiked = !!(await Like.exists({
         userId: new Types.ObjectId(userId),
-        targetId: targetIdObj,
-        targetType: targetType,
-      });
-      isLiked = !!existingLike;
+        targetId: new Types.ObjectId(targetId as string),
+        targetType,
+      }));
     }
 
-    res.json({ isLiked, likes_count });
+    res.json({ isLiked, likes_count: target.likes_count || 0 });
   }
 );

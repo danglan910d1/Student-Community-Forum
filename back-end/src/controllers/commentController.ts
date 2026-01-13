@@ -1,273 +1,293 @@
 /**
  * CONTROLLER: commentController
- * * Trách nhiệm: Xử lý Business Logic (Logic Nghiệp vụ) liên quan đến Bình luận (CRUD, Reply, Soft Delete).
- * * Nguyên tắc áp dụng: HOF, Type Safety, Atomic Updates, Data Integrity.
+ * Trách nhiệm: Xử lý Business Logic liên quan đến Bình luận.
+ * Nguyên tắc: Pipeline-driven, Job-based Counter, Atomic Updates.
  */
 import { Request, Response } from "express";
 import { Types } from "mongoose";
-import Comment, { IComment } from "../models/Comment";
-import Post from "../models/Post";
-import Like from "../models/Like";
+import Comment from "../models/Comment";
 import { AuthenticatedRequest } from "../types/express";
 import { asyncHandler } from "../utils/asyncHandler";
 import { paginateAggregation } from "../utils/pagination";
 import { buildCommentAggregationPipeline } from "../services/comments/commentPipeline";
 import { buildCommentFilter } from "../services/comments/commentFilter";
-import { addJobToQueue } from "../services/common/jobQueue"; // IMPORT JOB QUEUE
+import { addJobToQueue } from "../services/common/jobQueue";
 import {
   CommentParams,
   CreateCommentBody,
   GetCommentsQuery,
 } from "../types/comment";
+import { AppError } from "../utils/appError";
+import Post from "../models/Post";
+import { NotificationType } from "../models/Notification";
+import { createNotification } from "../services/notifications/notificationService";
 
-// --- [ JOB PRODUCER: Thêm Job đếm Comments/Replies ] ---
-// Tên model được truyền vào là 'Post' hoặc 'Comment'
+/** * helper: Thêm Job đếm Comments/Replies vào Queue để xử lý bất đồng bộ
+ */
 const addCountJob = (
-  ModelType: "Post" | "Comment",
+  targetType: "Post" | "Comment",
   targetId: string,
   increment: 1 | -1
 ) => {
-  let jobName = "";
-  let update: any = {};
-  let targetModelName: "Post" | "Comment" = ModelType;
-
-  if (ModelType === "Post") {
-    jobName = "updatePostCommentCount";
-    update = { $inc: { comments_count: increment } };
-  } else if (ModelType === "Comment") {
-    jobName = "updateCommentReplyCount";
-    update = { $inc: { replies_count: increment } };
-  }
-
-  if (jobName) {
-    addJobToQueue(jobName, {
-      targetId: targetId,
-      targetModelName: targetModelName, // <-- TRUYỀN TÊN MODEL
-      update: update,
-    });
-  }
+  const jobName =
+    targetType === "Post"
+      ? "updatePostCommentCount"
+      : "updateCommentReplyCount";
+  addJobToQueue(jobName, {
+    targetId,
+    targetModelName: targetType,
+    update: {
+      $inc: {
+        [targetType === "Post" ? "comments_count" : "replies_count"]: increment,
+      },
+    },
+  });
 };
 
-// --- [ USER: Tạo Bình Luận Mới ] ---
+// --- [ 1. READ OPERATIONS ] ---
+
+/** * GET /api/comments (Public)
+ * Lấy comment theo bài viết (thường dùng postId trong query)
+ */
+export const getComments = asyncHandler(async (req: Request, res: Response) => {
+  const query = req.query as GetCommentsQuery;
+
+  // 1. Build Filter & Pipeline
+  const filter = buildCommentFilter(query, {
+    userId: undefined,
+    isAdmin: false,
+  });
+  const pipeline = buildCommentAggregationPipeline(filter, {
+    includeUser: true,
+    includeProjection: true,
+    isAdminView: false,
+  });
+
+  // 2. Phân trang và phản hồi
+  const result = await paginateAggregation(
+    Comment,
+    pipeline,
+    query.page,
+    query.limit
+  );
+  res.json({
+    comments: result.items,
+    pagination: {
+      totalItems: result.totalItems,
+      totalPages: result.totalPages,
+      currentPage: result.currentPage,
+      limit: result.limit,
+    },
+  });
+});
+
+/** * GET /api/comments/admin (Admin Only) */
+export const getAllCommentsForAdmin = asyncHandler(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const query = req.query as GetCommentsQuery;
+
+    const filter = buildCommentFilter(query, {
+      userId: req.userId,
+      isAdmin: true,
+    });
+    const pipeline = buildCommentAggregationPipeline(filter, {
+      includeUser: true,
+      includePost: true,
+      includeParent: true,
+      includeProjection: true,
+      isAdminView: true,
+    });
+
+    const result = await paginateAggregation(
+      Comment,
+      pipeline,
+      query.page,
+      query.limit
+    );
+    res.json({
+      comments: result.items,
+      pagination: {
+        totalItems: result.totalItems,
+        totalPages: result.totalPages,
+        currentPage: result.currentPage,
+        limit: result.limit,
+      },
+    });
+  }
+);
+
+// --- [ 2. WRITE OPERATIONS ] ---
+
+/**
+ * POST /api/comments (User)
+ * Cập nhật: Đảm bảo dữ liệu trả về là dữ liệu mới nhất thông qua Lean và Aggregate chuẩn.
+ */
 export const createComment = asyncHandler(
   async (
     req: AuthenticatedRequest<{}, {}, CreateCommentBody>,
     res: Response
   ) => {
     const { postId, parentId, content } = req.body;
-    const userId = req.userId;
+    if (!postId || !content?.trim())
+      throw new AppError(400, "Post ID and content are required.");
 
-    const trimmedContent = content ? content.trim() : "";
+    const userId = req.userId!;
 
-    if (!postId || !trimmedContent) {
-      return res
-        .status(400)
-        .json({ error: "Post ID and content are required." });
-    }
-    if (!Types.ObjectId.isValid(postId)) {
-      return res.status(400).json({ error: "Invalid Post ID format." });
-    }
-
-    const post = await Post.findById(postId);
-    if (!post || post.status !== "approved" || post.is_deleted) {
-      return res
-        .status(404)
-        .json({ error: "Post not found or not available." });
-    }
-
-    let parentComment: IComment | null = null;
-    let parentIdObj: Types.ObjectId | null = null;
-
-    if (parentId) {
-      if (!Types.ObjectId.isValid(parentId)) {
-        return res.status(400).json({ error: "Invalid Parent ID format." });
-      }
-
-      parentComment = await Comment.findById(parentId);
-      if (!parentComment || parentComment.is_deleted) {
-        return res
-          .status(404)
-          .json({ error: "Parent comment not found or has been deleted." });
-      }
-
-      if (parentComment.postId.toString() !== postId) {
-        return res
-          .status(400)
-          .json({ error: "Reply must belong to the same post as the parent." });
-      }
-      parentIdObj = parentComment._id as Types.ObjectId;
-    }
-
-    const newComment = await Comment.create({
+    // 1. Lưu DB - Sử dụng lean() hoặc save() để đảm bảo object được tạo
+    const newCommentDoc = new Comment({
       userId: new Types.ObjectId(userId),
       postId: new Types.ObjectId(postId),
-      parentId: parentIdObj,
-      content: trimmedContent,
+      parentId: parentId ? new Types.ObjectId(parentId) : null,
+      content: content.trim(),
       status: "approved",
     });
+    await newCommentDoc.save();
 
-    if (parentComment) {
-      addCountJob(
-        "Comment",
-        (parentComment._id as Types.ObjectId).toString(),
-        1
-      );
+    if (parentId) {
+      await Comment.findByIdAndUpdate(parentId, {
+        $inc: { replies_count: 1 },
+      });
+    } else {
+      await Post.findByIdAndUpdate(postId, {
+        $inc: { comments_count: 1 },
+      });
     }
 
-    if (!parentId) {
-      addCountJob("Post", postId, 1);
+    // 3. XỬ LÝ LẤY DỮ LIỆU MỚI NHẤT
+    // Dùng aggregate với chính ID vừa tạo để trả về đúng format pipeline FE yêu cầu
+    const commentArray = await Comment.aggregate(
+      buildCommentAggregationPipeline(
+        { _id: newCommentDoc._id },
+        { includeUser: true, includeProjection: true }
+      )
+    );
+
+    if (!commentArray || commentArray.length === 0) {
+      throw new AppError(500, "Lỗi khi truy xuất bình luận vừa tạo.");
     }
 
-    res.status(201).json(newComment);
+    // 4. Gửi thông báo (Giữ nguyên logic của bạn)
+    const post = await Post.findById(postId).select("userId");
+    if (post) {
+      let recipientId = post.userId;
+      let type = NotificationType.NEW_COMMENT;
+      if (parentId) {
+        const parentComment = await Comment.findById(parentId).select("userId");
+        if (parentComment) {
+          recipientId = parentComment.userId;
+          type = NotificationType.NEW_REPLY;
+        }
+      }
+      await createNotification({
+        recipientId: recipientId as Types.ObjectId,
+        senderId: userId,
+        type,
+        entityId: post._id as Types.ObjectId,
+        entityType: "post",
+        content: parentId
+          ? "đã trả lời bình luận của bạn."
+          : "đã bình luận về bài viết của bạn.",
+      });
+    }
+
+    res.status(201).json(commentArray[0]);
   }
 );
 
-// --- [ PUBLIC: Lấy danh sách Bình Luận ] ---
-// FIX N+1 & Tách Filter
-export const getComments = asyncHandler(
-  async (req: Request<{}, {}, {}, GetCommentsQuery>, res: Response) => {
-    const { page, limit } = req.query;
-    // Logic xác định quyền hạn đã được chuyển vào Service Layer
-    const authContext = { userId: undefined, isAdmin: false };
-
-    // 1. XÂY DỰNG BỘ LỌC (Sử dụng Service mới)
-    const filter = buildCommentFilter(req.query, authContext);
-    if (filter.error) {
-      return res.status(400).json({ error: filter.error });
-    }
-
-    // 2. TẠO AGGREGATION PIPELINE (FIX N+1)
-    let pipeline = buildCommentAggregationPipeline(filter, {
-      includeUser: true,
-      includePost: false,
-      includeParent: false,
-      includeProjection: true,
-    });
-
-    // 3. GỌI HÀM AGGREGATION PHÂN TRANG
-    const result = await paginateAggregation(Comment, pipeline, page, limit);
-
-    res.json({
-      comments: result.items,
-      currentPage: result.currentPage,
-      totalPages: result.totalPages,
-      totalItems: result.totalItems,
-      limit: result.limit,
-    });
-  }
-);
-
-// --- [ USER/ADMIN: Cập nhật Bình Luận ] ---
+/**
+ * PUT /api/comments/:commentId (Author/Admin)
+ * Cập nhật: Thêm logic cập nhật nội dung và trả về dữ liệu chuẩn Pipeline.
+ */
 export const updateComment = asyncHandler(
   async (
     req: AuthenticatedRequest<CommentParams, {}, { content: string }>,
     res: Response
   ) => {
-    const commentId = req.params.commentId;
-    const userId = req.userId;
+    const { commentId } = req.params;
     const { content } = req.body;
 
-    const trimmedContent = content ? content.trim() : "";
-
-    if (!trimmedContent) {
-      return res.status(400).json({ error: "Content is required for update." });
-    }
+    if (!content?.trim())
+      throw new AppError(400, "Nội dung không được để trống.");
 
     const comment = await Comment.findById(commentId);
-    if (!comment || comment.is_deleted) {
-      return res.status(404).json({ error: "Comment not found." });
+    if (!comment || comment.is_deleted)
+      throw new AppError(404, "Không tìm thấy bình luận.");
+
+    // Kiểm tra quyền sở hữu
+    if (comment.userId.toString() !== req.userId && req.userRole !== "admin") {
+      throw new AppError(403, "Bạn không có quyền sửa bình luận này.");
     }
 
-    const isAuthor = comment.userId.toString() === userId;
-    const isAdmin = req.userRole === "admin";
+    // Thực hiện Update
+    await Comment.updateOne(
+      { _id: commentId },
+      { $set: { content: content.trim(), updatedAt: new Date() } }
+    );
 
-    if (!isAuthor && !isAdmin) {
-      return res.status(403).json({
-        error: "Access denied. Only author or admin can update this comment.",
-      });
-    }
+    // Lấy lại dữ liệu sau khi update thông qua Pipeline để đồng bộ Format với GET
+    const commentArray = await Comment.aggregate(
+      buildCommentAggregationPipeline(
+        { _id: new Types.ObjectId(commentId) },
+        { includeUser: true, includeProjection: true }
+      )
+    );
 
-    comment.content = trimmedContent;
-    comment.status = "approved";
-    await comment.save();
-
-    res.json(comment);
+    res.json(commentArray[0]);
   }
 );
 
-// --- [ USER/ADMIN: Xóa Bình Luận (Soft Delete) ] ---
+// --- [ 3. DELETE & RESTORE ] ---
+
+/** * DELETE /api/comments/:commentId (Author/Admin) */
 export const deleteComment = asyncHandler(
   async (req: AuthenticatedRequest<CommentParams>, res: Response) => {
-    const commentId = req.params.commentId;
-    const userId = req.userId;
-
+    const { commentId } = req.params;
     const comment = await Comment.findById(commentId);
-    if (!comment || comment.is_deleted) {
-      return res.status(404).json({ error: "Comment not found." });
+    if (!comment || comment.is_deleted)
+      throw new AppError(404, "Comment not found.");
+
+    if (comment.userId.toString() !== req.userId && req.userRole !== "admin") {
+      throw new AppError(403, "Permission denied.");
     }
 
-    const isAuthor = comment.userId.toString() === userId;
-    const isAdmin = req.userRole === "admin";
+    // Soft delete
+    await Comment.updateOne({ _id: commentId }, { $set: { is_deleted: true } });
 
-    if (!isAuthor && !isAdmin) {
-      return res.status(403).json({
-        error: "Access denied. Only author or admin can delete this comment.",
-      });
-    }
-
-    comment.is_deleted = true;
-    comment.content = "[Bình luận này đã bị xóa.]";
-    await comment.save();
-
+    // Giảm count ngầm
     if (comment.parentId) {
-      addCountJob("Comment", comment.parentId.toString(), -1);
-    }
-
-    if (!comment.parentId) {
-      addCountJob("Post", comment.postId.toString(), -1);
+      // Cập nhật trực tiếp cho Comment cha thay vì dùng Job
+      await Comment.findByIdAndUpdate(comment.parentId, {
+        $inc: { replies_count: -1 },
+      });
+    } else {
+      // Cập nhật trực tiếp cho Post
+      await Post.findByIdAndUpdate(comment.postId, {
+        $inc: { comments_count: -1 },
+      });
     }
 
     res.json({ message: "Comment deleted successfully." });
   }
 );
 
-// --- [ ADMIN: Lấy tất cả Comments (kể cả pending/deleted) ] ---
-// FIX N+1 & Tách Filter
-export const getAllCommentsForAdmin = asyncHandler(
-  async (
-    req: AuthenticatedRequest<{}, {}, {}, GetCommentsQuery>,
-    res: Response
-  ) => {
-    const { page, limit } = req.query;
-    // Logic xác định quyền hạn
-    const authContext = {
-      userId: req.userId,
-      isAdmin: req.userRole === "admin",
-    };
+/** * PUT /api/comments/admin/restore/:commentId (Admin Only) */
+export const restoreComment = asyncHandler(
+  async (req: AuthenticatedRequest<CommentParams>, res: Response) => {
+    const { commentId } = req.params;
 
-    // 1. XÂY DỰNG BỘ LỌC (isAdmin: true)
-    const filter = buildCommentFilter(req.query, authContext);
-    if (filter.error) {
-      return res.status(400).json({ error: filter.error });
-    }
+    const comment = await Comment.findOneAndUpdate(
+      { _id: commentId, is_deleted: true },
+      { $set: { is_deleted: false } },
+      { new: true }
+    );
 
-    // 2. TẠO AGGREGATION PIPELINE (FIX N+1)
-    let pipeline = buildCommentAggregationPipeline(filter, {
-      includeUser: true,
-      includePost: true,
-      includeParent: true,
-      includeProjection: true,
-    });
+    if (!comment) throw new AppError(404, "Comment not found in trash.");
 
-    // 3. GỌI HÀM AGGREGATION PHÂN TRANG
-    const result = await paginateAggregation(Comment, pipeline, page, limit);
+    // Tăng lại count
+    comment.parentId
+      ? addCountJob("Comment", comment.parentId.toString(), 1)
+      : addCountJob("Post", comment.postId.toString(), 1);
 
-    res.json({
-      comments: result.items,
-      currentPage: result.currentPage,
-      totalPages: result.totalPages,
-      totalItems: result.totalItems,
-      limit: result.limit,
-    });
+    res.json({ message: "Comment restored successfully." });
   }
 );

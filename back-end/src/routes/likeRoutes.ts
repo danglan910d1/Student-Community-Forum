@@ -1,28 +1,35 @@
+// src/routes/likeRoutes.ts
 import { Router } from "express";
-import { toggleLike, getLikeStatus } from "../controllers/likeController";
+import * as likeCtrl from "../controllers/likeController";
 import { authMiddleware } from "../middleware/auth";
+import { optionalAuth } from "../middleware/optionalAuth";
 import { generalLimiter, sensitiveLimiter } from "../middleware/ratelimit";
 import { preventDuplicateRequest } from "../middleware/idempotency";
 
 const router = Router();
 
-// Định nghĩa các Route cho Likes (Prefix: /api/likes)
+/**
+ * NHÓM 1: PUBLIC / OPTIONAL AUTH
+ * Dùng để hiển thị dữ liệu lên giao diện.
+ */
 
-// --- [ USER ACCESS - Cần Đăng nhập ] ---
+// GET /api/likes - Lấy trạng thái Like & Tổng số lượt Like
+// Query params: ?targetType=post|comment&targetId=...
+router.get("/", optionalAuth, generalLimiter, likeCtrl.getLikeStatus);
 
-// POST /api/likes/:targetType/:targetId
-// Thao tác Thích/Bỏ Thích (Toggle) cho Post, Comment.
-// Cần authMiddleware để lấy userId
+/**
+ * NHÓM 2: AUTHENTICATED USER
+ * Các thao tác thay đổi dữ liệu yêu cầu định danh.
+ */
+
+// POST /api/likes/:targetType/:targetId - Thích hoặc Bỏ thích (Toggle)
+// :targetType có thể là 'post' hoặc 'comment'
 router.post(
   "/:targetType/:targetId",
-  sensitiveLimiter,
   authMiddleware,
+  sensitiveLimiter,
   preventDuplicateRequest,
-  toggleLike
+  likeCtrl.toggleLike
 );
-
-// GET /api/likes?targetType=...&targetId=...
-// Lấy trạng thái Like của người dùng hiện tại (Optional Auth) và tổng số Like
-router.get("/", generalLimiter, getLikeStatus);
 
 export default router;

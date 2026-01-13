@@ -19,6 +19,7 @@ export interface GetTagsQuery {
   page?: string;
   limit?: string; // BỔ SUNG FIX LỖI: Thêm trường status vào GetTagsQuery
   status?: TagStatus;
+  adminView?: string | boolean;
 }
 
 // 4. Dùng cho PUT /tags/:id (Cập nhật)
