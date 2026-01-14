@@ -10,12 +10,14 @@ interface PostFormTitleProps<T extends FieldValues> {
   name: Path<T>;
   label: string;
   placeholder?: string;
+  disabled?: boolean;
 }
 
 export function PostFormTitle<T extends FieldValues>({
   name,
   label,
   placeholder,
+  disabled = false,
 }: PostFormTitleProps<T>) {
   const {
     register,
@@ -33,6 +35,7 @@ export function PostFormTitle<T extends FieldValues>({
       <Input
         id={name as string}
         {...register(name)}
+        disabled={disabled}
         placeholder={placeholder}
         className={`border h-11 rounded-sm ${error ? "border-red-500" : ""}`}
       />

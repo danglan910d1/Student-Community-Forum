@@ -56,7 +56,8 @@ const getTagMetaData = (tagName: string) => {
 
 export const PopularTags = () => {
   const router = useRouter();
-  const { isLoading, allTags } = useTagsExplorer();
+  const { isLoading, allTags } = useTagsExplorer({ adminView: false });
+  console.log(allTags);
   // Xử lý logic sắp xếp và filter dữ liệu
   const processedTags = React.useMemo(() => {
     if (!allTags || allTags.length === 0) return [];

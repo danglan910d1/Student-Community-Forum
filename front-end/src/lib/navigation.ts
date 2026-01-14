@@ -8,7 +8,6 @@ export const determineActiveLabel = (
   // Logic Dashboard
   if (pathname.startsWith("/dashboard/profile")) return "Thông tin tài khoản";
   if (pathname.startsWith("/dashboard/posts")) return "Bài viết của tôi";
-  if (pathname.startsWith("/dashboard/settings")) return "Thiết lập";
 
   // Logic Public
   if (pathname === "/" || pathname.startsWith("/posts")) return "Bài viết";
@@ -17,6 +16,13 @@ export const determineActiveLabel = (
   if (pathname.match(/\/profile\/[^/]+$/)) return "Thông tin cá nhân"; // /profile/abc
   if (pathname.includes("/posts") && pathname.startsWith("/profile/"))
     return "Bài viết công khai"; // /profile/abc/posts
+
+  // Logic Admin
+  if (pathname.startsWith("/dashboard/admin/posts")) return "Quản lý bài viết";
+  if (pathname.startsWith("/dashboard/admin/users"))
+    return "Quản lý người dùng";
+  if (pathname.startsWith("/dashboard/admin/taxonomy"))
+    return "Quản lý danh mục";
 
   return "";
 };

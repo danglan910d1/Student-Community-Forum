@@ -11,13 +11,13 @@ export function useUpdatePost(postId: string) {
 
   return useMutation({
     mutationFn: (body: ICreatePostBody) => postService.updatePost(postId, body),
-    onSuccess: () => {
+    onSuccess: (data) => {
       toast.success("Cập nhật bài viết thành công!");
       // Làm mới danh sách và chi tiết bài viết
       queryClient.invalidateQueries({ queryKey: ["posts"] });
       queryClient.invalidateQueries({ queryKey: ["post", postId] });
 
-      router.push("/posts");
+      router.push(`/posts/${postId}/${data.slug}`);
       router.refresh();
     },
     onError: (error: AxiosError<{ message: string }>) => {

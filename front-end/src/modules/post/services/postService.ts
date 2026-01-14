@@ -1,5 +1,6 @@
 import { api } from "@/services/api";
 import {
+  IAdminApprovePostBody,
   ICreatePostBody,
   IGetPostsRequestParams,
   IPost,
@@ -22,9 +23,14 @@ export const postService = {
     return data;
   },
 
-  // Ví dụ bổ sung lấy chi tiết bài viết
-  getPostById: async (postId: string): Promise<IPost> => {
-    const { data } = await api.get<IPost>(`/posts/${postId}`);
+  getPostById: async (
+    postId: string,
+    adminView: boolean = false
+  ): Promise<IPost> => {
+    // Nếu adminView = true thì gọi vào route admin, ngược lại gọi route public
+    const endpoint = adminView ? `/posts/admin/${postId}` : `/posts/${postId}`;
+
+    const { data } = await api.get<IPost>(endpoint);
     return data;
   },
 
@@ -41,6 +47,13 @@ export const postService = {
 
   deletePost: async (id: string): Promise<{ message: string }> => {
     const { data } = await api.delete(`/posts/${id}`);
+    return data;
+  },
+  adminApprovePost: async (
+    id: string,
+    body: IAdminApprovePostBody
+  ): Promise<IPost> => {
+    const { data } = await api.post<IPost>(`/posts/admin/approve/${id}`, body);
     return data;
   },
 };

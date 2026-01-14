@@ -1,5 +1,5 @@
-import { ProfileContainer } from "@/modules/user/containers/ProfileContainer";
+import { PostTableContainer } from "@/modules/post/containers/PostTableContainer";
 
 export default function PostListPage() {
-  return <ProfileContainer />;
+  return <PostTableContainer />;
 }

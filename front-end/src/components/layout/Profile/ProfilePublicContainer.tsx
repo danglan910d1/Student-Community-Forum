@@ -17,8 +17,8 @@ export const ProfilePublicContainer = ({
   return (
     <SidebarLayoutWrapper
       sidebar={<ProfileSidebar userId={userId} />}
-      sidebarClassName="w-64"
-      stickyClassName="sticky top-2 h-[calc(100vh-20px)]" // Trừ đi khoảng cách top
+      sidebarClassName="w-62"
+      stickyClassName="sticky top-2 h-[calc(100vh)]"
     >
       <div className="animate-in fade-in duration-500">{children}</div>
     </SidebarLayoutWrapper>

@@ -34,13 +34,6 @@ export const DASHBOARD_NAV_ITEMS = [
     iconBg: "bg-purple-100",
     iconColor: "text-purple-600",
   },
-  {
-    label: "Thiết lập",
-    href: "/dashboard/settings",
-    icon: Settings,
-    iconBg: "bg-slate-100",
-    iconColor: "text-slate-600",
-  },
 ];
 
 // constants/navigation.ts
@@ -58,5 +51,30 @@ export const PUBLIC_PROFILE_NAV_ITEMS = (userId: string) => [
     icon: FileText,
     iconBg: "bg-purple-100",
     iconColor: "text-purple-600",
+  },
+];
+
+// Thêm vào constants/navigation.ts
+export const ADMIN_NAV_ITEMS = [
+  {
+    label: "Quản lý bài viết",
+    href: "/dashboard/admin/posts",
+    icon: FileText,
+    iconBg: "bg-red-100",
+    iconColor: "text-red-600",
+  },
+  {
+    label: "Quản lý người dùng",
+    href: "/dashboard/admin/users",
+    icon: UserCircle,
+    iconBg: "bg-indigo-100",
+    iconColor: "text-indigo-600",
+  },
+  {
+    label: "Quản lý danh mục",
+    href: "/dashboard/admin/taxonomy",
+    icon: Settings, // Bạn có thể dùng icon Hash hoặc Settings
+    iconBg: "bg-yellow-100",
+    iconColor: "text-yellow-600",
   },
 ];

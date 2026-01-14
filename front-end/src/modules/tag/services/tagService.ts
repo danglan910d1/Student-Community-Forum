@@ -10,9 +10,14 @@ import {
 export const tagService = {
   // Lấy tags gợi ý: mặc định lấy các tag đã approved
   getTags: async (params?: IGetTagsRequestParams): Promise<ITagResponse> => {
-    const { data } = await api.get<ITagResponse>("/tags", {
+    // Nếu adminView = true, dùng route /tags/admin, ngược lại dùng /tags
+    const endpoint = params?.adminView ? "/tags/admin" : "/tags";
+
+    const { data } = await api.get<ITagResponse>(endpoint, {
       params: {
         ...params,
+        // Backend mới nhận diện qua Route nên adminView ở params có thể giữ hoặc bỏ
+        // Nhưng tốt nhất là gửi đi để đồng bộ logic isAdmin trong Controller
         adminView: params?.adminView === true,
       },
     });

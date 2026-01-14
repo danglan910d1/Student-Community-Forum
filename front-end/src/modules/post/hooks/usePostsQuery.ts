@@ -14,6 +14,7 @@ export const usePostsQuery = (params: IGetPostsRequestParams) => {
     params.sortBy ?? "",
     params.is_resolved ?? false,
     params.myPosts ?? false,
+    params.userId ?? "",
   ];
 
   return useQuery<IPostResponse, AxiosError>({

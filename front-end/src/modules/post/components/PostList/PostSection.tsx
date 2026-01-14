@@ -13,6 +13,7 @@ import { LoginGuard } from "@/components/shared/LoginGuarđialog";
 import Link from "next/link";
 import { FileQuestion, PlusCircle } from "lucide-react";
 import { EmptyState } from "@/components/shared/EmtyState";
+import { POST_FILTERS } from "../../constants/post";
 
 interface PostSectionProps {
   headerTitle: string;
@@ -97,12 +98,6 @@ export function PostSection({
     </main>
   );
 }
-
-const POST_FILTERS = [
-  { label: "Mới nhất", value: "new" },
-  { label: "Phổ biến", value: "popular" },
-  { label: "Đã Giải quyết", value: "resolved" },
-];
 
 function SkeletonList({ count }: { count: number }) {
   return (

@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
-import { useParams } from "next/navigation"; // 1. Lấy params từ URL
+import { useEffect, useMemo, useRef } from "react";
+import { useParams } from "next/navigation";
 import { FormProvider, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTopicStore } from "@/stores/useTopicStore";
@@ -19,19 +19,23 @@ import { PostFormActions } from "../components/PostForm/PostFormAction";
 
 export function UpdatePostContainer() {
   const params = useParams();
-  const postId = params.id as string; // Giả sử folder của bạn là [id]
+  const postId = params.id as string;
+
+  // Khóa để chỉ reset dữ liệu 1 lần duy nhất khi load thành công
+  const isDataInitialized = useRef(false);
 
   const { topics } = useTopicStore();
   const { mutate: updatePost, isPending } = useUpdatePost(postId);
+
+  // Lấy dữ liệu bài viết (Kiểu IPost chuẩn)
   const { data: post, isLoading: isLoadingPost } = usePostDetail(postId);
   console.log(post);
+
   const {
     getTagsByTopicId,
     systemTags,
     isLoading: isLoadingTags,
-  } = useTagsData({
-    adminView: false,
-  });
+  } = useTagsData({ adminView: false });
 
   const methods = useForm<CreatePostInput>({
     resolver: zodResolver(createPostSchema),
@@ -50,42 +54,55 @@ export function UpdatePostContainer() {
     return getTagsByTopicId(selectedTopicId);
   }, [selectedTopicId, getTagsByTopicId]);
 
+  const formValues = methods.watch();
+
   useEffect(() => {
-    if (post) {
-      // 1. Lấy đúng ID của topic
-      const tId = post.topic?.topicId || post.topic?.topicId || "";
+    if (post && topics.length > 0 && !isDataInitialized.current) {
+      // 1. Chuyển đổi ID về string để đồng bộ với Select value
+      const normalizedTopicId = post.topic?.topicId
+        ? String(post.topic.topicId)
+        : "";
 
-      // 2. Map lại tags (Đảm bảo backend trả về mảng object có name/slug)
-      const postTags = Array.isArray(post.tags) ? post.tags : [];
-
-      methods.reset({
+      const dataToReset = {
         title: post.title || "",
         content: post.content || "",
-        topicId: tId,
-        tags: postTags,
-      });
+        topicId: normalizedTopicId,
+        tags: [...(post.tags || []), ...(post.pending_tags || [])].map((t) => ({
+          tagId: String(t.tagId),
+          name: t.name,
+          slug: t.slug,
+        })),
+      };
 
-      console.log("Form đã được reset với topicId:", tId);
+      // 2. Reset form với keepDefaultValues: false để ghi đè hoàn toàn
+      methods.reset(dataToReset);
+
+      isDataInitialized.current = true;
     }
-  }, [post, methods]);
+  }, [post, topics, methods]);
 
-  console.log(post);
-  const watchedValues = methods.watch();
-  console.log("Form Values hiện tại:", watchedValues);
+  // Log này sẽ chạy mỗi khi Form thay đổi (do lệnh watch)
+  console.log(">>> FORM STATE CURRENT:", formValues);
 
   const handleFormSubmit = (data: CreatePostInput) => {
     updatePost(transformPostData(data));
   };
 
+  // UI Loading
   if (isLoadingPost || (isLoadingTags && !post)) {
     return (
-      <div className="p-10 text-center animate-pulse">Đang tải dữ liệu...</div>
+      <div className="p-10 text-center animate-pulse flex flex-col items-center gap-4">
+        <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+        <p className="text-muted-foreground font-medium">
+          Đang chuẩn bị dữ liệu bài viết...
+        </p>
+      </div>
     );
   }
 
   return (
     <CardLayout className="p-0 border-none shadow-sm">
-      <div className="max-w-6xl p-5 space-y-8 animate-in fade-in duration-700">
+      <div className="max-w-6xl p-5 space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-700">
         <PostFormHeader
           title="Chỉnh sửa bài viết"
           description="Cập nhật lại nội dung bài viết để cộng đồng hỗ trợ tốt hơn."

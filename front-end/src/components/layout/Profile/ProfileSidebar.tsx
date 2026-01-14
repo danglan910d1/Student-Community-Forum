@@ -13,7 +13,7 @@ export function ProfileSidebar({ userId }: { userId: string }) {
       <SidebarGroup className="p-0">
         <CardLayout className="shadow-sm border-none">
           <div className="px-4 py-3 text-xs font-bold text-muted-foreground uppercase bg-muted/30">
-            Hồ sơ người dùng
+            Hồ sơ
           </div>
           {items.map((item, index) => (
             <QuickNavItem key={item.label} item={item} showBorder={index > 0} />

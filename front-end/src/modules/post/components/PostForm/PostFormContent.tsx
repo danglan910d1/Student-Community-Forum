@@ -17,6 +17,7 @@ interface PostFormContentProps {
   topicTags: ITag[];
   systemTags: ITag[];
   selectedTopicId: string;
+  disabled?: boolean;
 }
 
 export function PostFormContent({
@@ -24,8 +25,21 @@ export function PostFormContent({
   topicTags,
   systemTags,
   selectedTopicId,
+  disabled,
 }: PostFormContentProps) {
-  const { control, setValue } = useFormContext<CreatePostInput>();
+  const {
+    control,
+    setValue,
+    formState: { isDirty },
+  } = useFormContext<CreatePostInput>();
+
+  const handleTopicChange = (val: string) => {
+    // CHỈ xóa tags nếu người dùng thực sự thao tác (form đã bẩn)
+    // Hoặc kiểm tra nếu giá trị mới khác giá trị cũ
+    if (isDirty) {
+      setValue("tags", []);
+    }
+  };
 
   return (
     <div className="space-y-8 px-5">
@@ -34,7 +48,7 @@ export function PostFormContent({
         control={control}
         name="topicId"
         topics={topics}
-        onTopicChange={() => setValue("tags", [])}
+        onTopicChange={handleTopicChange}
       />
 
       {/* 2. Tiêu đề - Truyền props để tái sử dụng */}

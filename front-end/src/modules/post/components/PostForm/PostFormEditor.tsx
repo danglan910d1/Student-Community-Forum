@@ -8,11 +8,13 @@ import MDEditor from "@uiw/react-md-editor";
 interface PostFormEditorProps<T extends FieldValues> {
   name: Path<T>;
   label: string;
+  disabled?: boolean;
 }
 
 export function PostFormEditor<T extends FieldValues>({
   name,
   label,
+  disabled = false,
 }: PostFormEditorProps<T>) {
   const {
     control,
@@ -30,7 +32,12 @@ export function PostFormEditor<T extends FieldValues>({
           <div
             className={`border rounded-sm overflow-hidden ${error ? "border-red-500" : ""}`}
           >
-            <MDEditor {...field} height={400} preview="edit" />
+            <MDEditor
+              {...field}
+              height={400}
+              preview={disabled ? "preview" : "edit"}
+              aria-disabled={disabled}
+            />
           </div>
         )}
       />

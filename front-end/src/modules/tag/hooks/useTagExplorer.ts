@@ -26,7 +26,7 @@ export function useTagsExplorer({
     queryFn: () =>
       tagService.getTags({
         limit: 1000,
-        adminView,
+        adminView: Boolean(adminView),
       }),
     staleTime: 1000 * 60 * 5, // 5 phút
     gcTime: 1000 * 60 * 10,

@@ -56,16 +56,27 @@ export const buildTagAggregationPipeline = (
       },
     });
   }
-
   pipeline.push({
     $lookup: {
       from: "posts",
-      localField: "_id",
-      foreignField: "tags",
+      let: { tagId: "$_id" },
+      pipeline: [
+        {
+          $match: {
+            $expr: {
+              $and: [
+                { $in: ["$$tagId", "$tags"] },
+                { $ne: ["$is_deleted", true] },
+                // Nếu không phải adminView, chỉ lấy post đã duyệt
+                ...(isAdminView ? [] : [{ $eq: ["$status", "approved"] }]),
+              ],
+            },
+          },
+        },
+      ],
       as: "postsUsingThisTag",
     },
   });
-
   // Thêm field postCount
   pipeline.push({
     $addFields: {

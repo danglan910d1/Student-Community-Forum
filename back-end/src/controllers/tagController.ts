@@ -24,31 +24,35 @@ import { AppError } from "../utils/appError";
 export const getTagsList = asyncHandler(
   async (req: Request | AuthenticatedRequest, res: Response) => {
     const query = req.query as GetTagsQuery;
-    // 1. Xác định quyền dựa trên token (nếu có)
-    const actualRole = (req as any).userRole;
 
-    // 2. Ý định của người dùng (Chỉ Admin mới có quyền bật view này)
-    const isAdmin =
-      actualRole === "admin" &&
-      (query.adminView === "true" || query.adminView === true);
+    // 1. Tự động xác định Admin dựa trên Route Path
+    // Nếu URL chứa "/admin", isAdmin sẽ được kích hoạt
+    const isResourceAdminRoute = req.originalUrl.includes("/api/tags/admin");
+    const userRole = (req as any).userRole;
+
+    // isAdmin chỉ true khi: đúng route admin VÀ user có role admin
+    const isAdmin = isResourceAdminRoute && userRole === "admin";
+
     const userId = "userId" in req ? (req as any).userId : undefined;
 
-    // 1. Xây dựng bộ lọc và ống dẫn (isAdminView quyết định việc hiện các trường ẩn)
+    // 2. Xây dựng filter (buildTagFilter sẽ nhận isAdmin để bỏ qua filter status="approved")
     const filter = await buildTagFilter(query, { userId, isAdmin });
+
     const pipeline = buildTagAggregationPipeline(filter, {
       includeTopic: true,
-      includeUser: isAdmin, // Chỉ hiện người tạo cho Admin
+      includeUser: isAdmin, // Public không cần biết ai tạo tag
       includeProjection: true,
-      isAdminView: isAdmin,
+      isAdminView: isAdmin, // Quyết định postCount và hiển thị field status
     });
 
-    // 2. Phân trang và phản hồi
+    // 3. Thực hiện phân trang
     const result = await paginateAggregation(
       Tag,
       pipeline,
       query.page,
       query.limit
     );
+
     res.json({
       tags: result.items,
       pagination: {

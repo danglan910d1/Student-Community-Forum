@@ -163,8 +163,8 @@ export const getPostById = asyncHandler(
         includeTopic: true,
         includeTags: true,
         includeProjection: true,
-        // Tác giả (có userId) được phép thấy status/email của chính họ
-        isAdminView: !!userId,
+        isAdminView: userRole === "admin",
+        currentUserId: userId,
       })
     );
 

@@ -9,7 +9,7 @@ export const DashboardContainer = ({
   return (
     <SidebarLayoutWrapper
       sidebar={<DashboardSidebar />}
-      sidebarClassName="w-64"
+      sidebarClassName="w-62"
       stickyClassName="sticky top-2 h-[calc(100vh)]"
     >
       {" "}
