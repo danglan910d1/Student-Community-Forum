@@ -51,17 +51,27 @@ export function UpdatePostContainer() {
   }, [selectedTopicId, getTagsByTopicId]);
 
   useEffect(() => {
-    if (post && !isLoadingTags) {
+    if (post) {
+      // 1. Lấy đúng ID của topic
+      const tId = post.topic?.topicId || post.topic?.topicId || "";
+
+      // 2. Map lại tags (Đảm bảo backend trả về mảng object có name/slug)
+      const postTags = Array.isArray(post.tags) ? post.tags : [];
+
       methods.reset({
-        title: post.title,
-        content: post.content,
-        topicId: post.topic?.topicId || "",
-        tags: post.tags || [],
+        title: post.title || "",
+        content: post.content || "",
+        topicId: tId,
+        tags: postTags,
       });
+
+      console.log("Form đã được reset với topicId:", tId);
     }
-  }, [post, isLoadingTags, methods]);
+  }, [post, methods]);
 
   console.log(post);
+  const watchedValues = methods.watch();
+  console.log("Form Values hiện tại:", watchedValues);
 
   const handleFormSubmit = (data: CreatePostInput) => {
     updatePost(transformPostData(data));

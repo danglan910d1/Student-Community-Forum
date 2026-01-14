@@ -71,11 +71,6 @@ export function PostListContainer() {
     return "Danh sách Bài viết";
   }, [params.tag, params.topic, topics]);
 
-  // const isInitialLoading = postsQuery.isLoading && !postsQuery.data;
-  // const showPageSkeleton = useMinimumLoading(isInitialLoading, 300);
-
-  // if (showPageSkeleton) return <ContentPageSkeleton />;
-
   return (
     <PostSection
       headerTitle={headerTitle}

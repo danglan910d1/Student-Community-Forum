@@ -59,7 +59,7 @@ router.get(
 router.get("/", generalLimiter, optionalAuth, postCtrl.getPosts);
 
 // GET /api/posts/:id - Xem chi tiết bài viết công khai & Tăng View
-router.get("/:id", generalLimiter, postCtrl.getPostById);
+router.get("/:id", generalLimiter, optionalAuth, postCtrl.getPostById);
 
 /**
  * NHÓM 3: AUTHORIZED USERS (Author/Admin)

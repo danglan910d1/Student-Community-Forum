@@ -42,12 +42,6 @@ const clearPostsCache = async () => {
 /** * GET /api/posts
  * Lấy danh sách bài viết (Public/Admin)
  */
-/** * GET /api/posts
- * Lấy danh sách bài viết kèm View Real-time từ Redis
- */
-/** * GET /api/posts
- * Lấy danh sách bài viết (Public/Admin)
- */
 export const getPosts = asyncHandler(async (req: Request, res: Response) => {
   const query = req.query as any;
 
@@ -130,52 +124,72 @@ export const getPosts = asyncHandler(async (req: Request, res: Response) => {
   res.json(response);
 });
 
-/** * GET /api/posts/:id
- * Lấy chi tiết bài viết (Public + Tăng views)
+/**
+ * GET /api/posts/:id
+ * Lấy chi tiết bài viết: Dành cho khách vãng lai và Tác giả xem bài của mình.
  */
 export const getPostById = asyncHandler(
   async (req: Request<PostParams>, res: Response) => {
     const { id } = req.params;
-    if (!Types.ObjectId.isValid(id))
-      throw new AppError(400, "Invalid Post ID.");
+    const userId = (req as any).userId; // Từ optionalAuth
+    const userRole = (req as any).userRole;
 
-    // 1. Tìm bài qua Pipeline (Lấy dữ liệu từ MongoDB)
+    if (!Types.ObjectId.isValid(id))
+      throw new AppError(400, "ID bài viết không hợp lệ.");
+
+    // 1. Xây dựng Filter
+    const filter: any = {
+      _id: new Types.ObjectId(id),
+      is_deleted: { $ne: true },
+    };
+
+    /**
+     * Tác giả xem được bài của chính mình bất kể status.
+     * Khách chỉ xem được bài 'approved'.
+     */
+    if (userId) {
+      filter.$or = [
+        { status: "approved" },
+        { userId: new Types.ObjectId(userId) },
+      ];
+    } else {
+      filter.status = "approved";
+    }
+
+    // 2. Aggregation Pipeline
     const postArray = await Post.aggregate(
-      buildPostAggregationPipeline(
-        {
-          _id: new Types.ObjectId(id),
-          status: "approved",
-          is_deleted: { $ne: true },
-        },
-        {
-          includeUser: true,
-          includeTopic: true,
-          includeTags: true,
-          includeProjection: true,
-          isAdminView: false,
-        }
-      )
+      buildPostAggregationPipeline(filter, {
+        includeUser: true,
+        includeTopic: true,
+        includeTags: true,
+        includeProjection: true,
+        // Tác giả (có userId) được phép thấy status/email của chính họ
+        isAdminView: !!userId,
+      })
     );
 
-    if (!postArray[0]) throw new AppError(404, "Post not found or unapproved.");
-
     const post = postArray[0];
+    if (!post)
+      throw new AppError(
+        404,
+        "Không tìm thấy bài viết hoặc bạn không có quyền xem."
+      );
 
-    // --- BỔ SUNG: CỘNG DỒN VIEW TỪ REDIS ---
-    // Lấy số lượt xem hiện có trong Redis (nhưng chưa đồng bộ xuống DB)
+    // 3. Cộng dồn view từ Redis (Real-time)
     const pendingViews = await redisClient.get(`views:${id}`);
     if (pendingViews) {
-      // Cộng dồn vào kết quả trả về để người dùng thấy con số mới nhất
       post.views_count += parseInt(pendingViews, 10);
     }
-    // ---------------------------------------
 
-    // 2. Tăng View qua Redis (Ghi nhận lượt xem mới vào Redis)
-    // Lưu ý: Gọi sau khi đã lấy pendingViews để không bị tính trùng chính lượt xem này
-    // (hoặc gọi trước cũng được nếu bạn muốn user thấy +1 ngay lập tức)
-    await incrementPostView(id);
+    // 4. Logic Tăng View (Chống spam chính mình & Admin)
+    const isAuthor =
+      userId && post.user?.userId?.toString() === userId.toString();
+    const isAdmin = userRole === "admin";
 
-    // Trả về post đã được cộng dồn view
+    if (!isAuthor && !isAdmin) {
+      await incrementPostView(id);
+    }
+
     res.json(post);
   }
 );
