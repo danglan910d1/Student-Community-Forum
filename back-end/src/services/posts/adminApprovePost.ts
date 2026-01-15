@@ -3,7 +3,7 @@ import Post, { IPost } from "../../models/Post";
 import Tag, { ITag } from "../../models/Tag";
 
 export type TagApprovalAction =
-  | "approve_post_only" // Chỉ approve cho bài viết này, không đổi status Tag global
+  // | "approve_post_only" // Chỉ approve cho bài viết này, không đổi status Tag global
   | "approve_and_add_topic" // Approve cho bài viết và thêm topicId vào Tag (nếu Tag đang pending hoặc chưa có topic)
   | "approve_and_mark_free" // Approve cho bài viết và đánh dấu Tag là free/global
   | "reject_tag_from_post" // Loại tag ra khỏi pending_tags của Post
@@ -85,7 +85,7 @@ export const adminApprovePost = async (
       // KIỂM TRA 1: Có thêm Tag này vào bài viết (post.tags) không?
       // Chỉ những action 'approve_post_only' hoặc 'approve_and_...' mới được gắn vào bài
       const isApprovedForPost = [
-        "approve_post_only",
+        // "approve_post_only",
         "approve_and_add_topic",
         "approve_and_mark_free",
       ].includes(action);

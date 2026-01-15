@@ -133,7 +133,7 @@ export default function MultiAutocomplete<T extends FieldValues>({
           }
         >
           {value.map((v: Tag) => (
-            <ComboboxChip key={v.slug} value={v.slug}>
+            <ComboboxChip key={v.slug} value={v.slug} showRemove={!disabled}>
               {v.name}
             </ComboboxChip>
           ))}
@@ -142,7 +142,7 @@ export default function MultiAutocomplete<T extends FieldValues>({
             id={name}
             placeholder={value.length === 0 ? placeholder : ""}
             disabled={disabled || isLimitReached}
-            onFocus={() => setOpen(true)} // Tự mở khi focus vào input
+            onFocus={() => !disabled && setOpen(true)}
           />
         </ComboboxChips>
 

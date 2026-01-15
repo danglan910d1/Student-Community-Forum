@@ -9,10 +9,10 @@ import { IPost } from "../types";
  * - placeholderData lấy từ cache list bài viết
  * - cache list tự động cập nhật khi dữ liệu chi tiết thay đổi
  */
-export const usePostDetail = (postId: string) => {
+export const usePostDetail = (postId: string, adminView: boolean = false) => {
   return useQuery<IPost, Error>({
-    queryKey: ["post", postId],
-    queryFn: () => postService.getPostById(postId),
+    queryKey: ["post", postId, adminView],
+    queryFn: () => postService.getPostById(postId, adminView),
     enabled: !!postId,
     staleTime: 0,
     refetchOnWindowFocus: true,

@@ -21,6 +21,7 @@ export interface GetPostsQuery extends CommonQuery {
   tagId?: string; // Dùng khi truyền trực tiếp ID
   tagSlug?: string; // Dùng khi lọc theo tag trên URL
   is_resolved?: string | boolean;
+  userId?: string;
 }
 
 // 4. Dùng cho PUT /posts/:id (Cập nhật)

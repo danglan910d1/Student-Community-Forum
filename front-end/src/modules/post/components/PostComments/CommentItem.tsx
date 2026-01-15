@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { formatDistanceToNow } from "date-fns";
 import { vi } from "date-fns/locale";
 import { LikeButton } from "@/components/shared/LikeButton";
@@ -14,6 +13,8 @@ import { MessageSquareReply, Pencil, Trash2 } from "lucide-react";
 import { LoginGuard } from "@/components/shared/LoginGuarđialog";
 import { Button } from "@/components/ui/button";
 import { ReplyList } from "./ReplyList";
+import { UserAvatar } from "@/components/shared/UserAvatar";
+import Link from "next/link";
 
 export function CommentItem({
   comment,
@@ -47,16 +48,16 @@ export function CommentItem({
   return (
     <div className="flex flex-col gap-3 animate-in fade-in duration-300">
       <div className="flex gap-3">
-        <Avatar className="h-8 w-8 shrink-0 border">
-          <AvatarImage src={comment.user.avatar} alt={comment.user.name} />
-          <AvatarFallback>{comment.user.name[0]}</AvatarFallback>
-        </Avatar>
-
+        <UserAvatar user={comment.user} size="sm" shape="circle" />
         <div className="flex-1 min-w-0">
           <div className="bg-muted/50 p-3 rounded-2xl group relative">
-            <p className="text-sm font-bold mb-1 text-foreground">
+            {/* CHỈNH SỬA PHẦN NÀY: Biến tên thành Link có hiệu ứng */}
+            <Link
+              href={`/profile/${comment.user.userId}`}
+              className="text-sm font-bold mb-1 text-foreground block w-fit hover:underline "
+            >
               {comment.user.name}
-            </p>
+            </Link>
 
             {isEditing ? (
               <div className="mt-2 space-y-2">

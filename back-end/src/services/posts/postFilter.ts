@@ -17,7 +17,8 @@ export const buildPostFilter = async (
   const filter = buildCommonFilter(queryParams, authContext, "post");
 
   // 2. Thêm logic đặc thù (Destructuring lấy các trường riêng của Post)
-  const { topicId, tagId, is_resolved, topicSlug, tagSlug } = queryParams;
+  const { topicId, tagId, is_resolved, topicSlug, tagSlug, userId } =
+    queryParams;
   // Lọc theo Topic (Ưu tiên ID, sau đó đến Slug)
   if (topicId && Types.ObjectId.isValid(topicId)) {
     filter.topicId = new Types.ObjectId(topicId);
@@ -37,6 +38,18 @@ export const buildPostFilter = async (
 
   if (is_resolved === "true" || is_resolved === true) {
     filter.is_resolved = true;
+  }
+
+  // Nếu có userId trong query (User A xem User B) và không phải chế độ myPosts
+  if (userId && Types.ObjectId.isValid(userId)) {
+    filter.userId = new Types.ObjectId(userId);
+    // Khi xem người khác, bắt buộc chỉ xem bài approved (tránh hacker mò ID)
+    if (
+      !authContext.isAdmin &&
+      filter.userId.toString() !== authContext.userId
+    ) {
+      filter.status = "approved";
+    }
   }
 
   return filter;

@@ -10,8 +10,7 @@ interface CustomRequest extends Request {
 
 // --- 1. CẤU HÌNH DISK STORAGE (CHO POST IMAGES VÀ CÁC FILE LỚN) ---
 
-export const UPLOADS_DIR = path.resolve("uploads"); // Đường dẫn tuyệt đối đến thư mục 'uploads'
-
+export const UPLOADS_DIR = path.join(process.cwd(), "uploads");
 // Đảm bảo thư mục uploads tồn tại
 if (!fs.existsSync(UPLOADS_DIR)) {
   fs.mkdirSync(UPLOADS_DIR, { recursive: true });

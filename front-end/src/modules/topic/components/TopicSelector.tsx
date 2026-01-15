@@ -18,6 +18,7 @@ interface TopicSelectorProps<T extends FieldValues> {
   onTopicChange: (id: string) => void;
   label?: string;
   placeholder?: string;
+  disabled?: boolean;
 }
 
 export function TopicSelector<T extends FieldValues>({
@@ -27,6 +28,7 @@ export function TopicSelector<T extends FieldValues>({
   onTopicChange,
   label = "Chủ đề (Topic)",
   placeholder = "Chọn một chuyên mục...",
+  disabled = false,
 }: TopicSelectorProps<T>) {
   const {
     field: { value, onChange },
@@ -37,53 +39,31 @@ export function TopicSelector<T extends FieldValues>({
     rules: { required: "Vui lòng chọn một chuyên mục" },
   });
 
-  const isInvalid = !!fieldState.error;
-
   return (
     <Field>
-      <FieldLabel htmlFor={name} className="font-bold text-md">
-        {label}
-      </FieldLabel>
-
+      <FieldLabel className="font-bold text-md">{label}</FieldLabel>
       <Select
+        key={value} // Thêm dòng này để Select re-render khi giá trị value thay đổi
         onValueChange={(val) => {
           onChange(val);
-          onTopicChange(val);
+          if (onTopicChange) onTopicChange(val);
         }}
-        value={value}
+        value={value || ""}
+        disabled={disabled}
       >
-        <SelectTrigger
-          id={name}
-          // Thêm aria-invalid để đồng bộ logic với MultiAutocomplete
-          aria-invalid={isInvalid}
-          className={`w-full rounded-sm h-11 ${
-            isInvalid ? "border-red-500 focus:ring-red-500" : "border-border"
-          }`}
-        >
+        <SelectTrigger>
           <SelectValue placeholder={placeholder} />
         </SelectTrigger>
-
-        <SelectContent
-          position="popper"
-          className="w-[var(--radix-select-trigger-width)] max-h-[300px]"
-        >
-          {topics.length === 0 ? (
-            <div className="p-2 text-sm text-muted-foreground text-center">
-              Không có dữ liệu chủ đề
-            </div>
-          ) : (
-            topics.map((t) => (
-              <SelectItem key={t.topicId} value={t.topicId}>
-                {t.name}
-              </SelectItem>
-            ))
-          )}
+        <SelectContent>
+          {topics.map((t) => (
+            // Cực kỳ quan trọng: value={t.topicId} để khớp với reset
+            <SelectItem key={String(t.topicId)} value={String(t.topicId)}>
+              {t.name}
+            </SelectItem>
+          ))}
         </SelectContent>
       </Select>
-
-      {fieldState.error && (
-        <FieldError className="italic">{fieldState.error.message}</FieldError>
-      )}
+      {fieldState.error && <FieldError>{fieldState.error.message}</FieldError>}
     </Field>
   );
 }

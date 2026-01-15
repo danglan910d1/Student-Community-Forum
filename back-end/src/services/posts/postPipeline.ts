@@ -6,6 +6,7 @@ interface PostPipelineConfig {
   includeTags?: boolean;
   includeProjection?: boolean;
   isAdminView?: boolean;
+  currentUserId?: string;
 }
 
 export const buildPostAggregationPipeline = (
@@ -18,9 +19,26 @@ export const buildPostAggregationPipeline = (
     includeTags = true,
     includeProjection = true,
     isAdminView = false,
+    currentUserId,
   } = config;
 
   const pipeline: PipelineStage[] = [{ $match: filter }];
+
+  // Chuyển currentUserId sang ObjectId để so sánh trong Pipeline
+  const currentUserIdObj = currentUserId
+    ? new Types.ObjectId(currentUserId)
+    : null;
+
+  // Biến dùng chung để check quyền xem thông tin nhạy cảm (Admin hoặc Tác giả)
+  const canSeeSensitive = [
+    { $eq: [isAdminView, true] }, // Điều kiện 1: Là Admin
+    {
+      $and: [
+        { $gt: [currentUserIdObj, null] }, // Có đăng nhập
+        { $eq: ["$userId", currentUserIdObj] }, // Và là chủ bài viết
+      ],
+    },
+  ];
 
   // 1. Lookup User
   if (includeUser) {
@@ -110,7 +128,14 @@ export const buildPostAggregationPipeline = (
               name: "$userData.name",
               avatar: "$userData.avatar",
               role: "$userData.role",
-              email: { $cond: [isAdminView, "$userData.email", "$$REMOVE"] },
+              // SỬA: Chỉ hiện email nếu là Admin HOẶC là chính mình
+              email: {
+                $cond: [
+                  { $or: canSeeSensitive },
+                  "$userData.email",
+                  "$$REMOVE",
+                ],
+              },
             }
           : "$userId",
 
@@ -155,7 +180,7 @@ export const buildPostAggregationPipeline = (
         pending_tags: includeTags
           ? {
               $cond: [
-                isAdminView,
+                { $or: canSeeSensitive },
                 {
                   $map: {
                     input: {

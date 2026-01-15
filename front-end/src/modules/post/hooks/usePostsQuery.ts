@@ -6,14 +6,15 @@ import { IGetPostsRequestParams, IPostResponse } from "@/modules/post/types";
 export const usePostsQuery = (params: IGetPostsRequestParams) => {
   const queryKey = [
     "posts",
-    // Đưa adminView lên đầu queryKey để phân tách cache ngay lập tức
     params.adminView ?? false,
     params.page,
+    params.status ?? "all",
     params.topicSlug ?? "",
     params.tagSlug ?? "",
     params.sortBy ?? "",
     params.is_resolved ?? false,
     params.myPosts ?? false,
+    params.userId ?? "",
   ];
 
   return useQuery<IPostResponse, AxiosError>({

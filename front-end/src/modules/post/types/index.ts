@@ -22,6 +22,12 @@ export interface IPost {
   user: IAuthor; // Đã đổi tên
   topic: { topicId: string; name: string; slug: string } | null;
   tags: { tagId: string; name: string; slug: string }[];
+  pending_tags?: {
+    tagId: string;
+    name: string;
+    slug: string;
+    status?: string;
+  }[];
   status?: GlobalStatus;
   is_deleted?: boolean;
 }
@@ -45,6 +51,7 @@ export interface IGetPostsParams extends IGetListParams {
   is_resolved?: boolean;
   // Chỉ Admin dùng:
   showDeleted?: boolean;
+  userId?: string;
 }
 
 export interface IGetPostsRequestParams extends IGetPostsParams {
@@ -116,3 +123,43 @@ export interface ILikeStatusResponse {
 }
 
 export type ICommentResponse = IApiResponse<IComment, "comments">;
+
+/**
+ * Các hành động Admin có thể thực hiện trên từng Tag pending
+ * Khớp hoàn toàn với TagApprovalAction tại Backend
+ */
+export type TagApprovalAction =
+  // | "approve_post_only" // Chỉ duyệt cho bài viết này tag đã duyệt-post
+  | "approve_and_add_topic" // Duyệt cho bài và gán Tag vào Topic post-topic
+  | "approve_and_mark_free" // Duyệt cho bài và biến Tag thành thẻ chung
+  | "reject_tag_from_post" // Loại tag khỏi bài viết
+  | "approve_topic_and_reject_from_post" // Duyệt Tag vào Topic hệ thống nhưng KHÔNG gắn vào bài
+  | "approve_global_and_reject_from_post"; // Duyệt Tag vào hệ thống chung nhưng KHÔNG gắn vào bài
+
+/**
+ * Cấu trúc hành động cho từng Tag đơn lẻ
+ */
+export interface IPendingTagAction {
+  tagId: string;
+  action: TagApprovalAction;
+}
+
+/**
+ * Body gửi lên API POST /api/posts/admin/approve/:id
+ */
+export interface IAdminApprovePostBody {
+  newPostStatus: "approved" | "rejected";
+  pendingTagActions: IPendingTagAction[];
+  keepTagIds: string[]; // Danh sách ID các Tag cũ (đã approved) muốn giữ lại
+}
+
+export type PostStatusAction = "approved" | "rejected";
+
+export interface DecisionCardProps {
+  id: string;
+  value: PostStatusAction;
+  label: string;
+  desc: string;
+  isActive: boolean;
+  isDestructive?: boolean;
+}

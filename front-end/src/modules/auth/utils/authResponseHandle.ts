@@ -8,10 +8,18 @@ export const authResponseHandle = {
     response: AuthResponse,
     setAuth: (user: IAuthor, token: string) => void
   ) => {
-    // Trích xuất token, các trường còn lại sẽ gom vào userData (kiểu IAuthor)
-    const { token, ...userData } = response;
+    // 1. Chuyển toàn bộ response thành chuỗi và thay thế port
+    const cleanResponseString = JSON.stringify(response).replace(
+      /localhost:3000/g,
+      "localhost:5000"
+    );
 
-    // Gọi store để lưu
+    // 2. Parse ngược lại thành object đã sạch
+    const cleanResponse = JSON.parse(cleanResponseString);
+
+    const { token, ...userData } = cleanResponse;
+
+    // 3. Gọi store để lưu dữ liệu đã sạch
     setAuth(userData, token);
 
     return userData.name;
