@@ -1,21 +1,30 @@
-// src/lib/navigation.ts
 export const determineActiveLabel = (
   pathname: string,
-  topic: string | null
+  searchParams: URLSearchParams | null
 ): string => {
-  if (topic) return "Bài viết";
+  const tagSlug = searchParams?.get("tag");
+  const topicId = searchParams?.get("topic");
 
-  // Logic Dashboard
+  if (tagSlug) return tagSlug;
+  if (topicId) return "Bài viết";
+
+  // --- LOGIC PUBLIC PROFILE (Ưu tiên kiểm tra cái chi tiết trước) ---
+  // Khớp với: /profile/[id]/posts
+  if (pathname.includes("/profile/") && pathname.endsWith("/posts")) {
+    return "Bài viết công khai";
+  }
+  // Khớp với: /profile/[id]
+  if (pathname.startsWith("/profile/")) {
+    return "Thông tin cá nhân";
+  }
+
+  // --- LOGIC DASHBOARD CÁ NHÂN ---
   if (pathname.startsWith("/dashboard/profile")) return "Thông tin tài khoản";
   if (pathname.startsWith("/dashboard/posts")) return "Bài viết của tôi";
 
-  // Logic Public
+  // Logic Public chung
   if (pathname === "/" || pathname.startsWith("/posts")) return "Bài viết";
   if (pathname.startsWith("/topics")) return "Chủ đề";
-
-  if (pathname.match(/\/profile\/[^/]+$/)) return "Thông tin cá nhân"; // /profile/abc
-  if (pathname.includes("/posts") && pathname.startsWith("/profile/"))
-    return "Bài viết công khai"; // /profile/abc/posts
 
   // Logic Admin
   if (pathname.startsWith("/dashboard/admin/posts")) return "Quản lý bài viết";

@@ -8,6 +8,7 @@ interface TagItemProps {
   count: string;
   isTrending?: boolean;
   colorClass: string;
+  isActive?: boolean; // Thêm prop isActive
 }
 
 export const TagItem = ({
@@ -16,6 +17,7 @@ export const TagItem = ({
   count,
   isTrending,
   colorClass,
+  isActive, // Nhận prop isActive
 }: TagItemProps) => {
   const colorMap: Record<string, string> = {
     blue: "bg-blue-100 text-blue-600",
@@ -27,18 +29,22 @@ export const TagItem = ({
 
   return (
     <Button
-      // SỬ DỤNG NGUYÊN BẢN VARIANT CỦA BẠN
-      variant="ghost"
-      // CHỈ ĐIỀU CHỈNH LAYOUT, KHÔNG ĐỔI MÀU SẮC
+      variant={isActive ? "secondary" : "ghost"} // Đổi sang secondary khi active giống QuickNavItem
       className={cn(
-        "w-full h-auto justify-start items-center p-2 border-b border-gray-50 last:border-0 hover:text-blue-700",
-        "transition-all"
+        "w-full h-auto justify-start items-center p-2 border-b border-gray-50 last:border-0 relative overflow-hidden group",
+        "transition-all duration-200",
+        isActive && "text-primary font-bold bg-secondary"
       )}
     >
-      {/* 1. Icon Wrapper - Giữ nguyên vì đây là style riêng của Tag */}
+      {/* Vạch kẻ dọc bên phải/trái khi active giống QuickNavItem */}
+      {isActive && (
+        <div className="absolute right-0 top-0 bottom-0 w-1 bg-primary" />
+      )}
+
+      {/* 1. Icon Wrapper */}
       <div
         className={cn(
-          "w-8 h-8 flex items-center justify-center rounded-lg flex-shrink-0",
+          "w-8 h-8 flex items-center justify-center rounded-lg flex-shrink-0 mr-3 transition-transform group-hover:scale-110",
           colorMap[colorClass] || colorMap.blue
         )}
       >
@@ -47,16 +53,18 @@ export const TagItem = ({
 
       {/* 2. Content Area */}
       <div className="flex flex-col items-start min-w-0">
-        <span className="text-sm bold truncate">#{name}</span>
-        <span className="text-xs text-gray-500 font-normal truncate">
+        <span className="text-sm font-semibold truncate">#{name}</span>
+        <span
+          className={cn(
+            "text-xs font-normal truncate",
+            isActive ? "text-primary/70" : "text-gray-500"
+          )}
+        >
           {count} bài đăng
           {isTrending && (
             <>
               {" "}
-              •{" "}
-              <span className="text-green-600 font-medium">
-                Đang thịnh hành
-              </span>
+              • <span className="text-green-600 font-medium">Thịnh hành</span>
             </>
           )}
         </span>

@@ -15,11 +15,7 @@ export const ProfilePublicContainer = ({
   const userId = params.id as string;
 
   return (
-    <SidebarLayoutWrapper
-      sidebar={<ProfileSidebar userId={userId} />}
-      sidebarClassName="w-62"
-      stickyClassName="sticky top-2 h-[calc(100vh)]"
-    >
+    <SidebarLayoutWrapper sidebar={<ProfileSidebar userId={userId} />}>
       <div className="animate-in fade-in duration-500">{children}</div>
     </SidebarLayoutWrapper>
   );

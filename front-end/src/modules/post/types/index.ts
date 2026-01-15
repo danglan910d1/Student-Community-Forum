@@ -152,3 +152,14 @@ export interface IAdminApprovePostBody {
   pendingTagActions: IPendingTagAction[];
   keepTagIds: string[]; // Danh sách ID các Tag cũ (đã approved) muốn giữ lại
 }
+
+export type PostStatusAction = "approved" | "rejected";
+
+export interface DecisionCardProps {
+  id: string;
+  value: PostStatusAction;
+  label: string;
+  desc: string;
+  isActive: boolean;
+  isDestructive?: boolean;
+}

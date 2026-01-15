@@ -1,4 +1,5 @@
-// modules/post/components/Admin/AdminTagActionRow.tsx
+"use client";
+
 import {
   Select,
   SelectContent,
@@ -11,50 +12,54 @@ import { TagApprovalAction } from "../../types";
 interface AdminTagActionRowProps {
   tag: { tagId: string; name: string; slug: string };
   onActionChange: (tagId: string, action: TagApprovalAction) => void;
+  currentAction?: TagApprovalAction;
 }
 
 export function AdminTagActionRow({
   tag,
   onActionChange,
+  currentAction,
 }: AdminTagActionRowProps) {
   return (
-    <div className="flex items-center justify-between p-3 border rounded-lg bg-white shadow-sm">
+    <div className="group flex flex-col sm:flex-row sm:items-center justify-between p-3 gap-3 border rounded-lg bg-card hover:bg-accent/50 transition-colors">
       <div className="flex flex-col">
-        <span className="font-semibold text-sm">{tag.name}</span>
-        <span className="text-xs text-muted-foreground italic">
-          slug: {tag.slug}
-        </span>
+        <span className="font-bold text-sm">{tag.name}</span>
+        <code className="text-[10px] text-muted-foreground font-mono">
+          Slug: {tag.slug}
+        </code>
       </div>
 
       <Select
+        value={currentAction}
         onValueChange={(val) =>
           onActionChange(tag.tagId, val as TagApprovalAction)
         }
       >
-        <SelectTrigger className="w-[260px] bg-slate-50">
-          <SelectValue placeholder="Chọn hành động cho thẻ này..." />
+        <SelectTrigger className="w-full sm:w-[240px] h-9 text-xs font-medium uppercase tracking-tight">
+          <SelectValue placeholder="Chọn hành động..." />
         </SelectTrigger>
-        <SelectContent>
-          <SelectItem
-            value="approve_post_only"
-            className="text-blue-600 font-medium"
-          >
-            Duyệt cho bài viết này
-          </SelectItem>
+        <SelectContent align="end">
+          <SelectItem value="approve_post_only">Duyệt cho bài viết</SelectItem>
           <SelectItem value="approve_and_add_topic">
-            Duyệt bài & Lưu vào Topic
+            Duyệt & Lưu vào Topic
           </SelectItem>
           <SelectItem value="approve_and_mark_free">
-            Duyệt bài & Lưu làm Thẻ chung
+            Duyệt & Lưu Thẻ chung
           </SelectItem>
-          <SelectItem value="reject_tag_from_post" className="text-red-500">
+          <SelectItem value="reject_tag_from_post" className="text-destructive">
             Từ chối (Gỡ khỏi bài)
           </SelectItem>
-          <SelectItem value="approve_topic_and_reject_from_post">
-            Chỉ lưu vào Topic (Không gắn bài)
+          <SelectItem
+            value="approve_topic_and_reject_from_post"
+            className="text-xs italic"
+          >
+            Chỉ lưu Topic
           </SelectItem>
-          <SelectItem value="approve_global_and_reject_from_post">
-            Chỉ lưu làm Thẻ chung (Không gắn bài)
+          <SelectItem
+            value="approve_global_and_reject_from_post"
+            className="text-xs italic"
+          >
+            Chỉ lưu Thẻ chung
           </SelectItem>
         </SelectContent>
       </Select>

@@ -5,7 +5,7 @@ import { SidebarLayoutWrapper } from "./SideBarWrapper";
 
 export const MainContainer = ({ children }: { children: React.ReactNode }) => {
   return (
-    <SidebarLayoutWrapper sidebar={<AppSidebar className="w-64" />}>
+    <SidebarLayoutWrapper sidebar={<AppSidebar />}>
       {children}
     </SidebarLayoutWrapper>
   );

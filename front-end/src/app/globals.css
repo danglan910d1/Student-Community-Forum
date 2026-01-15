@@ -166,3 +166,16 @@
 .custom-scrollbar::-webkit-scrollbar-track {
   background-color: transparent;
 }
+
+/* Khi Sidebar có trạng thái đóng (ẩn hoàn toàn) */
+[data-state="closed"] + [data-sidebar="inset"],
+.group-data-\[state\=closed\] + .flex-1 {
+  margin-left: 0 !important;
+  transition: margin-left 0.3s ease-in-out;
+}
+
+/* Đảm bảo Sidebar Provider không giữ lại khoảng trống của Sidebar */
+.group-data-\[state\=closed\][data-collapsible="none"] {
+  width: 0 !important;
+  min-width: 0 !important;
+}

@@ -25,7 +25,6 @@ export function PostFormContent({
   topicTags,
   systemTags,
   selectedTopicId,
-  disabled,
 }: PostFormContentProps) {
   const {
     control,
@@ -33,7 +32,7 @@ export function PostFormContent({
     formState: { isDirty },
   } = useFormContext<CreatePostInput>();
 
-  const handleTopicChange = (val: string) => {
+  const handleTopicChange = () => {
     // CHỈ xóa tags nếu người dùng thực sự thao tác (form đã bẩn)
     // Hoặc kiểm tra nếu giá trị mới khác giá trị cũ
     if (isDirty) {

@@ -7,11 +7,7 @@ export const DashboardContainer = ({
   children: React.ReactNode;
 }) => {
   return (
-    <SidebarLayoutWrapper
-      sidebar={<DashboardSidebar />}
-      sidebarClassName="w-62"
-      stickyClassName="sticky top-2 h-[calc(100vh)]"
-    >
+    <SidebarLayoutWrapper sidebar={<DashboardSidebar />}>
       {" "}
       <div>{children}</div>
     </SidebarLayoutWrapper>

@@ -11,7 +11,6 @@ import notificationRoutes from "./routes/notificationRoutes";
 import { initializeConfig } from "./config";
 import { globalErrorHandler } from "./middleware/error";
 import { initSyncStatsJob } from "./core/scheduler";
-import path from "path";
 import { UPLOADS_DIR } from "./middleware/multer";
 
 // Khởi tạo ứng dụng Express

@@ -41,19 +41,20 @@ export const getPostLink = (
   isAdminView: boolean,
   isMine: boolean
 ): string => {
+  const isApproved = post.status === "approved";
   // 1. Trường hợp Admin
   if (isAdminView) {
-    return `/dashboard/admin/posts/${post.postId}`;
-  }
-
-  // 2. Trường hợp chủ bài viết (User quản lý bài của mình)
-  if (isMine) {
-    const isApproved = post.status === "approved";
+    // Approved thì xem trực tiếp, còn lại vào page quản lý (Approve/Reject)
     return isApproved
       ? `/posts/${post.postId}/${post.slug}`
-      : `/posts/${post.postId}/edit`;
+      : `/dashboard/admin/posts/${post.postId}`;
   }
 
-  // 3. Trường hợp xem bài viết của người khác (Public)
+  // 2. Trường hợp chủ bài viết hoặc Public
+  // Chỉ khi đã approved mới được xem chi tiết, còn lại (pending/rejected) là đi sửa
+  if (isMine && !isApproved) {
+    return `/posts/${post.postId}/edit`;
+  }
+
   return `/posts/${post.postId}/${post.slug}`;
 };

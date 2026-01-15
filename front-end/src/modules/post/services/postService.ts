@@ -56,4 +56,18 @@ export const postService = {
     const { data } = await api.post<IPost>(`/posts/admin/approve/${id}`, body);
     return data;
   },
+
+  toggleSticky: async (id: string, isSticky: boolean): Promise<IPost> => {
+    const { data } = await api.put<IPost>(`/posts/admin/sticky/${id}`, {
+      is_sticky: isSticky,
+    });
+    return data;
+  },
+
+  restorePost: async (
+    id: string
+  ): Promise<{ message: string; postId: string }> => {
+    const { data } = await api.put(`/posts/admin/restore/${id}`);
+    return data;
+  },
 };

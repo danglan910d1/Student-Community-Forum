@@ -1,9 +1,7 @@
 "use client";
 
-import { LogOut, User } from "lucide-react";
+import { LogOut, User, Settings } from "lucide-react";
 import { CardLayout } from "@/components/layout/CardLayout";
-import { cn, getAssetUrl } from "@/lib/utils";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuthStore } from "@/stores/useAuthStore";
 import Link from "next/link";
 import {
@@ -15,71 +13,39 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Settings } from "lucide-react";
+import { UserIdentity } from "@/components/shared/UserIdentity";
 
 export const UserInfo = () => {
   const user = useAuthStore((state) => state.user);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const logout = useAuthStore((state) => state.logout);
 
-  const initials =
-    user?.name
-      ?.split(" ")
-      .map((n) => n[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2) || "U";
-
   if (!isAuthenticated || !user) return null;
 
   return (
     <CardLayout className="shadow-md">
-      <div className="flex items-center gap-4">
-        {/* AVATAR WRAPPER */}
-        <div className="relative flex-shrink-0">
-          <Avatar className="w-12 h-12 border border-gray-100">
-            <AvatarImage
-              src={getAssetUrl(user.avatar)}
-              alt={user.name}
-              className="object-cover"
-            />
-            <AvatarFallback className="bg-blue-100 dark:bg-primary text-foreground font-bold text-md">
-              {initials}
-            </AvatarFallback>
-          </Avatar>
+      <div className="flex items-center">
+        {/* THÊM flex-1 VÀO ĐÂY ĐỂ ĐẨY NÚT SETTINGS SANG PHẢI */}
+        <UserIdentity
+          user={user}
+          size="md"
+          shape="circle"
+          showOnlineStatus={true}
+          className="flex-1 max-w-[85%]"
+        />
 
-          {/* CHẤM XANH ONLINE */}
-          <div
-            className={cn(
-              "absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-white",
-              "bg-green-500"
-            )}
-            title="Trực tuyến"
-          />
-        </div>
-
-        {/* THÔNG TIN TEXT */}
-        <div className="flex-1 min-w-0">
-          <p className="text-foreground font-bold truncate leading-tight text-md">
-            {user.name}
-          </p>
-          <p className="text-xs text-muted-foreground truncate italic mt-1">
-            {user.role === "admin" ? "Quản trị viên" : "Thành viên"}
-          </p>
-        </div>
-
-        {/* DROPDOWN MENU SETTINGS */}
+        {/* NÚT SETTINGS */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <div className="group cursor-pointer p-1.5 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-md transition-colors outline-none">
+            <button className="group cursor-pointer p-1.5 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-md transition-colors outline-none shrink-0 border-none bg-transparent">
               <Settings
                 size={18}
                 className="text-gray-400 group-hover:text-blue-700 group-hover:rotate-90 transition-all duration-300"
               />
-            </div>
+            </button>
           </DropdownMenuTrigger>
 
-          <DropdownMenuContent align="end" className="w-52">
+          <DropdownMenuContent align="end" className="w-52 mt-2">
             <DropdownMenuLabel>Tài khoản của tôi</DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>

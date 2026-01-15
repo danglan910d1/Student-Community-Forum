@@ -1,3 +1,5 @@
+"use client";
+
 import React from "react";
 import { CardLayout } from "@/components/layout/CardLayout";
 import { TagItem } from "@/modules/tag/components/TagItem";
@@ -13,6 +15,8 @@ import {
 } from "lucide-react";
 import { useTagsExplorer } from "../hooks/useTagExplorer";
 import { useRouter } from "next/navigation";
+import { useNavStore } from "@/stores/useNavStore"; // Import Store
+import { ITag } from "../types";
 
 const getTagMetaData = (tagName: string) => {
   const name = tagName.toLowerCase();
@@ -50,34 +54,35 @@ const getTagMetaData = (tagName: string) => {
     return { icon: Layout, colorClass: "blue" };
   if (name.includes("innovation") || name.includes("idea"))
     return { icon: Lightbulb, colorClass: "green" };
-
   return { icon: Hash, colorClass: "green" };
 };
 
 export const PopularTags = () => {
   const router = useRouter();
   const { isLoading, allTags } = useTagsExplorer({ adminView: false });
-  console.log(allTags);
-  // Xử lý logic sắp xếp và filter dữ liệu
+
+  // Lấy dữ liệu từ NavStore
+  const activeLabel = useNavStore((state) => state.activeLabel);
+  const setActiveLabel = useNavStore((state) => state.setActiveLabel);
+
   const processedTags = React.useMemo(() => {
     if (!allTags || allTags.length === 0) return [];
-
-    // Copy mảng để tránh mutate dữ liệu gốc
     return [...allTags]
       .sort((a, b) => {
         const countA = Number(a.postCount) || 0;
         const countB = Number(b.postCount) || 0;
-
         if (countB !== countA) return countB - countA;
         return a.name.localeCompare(b.name, "vi");
       })
       .slice(0, 10);
   }, [allTags]);
 
-  const handleTagClick = (tagName: string) => {
-    // Chuyển hướng sang trang danh sách bài viết kèm filter tag
-    // Bạn có thể dùng slug nếu API có hỗ trợ để URL đẹp hơn
-    router.push(`/posts?tag=${encodeURIComponent(tagName)}`);
+  const handleTagClick = (tag: ITag) => {
+    // 1. Cập nhật store để các QuickNavItem khác cũng sáng theo nếu trùng tên
+    setActiveLabel(tag.name);
+
+    // 2. Điều hướng trang
+    router.push(`/posts?tag=${encodeURIComponent(tag.slug)}`);
   };
 
   return (
@@ -98,18 +103,20 @@ export const PopularTags = () => {
           ) : processedTags.length > 0 ? (
             processedTags.map((tag, index) => {
               const meta = getTagMetaData(tag.name);
-
-              // 4. Hai tag có số lượng bài viết cao nhất (index 0 và 1) sẽ là trending
               const isTrending = index < 2 && tag.postCount > 0;
 
+              // KIỂM TRA ACTIVE TẠI ĐÂY
+              const isActive = activeLabel === tag.slug;
+
               return (
-                <div key={tag.tagId} onClick={() => handleTagClick(tag.slug)}>
+                <div key={tag.tagId} onClick={() => handleTagClick(tag)}>
                   <TagItem
                     icon={meta.icon}
                     name={tag.name}
                     count={tag.postCount.toLocaleString()}
                     isTrending={isTrending}
                     colorClass={meta.colorClass}
+                    isActive={isActive} // Truyền trạng thái active vào TagItem
                   />
                 </div>
               );
