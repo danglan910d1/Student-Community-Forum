@@ -15,7 +15,8 @@ import { Button } from "@/components/ui/button";
 import { Loader2, Save, Edit3, X, Camera } from "lucide-react";
 import { ProfileFormValues } from "../../schemas/profileSchema";
 import { PROFILE_FIELDS } from "../../constants/profile";
-import { UserAvatar } from "@/components/shared/UserAvatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { getAssetUrl } from "@/lib/utils";
 
 interface ProfileTabContentProps {
   form: UseFormReturn<ProfileFormValues>;
@@ -84,16 +85,23 @@ export function ProfileTabContent({
                     <FormControl>
                       {field.name === "avatar" ? (
                         <div className="flex items-center gap-5 p-4 border rounded-lg bg-muted/10">
-                          <UserAvatar
-                            user={{
-                              name: form.getValues("name"),
-                              avatar:
+                          <Avatar className="h-20 w-20 border-2 border-primary/20">
+                            <AvatarImage
+                              src={
                                 previewUrl ||
-                                (typeof value === "string" ? value : undefined),
-                            }}
-                            size="lg"
-                            shape="circle"
-                          />
+                                (typeof value === "string" && value
+                                  ? getAssetUrl(value)
+                                  : undefined)
+                              }
+                              className="object-cover"
+                            />
+                            <AvatarFallback>
+                              {form
+                                .getValues("name")
+                                ?.substring(0, 2)
+                                .toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
                           {/* 2. Chỉ hiện nút thay ảnh khi isMine và đang isEditing */}
                           {isMine && isEditing && (
                             <div className="space-y-2">

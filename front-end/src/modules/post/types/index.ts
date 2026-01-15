@@ -129,8 +129,8 @@ export type ICommentResponse = IApiResponse<IComment, "comments">;
  * Khớp hoàn toàn với TagApprovalAction tại Backend
  */
 export type TagApprovalAction =
-  | "approve_post_only" // Chỉ duyệt cho bài viết này
-  | "approve_and_add_topic" // Duyệt cho bài và gán Tag vào Topic
+  // | "approve_post_only" // Chỉ duyệt cho bài viết này tag đã duyệt-post
+  | "approve_and_add_topic" // Duyệt cho bài và gán Tag vào Topic post-topic
   | "approve_and_mark_free" // Duyệt cho bài và biến Tag thành thẻ chung
   | "reject_tag_from_post" // Loại tag khỏi bài viết
   | "approve_topic_and_reject_from_post" // Duyệt Tag vào Topic hệ thống nhưng KHÔNG gắn vào bài

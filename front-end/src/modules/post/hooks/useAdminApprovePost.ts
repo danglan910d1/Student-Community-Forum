@@ -36,7 +36,7 @@ export function useAdminApprovePost(postId: string) {
         router.push(`/posts/${postId}/${slug}`);
       } else {
         // Nếu bị từ chối hoặc không có slug, quay lại danh sách chờ duyệt
-        router.push("/dashboard/posts/");
+        router.push("/dashboard/admin/posts?status=rejected");
       }
 
       router.refresh();

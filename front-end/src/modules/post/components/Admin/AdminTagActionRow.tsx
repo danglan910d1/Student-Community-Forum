@@ -39,7 +39,7 @@ export function AdminTagActionRow({
           <SelectValue placeholder="Chọn hành động..." />
         </SelectTrigger>
         <SelectContent align="end">
-          <SelectItem value="approve_post_only">Duyệt cho bài viết</SelectItem>
+          {/* <SelectItem value="approve_post_only">Duyệt cho bài viết</SelectItem> */}
           <SelectItem value="approve_and_add_topic">
             Duyệt & Lưu vào Topic
           </SelectItem>
