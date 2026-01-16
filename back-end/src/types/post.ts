@@ -56,4 +56,5 @@ export interface AdminApprovePostBody {
 
   // Trạng thái cuối cùng của Bài viết sau khi duyệt Tag xong.
   newPostStatus: "approved" | "rejected";
+  reason?: string;
 }

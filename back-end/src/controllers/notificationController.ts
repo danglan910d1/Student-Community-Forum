@@ -5,26 +5,61 @@ import { asyncHandler } from "../utils/asyncHandler";
 import { AuthenticatedRequest } from "../types/express";
 import { buildNotificationAggregationPipeline } from "../services/notifications/notificationPipeline";
 import { Types } from "mongoose";
+import { GetNotificationsQuery } from "../types/noti";
+import { paginateAggregation } from "../utils/pagination";
 
 // 1. GET /api/notifications
 // 1. Lấy danh sách (Dùng Pipeline để làm phẳng ID)
 export const getNotifications = asyncHandler(
-  async (req: AuthenticatedRequest, res: Response) => {
-    const filter = { recipientId: new Types.ObjectId(req.userId) };
+  async (
+    req: AuthenticatedRequest<{}, {}, {}, GetNotificationsQuery>,
+    res: Response
+  ) => {
+    const query = req.query; // Bây giờ query đã có type là GetNotificationsQuery
+    const userId = req.userId!;
 
-    const notifications = await Notification.aggregate(
-      buildNotificationAggregationPipeline(filter, { includeSender: true })
+    // 1. Build Filter
+    const filter: any = { recipientId: new Types.ObjectId(userId) };
+    if (query.targetId) {
+      filter.entityId = new Types.ObjectId(query.targetId);
+    }
+
+    // Nếu FE truyền ?is_read=false thì ta thêm vào filter
+    if (query.is_read !== undefined) {
+      filter.is_read = query.is_read === "true";
+    }
+
+    // 2. Build Pipeline
+    const pipeline = buildNotificationAggregationPipeline(filter, {
+      includeSender: true,
+    });
+
+    // 3. Phân trang sử dụng hàm dùng chung (Tái sử dụng logic giống Comment)
+    const result = await paginateAggregation(
+      Notification,
+      pipeline,
+      query.page, // paginateAggregation sẽ tự xử lý ép kiểu Number bên trong
+      query.limit
     );
 
+    // 4. Lấy số lượng chưa đọc (Badge)
     const unreadCount = await Notification.countDocuments({
-      recipientId: req.userId,
+      recipientId: userId,
       is_read: false,
     });
 
-    res.json({ notifications, unreadCount });
+    res.json({
+      notifications: result.items,
+      unreadCount,
+      pagination: {
+        totalItems: result.totalItems,
+        totalPages: result.totalPages,
+        currentPage: result.currentPage,
+        limit: result.limit,
+      },
+    });
   }
 );
-
 // 2. PATCH /api/notifications/:id/read
 // 2. Đánh dấu đã đọc (Dùng findOneAndUpdate trực tiếp vì đơn giản)
 export const markAsRead = asyncHandler(
@@ -39,7 +74,7 @@ export const markAsRead = asyncHandler(
       return res.status(404).json({ message: "Notification not found" });
     }
 
-    res.json({ message: "Marked as read", notificationId: notification._id });
+    res.json({ message: "Marked as read", notificationId: notification.id });
   }
 );
 

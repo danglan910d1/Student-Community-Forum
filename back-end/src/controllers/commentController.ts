@@ -21,6 +21,7 @@ import { AppError } from "../utils/appError";
 import Post from "../models/Post";
 import { NotificationType } from "../models/Notification";
 import { createNotification } from "../services/notifications/notificationService";
+import { generateNotificationContent } from "../utils/notificationHelper";
 
 /** * helper: Thêm Job đếm Comments/Replies vào Queue để xử lý bất đồng bộ
  */
@@ -184,9 +185,7 @@ export const createComment = asyncHandler(
         type,
         entityId: post._id as Types.ObjectId,
         entityType: "post",
-        content: parentId
-          ? "đã trả lời bình luận của bạn."
-          : "đã bình luận về bài viết của bạn.",
+        content: generateNotificationContent(type, {}),
       });
     }
 

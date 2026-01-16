@@ -16,6 +16,7 @@ import { Separator } from "@/components/ui/separator";
 import { PostFormHeader } from "../components/PostForm/PostFormHeader";
 import { PostFormContent } from "../components/PostForm/PostFormContent";
 import { PostFormActions } from "../components/PostForm/PostFormAction";
+import ContentPageSkeleton from "@/components/loading/ContentPageSkeleton";
 
 export function UpdatePostContainer() {
   const params = useParams();
@@ -90,12 +91,17 @@ export function UpdatePostContainer() {
 
   // UI Loading
   if (isLoadingPost || (isLoadingTags && !post)) {
+    // return (
+    //   <div className="p-10 text-center animate-pulse flex flex-col items-center gap-4">
+    //     <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+    //     <p className="text-muted-foreground font-medium">
+    //       Đang chuẩn bị dữ liệu bài viết...
+    //     </p>
+    //   </div>
+    // );
     return (
-      <div className="p-10 text-center animate-pulse flex flex-col items-center gap-4">
-        <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-muted-foreground font-medium">
-          Đang chuẩn bị dữ liệu bài viết...
-        </p>
+      <div>
+        <ContentPageSkeleton />
       </div>
     );
   }

@@ -32,6 +32,7 @@ import redisClient, {
 import { AppError } from "../utils/appError";
 import { createNotification } from "../services/notifications/notificationService";
 import { NotificationType } from "../models/Notification";
+import { generateNotificationContent } from "../utils/notificationHelper";
 
 const clearPostsCache = async () => {
   await invalidateCache("posts:list:*");
@@ -370,10 +371,10 @@ export const adminApprovePostController = asyncHandler(
     res: Response
   ) => {
     const { id } = req.params;
-    const { pendingTagActions, newPostStatus, keepTagIds } = req.body;
+    const { pendingTagActions, newPostStatus, keepTagIds, reason } = req.body;
     const requestId = req.headers["x-request-id"] as string;
 
-    // 1. Gọi Service xử lý Transactional logic
+    // 1. Gọi Service xử lý logic nghiệp vụ (Tags, Status, DB Transaction)
     const updatedPost = await adminApprovePost(
       id,
       req.userId!,
@@ -382,26 +383,31 @@ export const adminApprovePostController = asyncHandler(
       keepTagIds
     );
 
+    // Xóa cache sau khi dữ liệu thay đổi
     await clearPostsCache();
 
-    // 2. GỬI THÔNG BÁO (Điểm kết nối)
-    // Xác định loại thông báo dựa trên trạng thái mới
+    // 2. GỬI THÔNG BÁO (Kết nối với logic Moderation Trace)
     const isApproved = newPostStatus === "approved";
+    const notiType = isApproved
+      ? NotificationType.POST_APPROVED
+      : NotificationType.POST_REJECTED;
 
-    await createNotification({
-      recipientId: updatedPost.userId, // ObjectId từ DB
-      senderId: req.userId, // String từ Request
-      type: isApproved
-        ? NotificationType.POST_APPROVED
-        : NotificationType.POST_REJECTED,
-      entityId: updatedPost.id,
-      entityType: "post",
-      content: isApproved
-        ? `Bài viết "${updatedPost.title}" của bạn đã được duyệt.`
-        : `Bài viết "${updatedPost.title}" bị từ chối do không phù hợp.`,
+    // Gọi hàm Helper để gộp reason vào content một cách chuẩn mực
+    const notificationContent = generateNotificationContent(notiType, {
+      title: updatedPost.title,
+      reason: reason,
     });
 
-    // 2. Trả về bài viết sau khi duyệt
+    await createNotification({
+      recipientId: updatedPost.userId,
+      senderId: req.userId,
+      type: notiType,
+      entityId: updatedPost.id,
+      entityType: "post",
+      content: notificationContent,
+    });
+
+    // 3. TRẢ VỀ DỮ LIỆU (Dùng Pipeline để FE nhận được format chuẩn có moderationNote)
     const postArray = await Post.aggregate(
       buildPostAggregationPipeline(
         { _id: updatedPost._id },
@@ -409,15 +415,22 @@ export const adminApprovePostController = asyncHandler(
           includeUser: true,
           includeTopic: true,
           includeTags: true,
-          isAdminView: true,
+          isAdminView: true, // Admin sẽ thấy được moderationNote vừa tạo qua pipeline
+          currentUserId: req.userId, // Để pipeline check logic canSeeSensitive
         }
       )
     );
+
     const result = postArray[0];
 
-    // IDEMPOTENCY: Lưu kết quả
-    if (requestId)
+    if (!result) {
+      throw new AppError(500, "Lỗi khi truy xuất dữ liệu sau khi duyệt.");
+    }
+
+    // 4. IDEMPOTENCY: Lưu kết quả để tránh submit trùng lặp
+    if (requestId) {
       await saveIdempotencyResult(requestId, 200, JSON.stringify(result));
+    }
 
     res.json(result);
   }

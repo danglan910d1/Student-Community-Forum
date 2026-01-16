@@ -15,6 +15,7 @@ import { ToggleLikeParams, GetLikeStatusQuery } from "../types/like";
 import { addJobToQueue } from "../services/common/jobQueue";
 import { createNotification } from "../services/notifications/notificationService";
 import { NotificationType } from "../models/Notification";
+import { generateNotificationContent } from "../utils/notificationHelper";
 
 type LikableDocument = Document & {
   userId: Types.ObjectId;
@@ -90,16 +91,18 @@ export const toggleLike = asyncHandler(
       target.userId &&
       target.userId.toString() !== userId.toString()
     ) {
+      const entityId =
+        targetType === "post" ? target._id : (target as any).postId;
       createNotification({
         recipientId: target.userId,
         senderId: userId,
         type: NotificationType.NEW_LIKE,
-        entityId: targetType === "post" ? target._id : (target as any).postId,
+        entityId: entityId,
         entityType: "post",
-        content: `đã thích ${
-          targetType === "post" ? "bài viết" : "bình luận"
-        } của bạn.`,
-      }).catch((err) => console.error(err));
+        content: generateNotificationContent(NotificationType.NEW_LIKE, {
+          targetType: targetType as "post" | "comment",
+        }),
+      }).catch((err) => console.error("Notification Error:", err));
     }
 
     // Chỉ đẩy Job vào Queue nếu có sự thay đổi (increment != 0)

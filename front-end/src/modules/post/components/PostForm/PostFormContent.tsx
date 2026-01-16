@@ -4,7 +4,7 @@
 import { useFormContext } from "react-hook-form";
 import { TopicSelector } from "@/modules/topic/components/TopicSelector";
 import MultiAutocomplete from "@/components/shared/MultiAutoComplete";
-import { ITag } from "@/modules/tag/types";
+import { ITag, Tag } from "@/modules/tag/types";
 import { ITopic } from "@/modules/topic/types";
 import { CreatePostInput } from "../../schemas/postSchema";
 
@@ -14,7 +14,7 @@ import { PostFormEditor } from "./PostFormEditor";
 
 interface PostFormContentProps {
   topics: ITopic[];
-  topicTags: ITag[];
+  topicTags: Tag[];
   systemTags: ITag[];
   selectedTopicId: string;
   disabled?: boolean;

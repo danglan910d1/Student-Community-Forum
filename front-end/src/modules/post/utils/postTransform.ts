@@ -2,12 +2,12 @@
 import { ICreatePostBody } from "../types";
 import { CreatePostInput } from "../schemas/postSchema";
 
+// modules/post/utils/postTransform.ts
 export const transformPostData = (data: CreatePostInput): ICreatePostBody => {
   return {
     title: data.title,
     content: data.content,
     topicId: data.topicId,
-    // TRỌNG TÂM: Biến [ {name: 'React', ...} ] thành [ 'React' ]
-    tags: data.tags.map((t) => t.name),
+    tags: data.tags.map((t) => t.name.trim()),
   };
 };

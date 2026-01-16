@@ -60,3 +60,9 @@ export interface IBulkUpdateTagBody {
   action: "approve" | "reject" | "delete" | "restore";
   topicId?: string; // Tùy chọn: Chuyển hàng loạt tag sang topic khác
 }
+
+export interface Tag {
+  tagId: string;
+  name: string;
+  slug: string;
+}
