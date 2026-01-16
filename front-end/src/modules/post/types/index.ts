@@ -69,6 +69,11 @@ export interface ICreatePostBody {
   tags: string[]; // Đổi từ Tag[] thành string[]
 }
 
+export interface IUpdatePostBody extends Partial<ICreatePostBody> {
+  status?: GlobalStatus;
+  is_resolved?: boolean;
+}
+
 export interface IComment {
   commentId: string; // Backend đã đổi từ _id thành commentId
   postId: string; // Hoặc IPost nếu includePost = true

@@ -5,6 +5,7 @@ import {
   IGetPostsRequestParams,
   IPost,
   IPostResponse,
+  IUpdatePostBody,
 } from "@/modules/post/types/index";
 
 export const postService = {
@@ -35,12 +36,12 @@ export const postService = {
   },
 
   createPost: async (body: ICreatePostBody): Promise<IPost> => {
-    // Backend return về post object sau khi aggregate
     const { data } = await api.post<IPost>("/posts", body);
     return data;
   },
 
-  updatePost: async (id: string, body: ICreatePostBody): Promise<IPost> => {
+  // Dùng IUpdatePostBody thay vì ICreatePostBody
+  updatePost: async (id: string, body: IUpdatePostBody): Promise<IPost> => {
     const { data } = await api.put<IPost>(`/posts/${id}`, body);
     return data;
   },

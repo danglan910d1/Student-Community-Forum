@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
 interface AdminTagActionRowProps {
   tag: { tagId: string; name: string; slug: string };
   onActionChange: (tagId: string, action: TagApprovalAction) => void;
-  currentAction?: TagApprovalAction;
+  currentAction: TagApprovalAction | "";
 }
 
 // Map label để hiển thị cho đẹp trên Button
@@ -47,10 +47,13 @@ export function AdminTagActionRow({
       <Combobox
         open={open}
         onOpenChange={setOpen}
-        value={currentAction}
+        value={currentAction || ""}
         onValueChange={(val) => {
-          onActionChange(tag.tagId, val as TagApprovalAction);
-          setOpen(false); // Đóng ngay sau khi chọn
+          if (val) {
+            // Đảm bảo val tồn tại trước khi gọi hàm
+            onActionChange(tag.tagId, val as TagApprovalAction);
+            setOpen(false);
+          }
         }}
       >
         {/* Nút bấm giả lập SelectTrigger nhưng dùng Anchor để cố định vị trí */}

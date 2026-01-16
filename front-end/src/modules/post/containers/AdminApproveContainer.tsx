@@ -19,6 +19,8 @@ import { AdminReviewSection } from "../components/Admin/AdminReviewSection";
 
 import { CreatePostInput } from "../schemas/postSchema";
 import { IPendingTagAction, IPost, PostStatusAction } from "../types";
+import { adminApproveSchema } from "../schemas/adminApproveSchema";
+import { toast } from "sonner";
 
 export function AdminApproveContainer() {
   const params = useParams();
@@ -73,12 +75,26 @@ export function AdminApproveContainer() {
   // --- 4. LOGIC HANDLERS ---
   const handleFinalSubmit = () => {
     if (!post) return;
+    const payload = {
+      newPostStatus,
+      keepTagIds,
+      pendingTagActions,
+      // reason: "" // Thêm nếu bạn có UI nhập lý do
+    };
     const pendingCount = post.pending_tags?.length || 0;
     if (pendingCount !== pendingTagActions.length) {
       alert("Vui lòng xử lý tất cả các thẻ đề xuất mới trước khi xác nhận!");
       return;
     }
-    approvePost({ newPostStatus, keepTagIds, pendingTagActions });
+    const validation = adminApproveSchema.safeParse(payload);
+
+    if (!validation.success) {
+      // Lấy lỗi đầu tiên từ Zod và hiển thị
+      const firstError = validation.error.errors[0]?.message;
+      toast.error(firstError || "Dữ liệu kiểm duyệt không hợp lệ");
+      return;
+    }
+    approvePost(validation.data);
   };
 
   if (isLoadingPost) {

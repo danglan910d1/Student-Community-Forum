@@ -1,6 +1,6 @@
 import { Types, Document } from "mongoose";
 import Tag, { ITag } from "../../models/Tag";
-import { generateSlug } from "../../utils/text";
+import { escapeRegex, generateSlug } from "../../utils/text";
 
 // --- HẰNG SỐ GIỚI HẠN (HARD RULE) ---
 const MAX_TAG_INPUT = 5;
@@ -9,12 +9,16 @@ const MAX_TAG_INPUT = 5;
 export interface ProcessedTagsResult {
   validTagIds: Types.ObjectId[]; // Tags đã approved (Master)
   pendingTagIds: Types.ObjectId[]; // Tags đang chờ duyệt/đề xuất (Pending/Rejected)
-  warning?: string; // Cảnh bảo vượt giới hạn thì lược bỏ
+  warning?: string | undefined;
 }
 
 /**
- * Xử lý đầu vào Tag hỗn hợp (ID và Tên)
- * Đảm bảo tính duy nhất dựa trên ID, Slug và Name (Case-insensitive)
+ * Xử lý đầu vào Tag hỗn hợp (ID và Tên) để phân loại và tạo Tag mới (Pending) nếu cần.
+ * Đây là logic nghiệp vụ cốt lõi về kiểm soát tính duy nhất của Tag.
+ * @param tags Mảng IDs và Tên Tag từ input của người dùng.
+ * @param userId ID của người dùng tạo bài viết (để gán Tag mới).
+ * @param topicId ID của Topic liên quan (để gán cho Tag mới).
+ * @returns Object chứa hai mảng ID đã được phân loại (validTagIds và pendingTagIds).
  */
 export const processTags = async (
   tags: string[],
@@ -25,135 +29,128 @@ export const processTags = async (
   let pendingTagIds: Types.ObjectId[] = [];
   let warning: string | undefined;
 
-  if (!tags || tags.length === 0) {
-    return { validTagIds, pendingTagIds };
-  }
+  if (!tags || tags.length === 0) return { validTagIds, pendingTagIds };
 
-  // --- 1. LÀM SẠCH DỮ LIỆU ĐẦU VÀO ---
-  // Chuyển tất cả về lowercase để so sánh đồng nhất, loại bỏ khoảng trắng và tag rỗng
-  const cleanedInput = tags.map((t) => t.trim().toLowerCase()).filter(Boolean);
+  // 1. Làm sạch input
+  const cleanedInput = tags.map((t) => t.trim()).filter(Boolean);
   const rawUniqueTags = Array.from(new Set(cleanedInput));
-
-  if (rawUniqueTags.length > MAX_TAG_INPUT) {
-    warning = `Chỉ cho phép tối đa ${MAX_TAG_INPUT} thẻ cho mỗi bài viết.`;
-  }
-
   const uniqueTags = rawUniqueTags.slice(0, MAX_TAG_INPUT);
-  const userObjectId = new Types.ObjectId(userId);
+  if (rawUniqueTags.length > MAX_TAG_INPUT) {
+    warning = `Chỉ cho phép tối đa ${MAX_TAG_INPUT} thẻ.`;
+  }
 
   const tagIdsFromInput: string[] = [];
-  const tagNamesFromInput: string[] = [];
   const tagSlugsFromInput: string[] = [];
+  const tagNamesForRegex: string[] = [];
 
-  // Phân tách ID/Tên để chuẩn bị truy vấn
-  for (const item of uniqueTags) {
+  uniqueTags.forEach((item) => {
     if (Types.ObjectId.isValid(item)) {
       tagIdsFromInput.push(item);
     } else {
-      tagNamesFromInput.push(item);
       tagSlugsFromInput.push(generateSlug(item));
+      tagNamesForRegex.push(item);
     }
-  }
+  });
 
-  // --- 2. TRUY VẤN TẤT CẢ TAG CÓ KHẢ NĂNG TRÙNG LẶP ---
+  // 2. TRUY VẤN MỞ RỘNG: Tìm cả Slug và Name (Case-insensitive)
   const existingTags = await Tag.find({
-    is_deleted: false,
+    is_deleted: { $ne: true },
     $or: [
       { _id: { $in: tagIdsFromInput } },
       { slug: { $in: tagSlugsFromInput } },
+      // Thêm cái này để "bắt" NodeJS vs node-js
       {
         name: {
-          $regex: new RegExp(
-            `^${tagNamesFromInput
-              .map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
-              .join("|")}$`,
-            "i"
+          $in: tagNamesForRegex.map(
+            (n) => new RegExp(`^${escapeRegex(n)}$`, "i")
           ),
         },
       },
     ],
   }).select("_id name status slug topicId");
 
-  // Map để tra cứu nhanh và đảm bảo tính duy nhất trong kết quả trả về
-  // Key là string của ObjectId để Map.set không bị trùng lặp
-  const finalTagsMap = new Map<
-    string,
-    { id: Types.ObjectId; status: string }
-  >();
-  const tagsToCreateMap = new Map<string, Partial<ITag>>();
+  const slugMap = new Map<string, ITag & Document>();
+  const idMap = new Map<string, ITag & Document>();
+  const nameMap = new Map<string, ITag & Document>();
 
-  // --- 3. LOGIC PHÂN LOẠI VÀ KIỂM TRA ---
+  existingTags.forEach((t) => {
+    slugMap.set(t.slug, t);
+    idMap.set(t.id.toString(), t);
+    nameMap.set(t.name.toLowerCase(), t); // Map thêm theo tên lowercase
+  });
+
+  const tagsToCreate: Partial<ITag>[] = [];
+  const processedIdSet = new Set<string>();
+
+  // 3. Phân loại
   for (const tagItem of uniqueTags) {
     const isObjectId = Types.ObjectId.isValid(tagItem);
     const itemSlug = isObjectId ? "" : generateSlug(tagItem);
 
-    // Tìm tag hiện có dựa trên ID, Slug hoặc Name
-    const foundTag = existingTags.find((t) => {
-      if (isObjectId) return t.id.toString() === tagItem;
-      return t.slug === itemSlug || t.name.toLowerCase() === tagItem;
-    });
+    // Tìm ưu tiên: ID -> Slug -> Name
+    const foundTag = isObjectId
+      ? idMap.get(tagItem)
+      : slugMap.get(itemSlug) || nameMap.get(tagItem.toLowerCase());
 
     if (foundTag) {
       const tagObjectId = foundTag._id as Types.ObjectId;
-      const tagIdStr = tagObjectId.toString();
+      if (processedIdSet.has(tagObjectId.toString())) continue;
 
-      // Quyết định tag vào mảng valid hay pending
-      const isApproved = foundTag.status === "approved";
-      const isTopicValid =
-        !foundTag.topicId || foundTag.topicId.equals(topicId);
-
-      const finalStatus = isApproved && isTopicValid ? "valid" : "pending";
-
-      // Map.set sẽ ghi đè nếu trùng tagIdStr, giải quyết vấn đề trùng lặp UI
-      finalTagsMap.set(tagIdStr, { id: tagObjectId, status: finalStatus });
+      if (foundTag.status === "approved") {
+        const isTopicValid =
+          !foundTag.topicId || foundTag.topicId.equals(topicId);
+        isTopicValid
+          ? validTagIds.push(tagObjectId)
+          : pendingTagIds.push(tagObjectId);
+      } else {
+        pendingTagIds.push(tagObjectId);
+      }
+      processedIdSet.add(tagObjectId.toString());
     } else if (!isObjectId) {
-      // Chỉ tạo mới nếu thực sự không tìm thấy bất kỳ sự trùng lặp nào trong DB
-      // Và không trùng với tag khác đang chuẩn bị tạo trong cùng request này
-      if (!tagsToCreateMap.has(itemSlug)) {
-        tagsToCreateMap.set(itemSlug, {
+      const isAlreadyInCreateList = tagsToCreate.some(
+        (t) => t.slug === itemSlug
+      );
+      if (!isAlreadyInCreateList) {
+        tagsToCreate.push({
           name: tagItem,
           slug: itemSlug,
-          createdBy: userObjectId,
+          createdBy: new Types.ObjectId(userId),
           status: "pending",
           topicId: topicId,
+        } as any);
+      }
+    }
+  }
+
+  // 4. Batch Create
+  if (tagsToCreate.length > 0) {
+    try {
+      const createdTags = await Tag.insertMany(tagsToCreate, {
+        ordered: false,
+      });
+      createdTags.forEach((tag) =>
+        pendingTagIds.push(tag._id as Types.ObjectId)
+      );
+    } catch (error: any) {
+      if (error.code === 11000) {
+        const retryTags = await Tag.find({
+          slug: { $in: tagsToCreate.map((t) => t.slug!) },
+          is_deleted: { $ne: true }, // Luôn tìm tag chưa xóa
+        });
+        retryTags.forEach((t) => {
+          const idStr = t.id.toString();
+          // Chỉ push nếu ID này chưa nằm trong valid hoặc pending (đã xử lý ở vòng lặp trước hoặc insert thành công một phần)
+          if (
+            !processedIdSet.has(idStr) &&
+            !pendingTagIds.some((p) => p.toString() === idStr)
+          ) {
+            pendingTagIds.push(t._id as Types.ObjectId);
+            processedIdSet.add(idStr);
+          }
         });
       }
     }
   }
 
-  // --- 4. TẠO THẺ MỚI (BULK CREATE) ---
-  if (tagsToCreateMap.size > 0) {
-    try {
-      const tagsToCreate = Array.from(tagsToCreateMap.values());
-      const createdTags = await Tag.insertMany(tagsToCreate, {
-        ordered: false, // Tiếp tục insert các tag khác nếu 1 tag bị trùng (race condition)
-      });
-
-      createdTags.forEach((tag) => {
-        finalTagsMap.set(tag.id.toString(), {
-          id: tag._id as Types.ObjectId,
-          status: "pending",
-        });
-      });
-    } catch (error: any) {
-      console.error("Lỗi Bulk Create Tags:", error.message);
-      // Nếu là lỗi trùng key (11000) do race condition, ta có thể bỏ qua vì tag đã tồn tại
-      if (error.code !== 11000) throw error;
-    }
-  }
-
-  // --- 5. TỔNG HỢP KẾT QUẢ CUỐI CÙNG ---
-  finalTagsMap.forEach((val) => {
-    if (val.status === "valid") {
-      validTagIds.push(val.id);
-    } else {
-      pendingTagIds.push(val.id);
-    }
-  });
-
-  return {
-    validTagIds,
-    pendingTagIds,
-    ...(warning && { warning }),
-  };
+  return { validTagIds, pendingTagIds, warning };
 };

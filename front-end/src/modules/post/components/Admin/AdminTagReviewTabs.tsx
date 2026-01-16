@@ -73,7 +73,7 @@ export function AdminTagReviewTabs({
                       tag={tag}
                       currentAction={
                         pendingTagActions.find((a) => a.tagId === tag.tagId)
-                          ?.action
+                          ?.action || ""
                       }
                       onActionChange={onActionChange}
                     />

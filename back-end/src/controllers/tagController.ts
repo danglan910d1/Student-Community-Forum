@@ -13,7 +13,7 @@ import { asyncHandler } from "../utils/asyncHandler";
 import { paginateAggregation } from "../utils/pagination";
 import { buildTagFilter } from "../services/tags/tagFilter";
 import { buildTagAggregationPipeline } from "../services/tags/tagPipeline";
-import { generateSlug } from "../utils/text";
+import { escapeRegex, generateSlug } from "../utils/text";
 import { AppError } from "../utils/appError";
 
 // --- [ 1. READ OPERATIONS ] ---
@@ -105,9 +105,20 @@ export const createTagByAdmin = asyncHandler(
     if (!name || name.trim().length === 0)
       throw new AppError(400, "Tag name is required.");
 
-    const slug = generateSlug(name.trim());
-    const existing = await Tag.findOne({ slug });
-    if (existing) throw new AppError(400, "Tag name already exists.");
+    const cleanName = name.trim();
+    const slug = generateSlug(cleanName);
+
+    // Tìm xem có cái nào trùng slug HOẶC trùng tên (không phân biệt hoa thường) mà chưa xóa không
+    const existing = await Tag.findOne({
+      is_deleted: { $ne: true },
+      $or: [
+        { slug: slug },
+        { name: { $regex: new RegExp(`^${escapeRegex(cleanName)}$`, "i") } },
+      ],
+    });
+
+    if (existing)
+      throw new AppError(400, "Tag with this name or slug already exists.");
 
     // 1. Tạo trực tiếp với trạng thái Approved
     const newTag = await Tag.create({

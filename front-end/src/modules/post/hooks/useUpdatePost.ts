@@ -13,18 +13,18 @@ export function useUpdatePost(postId: string) {
     mutationFn: (body: ICreatePostBody) => postService.updatePost(postId, body),
     onSuccess: (data) => {
       toast.success("Cập nhật bài viết thành công!");
-      // Làm mới danh sách và chi tiết bài viết
+
+      // Invalidate để các component khác (như List bài viết) lấy data mới
       queryClient.invalidateQueries({ queryKey: ["posts"] });
       queryClient.invalidateQueries({ queryKey: ["post", postId] });
-      // 2. Kiểm soát logic điều hướng dựa trên status
+
+      // Điều hướng dựa trên trạng thái bài viết sau khi update
       if (data.status === "approved") {
-        // Nếu đã duyệt -> Xem bài viết công khai
         router.push(`/posts/${postId}/${data.slug}`);
       } else {
-        // Nếu là pending hoặc rejected -> Về quản lý bài viết cá nhân kèm filter status
-        // data.status lúc này thường là 'pending' hoặc 'rejected'
         router.push(`/dashboard/posts?status=${data.status}`);
       }
+
       router.refresh();
     },
     onError: (error: AxiosError<{ message: string }>) => {

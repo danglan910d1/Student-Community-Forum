@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { FormProvider, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTopicStore } from "@/stores/useTopicStore";
@@ -10,15 +11,17 @@ import { transformPostData } from "../utils/postTransform";
 import { CardLayout } from "@/components/layout/CardLayout";
 import { Separator } from "@/components/ui/separator";
 
-// Import các component của bạn
 import { PostFormHeader } from "../components/PostForm/PostFormHeader";
 import { PostFormContent } from "../components/PostForm/PostFormContent";
 import { PostFormActions } from "../components/PostForm/PostFormAction";
-import { useMemo } from "react";
 
 export function CreatePostContainer() {
   const { topics } = useTopicStore();
   const { mutate: createPost, isPending } = useCreatePost();
+
+  const { getTagsByTopicId, systemTags, isLoading } = useTagsData({
+    adminView: false,
+  });
 
   const methods = useForm<CreatePostInput>({
     resolver: zodResolver(createPostSchema),
@@ -28,37 +31,34 @@ export function CreatePostContainer() {
       topicId: "",
       tags: [],
     },
-    // Chế độ validation khi người dùng tương tác
     mode: "onChange",
   });
 
   const selectedTopicId = methods.watch("topicId");
 
-  const { getTagsByTopicId, systemTags } = useTagsData({
-    adminView: false,
-  });
-
-  // 2. Lấy tags dựa trên topic đã chọn từ dữ liệu có sẵn trong cache
+  // Đồng nhất logic lấy tags theo Topic
   const topicTags = useMemo(() => {
     return getTagsByTopicId(selectedTopicId);
   }, [selectedTopicId, getTagsByTopicId]);
 
   const handleFormSubmit = (data: CreatePostInput) => {
+    // LOG để kiểm tra dữ liệu trước khi transform
+    console.log(">>> [CREATE POST RAW DATA]:", data);
+
+    // transformPostData sẽ xử lý mảng tags thành hỗn hợp ID/Name cho BE
     createPost(transformPostData(data));
   };
 
   return (
     <CardLayout className="p-0 border-none shadow-sm">
-      <div className="max-w-6xl p-5 space-y-8 animate-in fade-in duration-700">
-        {/* 1. Header: Thêm nội dung phù hợp cho trang Create */}
+      <div className="max-w-6xl p-5 space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-700">
         <PostFormHeader
           title="Tạo bài viết mới"
-          description="Chia sẻ kiến thức hoặc đặt câu hỏi cho cộng đồng."
+          description="Chia sẻ kiến thức hoặc đặt câu hỏi để nhận được sự hỗ trợ từ cộng đồng."
         />
 
         <Separator />
 
-        {/* 2. FormProvider cung cấp context cho các component con */}
         <FormProvider {...methods}>
           <form
             onSubmit={methods.handleSubmit(handleFormSubmit)}
@@ -71,12 +71,15 @@ export function CreatePostContainer() {
               selectedTopicId={selectedTopicId}
             />
 
-            {/* 3. Footer: Nút bấm Submit */}
             <PostFormActions
               isPending={isPending}
-              onCancel={() => methods.reset()}
-              submitText="Đăng bài"
-              cancelText="Huỷ"
+              onCancel={() => {
+                if (confirm("Bạn có chắc muốn huỷ bỏ nội dung đang nhập?")) {
+                  methods.reset();
+                }
+              }}
+              submitText="Đăng bài ngay"
+              cancelText="Làm mới"
             />
           </form>
         </FormProvider>
