@@ -14,14 +14,18 @@ export default function MainLayout({
         <Header />
       </Suspense>
 
-      {/* Thêm relative và z-index thấp hơn footer nếu cần */}
-      <div className="flex-1 flex flex-col relative z-0">
+      {/* SỬA: Đảm bảo container này chiếm trọn không gian và không có padding thừa */}
+      <div className="flex-1 flex flex-col relative w-full h-full">
         <MainContainer>{children}</MainContainer>
       </div>
 
-      <footer className="mt-auto border-t-4 border-blue-600 bg-slate-900 py-8 text-slate-400 z-30 relative">
+      <footer className="border-t-4 border-blue-600 bg-slate-900 py-8 text-slate-400 z-30 relative shrink-0">
         <div className="mx-auto max-w-[1600px] px-4 grid grid-cols-4 gap-8">
           {/* Footer content */}
+          <div>Footer Item</div>
+          <div>Footer Item</div>
+          <div>Footer Item</div>
+          <div>Footer Item</div>
         </div>
       </footer>
     </div>

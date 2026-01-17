@@ -11,12 +11,9 @@ import { useTagsData } from "@/modules/tag/hooks/useTagsData";
 import { usePostDetail } from "@/modules/post/hooks/usePostDetail";
 import { UpdatePostInput, updatePostSchema } from "../schemas/postSchema";
 import { transformPostData } from "../utils/postTransform";
-import { CardLayout } from "@/components/layout/CardLayout";
-import { Separator } from "@/components/ui/separator";
-
-import { PostFormHeader } from "../components/PostForm/PostFormHeader";
 import { PostFormContent } from "../components/PostForm/PostFormContent";
 import { PostFormActions } from "../components/PostForm/PostFormAction";
+import { PostFormLayout } from "../components/PostForm/PostFormLayout";
 
 export function UpdatePostContainer() {
   const params = useParams();
@@ -100,46 +97,34 @@ export function UpdatePostContainer() {
 
     updatePost(transformed);
   };
-
-  if (isLoadingPost || (isLoadingTags && !post)) {
-    return (
-      <div className="p-10 text-center animate-pulse flex flex-col items-center gap-4">
-        <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-muted-foreground font-medium">
-          Đang chuẩn bị dữ liệu bài viết...
-        </p>
-      </div>
-    );
-  }
+  const isGlobalLoading = isLoadingPost || !isDataInitialized.current;
 
   return (
-    <CardLayout className="p-0 border-none shadow-sm">
-      <div className="max-w-6xl p-5 space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-700">
-        <PostFormHeader
-          title="Chỉnh sửa bài viết"
-          description="Cập nhật lại nội dung bài viết để cộng đồng hỗ trợ tốt hơn."
-        />
-        <Separator />
-        <FormProvider {...methods}>
-          <form
-            onSubmit={methods.handleSubmit(handleFormSubmit)}
-            className="space-y-8"
-          >
-            <PostFormContent
-              topics={topics}
-              topicTags={topicTags}
-              systemTags={systemTags}
-              selectedTopicId={selectedTopicId}
-            />
-            <PostFormActions
-              isPending={isPending}
-              onCancel={() => window.history.back()}
-              submitText="Cập nhật ngay"
-              cancelText="Huỷ bỏ"
-            />
-          </form>
-        </FormProvider>
-      </div>
-    </CardLayout>
+    <PostFormLayout
+      title="Chỉnh sửa bài viết"
+      description="Cập nhật lại nội dung bài viết để cộng đồng hỗ trợ tốt hơn."
+      isLoading={isGlobalLoading}
+    >
+      <FormProvider {...methods}>
+        <form
+          onSubmit={methods.handleSubmit(handleFormSubmit)}
+          className="space-y-8"
+        >
+          <PostFormContent
+            topics={topics}
+            topicTags={topicTags}
+            systemTags={systemTags}
+            selectedTopicId={selectedTopicId}
+            isLoading={isLoadingTags}
+          />
+          <PostFormActions
+            isPending={isPending}
+            onCancel={() => window.history.back()}
+            submitText="Cập nhật ngay"
+            cancelText="Huỷ bỏ"
+          />
+        </form>
+      </FormProvider>
+    </PostFormLayout>
   );
 }

@@ -39,9 +39,10 @@ export function PostTableSection({
       ? "Theo dõi và quản lý các nội dung bạn đã đóng góp."
       : "Danh sách các nội dung công khai của thành viên.";
   return (
-    <main className="animate-in fade-in duration-500 w-full min-w-0">
-      <CardLayout className="p-0 border-none shadow-sm overflow-hidden flex flex-col h-[650px] w-full">
-        {/* HEADER & FILTER AREA - Cố định phía trên */}
+    <main className="animate-in fade-in duration-500 w-full min-w-0 h-[800px] flex flex-col">
+      {/* CardLayout phải có flex-col và h-full */}
+      <CardLayout className="p-0 border shadow-sm overflow-hidden flex flex-col h-full w-full bg-card">
+        {/* HEADER & FILTER - flex-none để không bị co giãn */}
         <div className="px-6 pt-6 flex-none border-b pb-4">
           <header className="mb-6">
             <h2 className="text-2xl font-bold uppercase tracking-tight">
@@ -50,7 +51,6 @@ export function PostTableSection({
             <p className="text-sm text-muted-foreground">{description}</p>
           </header>
           {isAdminView ? (
-            /* TRƯỜNG HỢP ADMIN: Hiện component tổng hợp */
             <AdminFilter
               statusValue={params.status}
               sortValue={params.sort}
@@ -58,7 +58,6 @@ export function PostTableSection({
               onUpdateParams={onUpdateParams}
             />
           ) : (
-            /* TRƯỜNG HỢP USER: Hiện 1 filter như cũ */
             <ContentFilter
               titlePrefix={isMine ? "Trạng thái" : "Sắp xếp"}
               totalCount={pagination?.totalItems ?? 0}
@@ -72,8 +71,9 @@ export function PostTableSection({
             />
           )}
         </div>
-        {/* TABLE AREA - Có thể cuộn dọc và ngang */}
-        <div className="flex-1 overflow-auto px-4 py-4 min-w-0">
+
+        {/* TABLE AREA - flex-1 và overflow-hidden để ép nội dung con scroll */}
+        <div className="flex-1 overflow-hidden px-4 py-2 ">
           {isFetching ? (
             <TableSkeleton />
           ) : (
@@ -85,7 +85,7 @@ export function PostTableSection({
           )}
         </div>
 
-        {/* PAGINATION - Cố định phía dưới */}
+        {/* PAGINATION - flex-none để luôn dính dưới đáy */}
         <div className="px-6 py-4 flex-none border-t bg-card">
           <PaginationSection
             currentPage={params.page}

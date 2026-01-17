@@ -27,11 +27,16 @@ export const determineActiveLabel = (
   if (pathname.startsWith("/topics")) return "Chủ đề";
 
   // Logic Admin
+  // Logic Admin Taxonomy
+  if (pathname.startsWith("/dashboard/admin/taxonomy/topic"))
+    return "Quản lý Chủ đề";
+  if (pathname.startsWith("/dashboard/admin/taxonomy/tag"))
+    return "Quản lý Thẻ (Tag)";
+
+  // Logic Admin Core
   if (pathname.startsWith("/dashboard/admin/posts")) return "Quản lý bài viết";
   if (pathname.startsWith("/dashboard/admin/users"))
     return "Quản lý người dùng";
-  if (pathname.startsWith("/dashboard/admin/taxonomy"))
-    return "Quản lý danh mục";
 
   return "";
 };

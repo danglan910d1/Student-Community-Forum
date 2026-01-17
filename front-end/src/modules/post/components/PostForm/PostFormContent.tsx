@@ -18,6 +18,7 @@ interface PostFormContentProps {
   systemTags: ITag[];
   selectedTopicId: string;
   disabled?: boolean;
+  isLoading?: boolean;
 }
 
 export function PostFormContent({
@@ -25,6 +26,7 @@ export function PostFormContent({
   topicTags,
   systemTags,
   selectedTopicId,
+  isLoading,
 }: PostFormContentProps) {
   const {
     control,
@@ -48,13 +50,14 @@ export function PostFormContent({
         name="topicId"
         topics={topics}
         onTopicChange={handleTopicChange}
+        disabled={isLoading}
       />
 
       {/* 2. Tiêu đề - Truyền props để tái sử dụng */}
       <PostFormTitle<CreatePostInput>
         name="title"
         label="Tiêu đề bài viết"
-        placeholder="Mô tả vấn đề của bạn..."
+        placeholder={isLoading ? "Đang tải..." : "Mô tả vấn đề của bạn..."}
       />
 
       {/* 3. Nội dung Markdown - Truyền props để tái sử dụng */}
@@ -64,10 +67,13 @@ export function PostFormContent({
       <MultiAutocomplete
         name="tags"
         control={control}
-        disabled={!selectedTopicId}
+        disabled={!selectedTopicId || isLoading}
         topicTags={topicTags}
         systemTags={systemTags}
         max={5}
+        placeholder={
+          isLoading ? "Đang tải danh sách thẻ..." : "Chọn tối đa 5 thẻ..."
+        }
       />
     </div>
   );
