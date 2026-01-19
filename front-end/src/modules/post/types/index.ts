@@ -53,6 +53,8 @@ export interface IGetPostsParams extends IGetListParams {
   // Chỉ Admin dùng:
   showDeleted?: boolean;
   userId?: string;
+  startDate?: string; // ISO String hoặc YYYY-MM-DD
+  endDate?: string;
 }
 
 export interface IGetPostsRequestParams extends IGetPostsParams {

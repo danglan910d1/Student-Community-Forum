@@ -1,28 +1,30 @@
-// modules/post/components/DeletePostButton.tsx
+// modules/topic/components/TopicList/DeleteTopicButton.tsx
 "use client";
 
 import { useState } from "react";
 import { Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useDeletePost } from "../../hooks/useDeletePost";
 import { ConfirmActionModal } from "@/components/shared/ConfirmActionModal";
+import { useDeleteTopic } from "./hooks/useDeleteTopic";
 
-interface DeletePostButtonProps {
-  postId: string;
+interface DeleteTopicButtonProps {
+  topicId: string;
+  topicName?: string;
   className?: string;
   showText?: boolean;
 }
 
-export function DeletePostButton({
-  postId,
+export function DeleteTopicButton({
+  topicId,
+  topicName,
   className,
   showText = true,
-}: DeletePostButtonProps) {
+}: DeleteTopicButtonProps) {
   const [open, setOpen] = useState(false);
-  const { mutate, isPending } = useDeletePost();
+  const { mutate, isPending } = useDeleteTopic();
 
   const handleConfirm = () => {
-    mutate(postId, {
+    mutate(topicId, {
       onSuccess: () => setOpen(false),
     });
   };
@@ -31,8 +33,8 @@ export function DeletePostButton({
     <ConfirmActionModal
       open={open}
       onOpenChange={setOpen}
-      title="Bạn chắc chắn chứ?"
-      description="Hành động này không thể hoàn tác. Bài viết sẽ bị xóa mềm và chuyển vào thùng rác."
+      title="Xóa chủ đề bài viết?"
+      description={`Bạn đang chuẩn bị xóa chủ đề "${topicName}". Hành động này có thể ảnh hưởng đến các bài viết đang thuộc chủ đề này.`}
       confirmLabel="Xác nhận xóa"
       variant="destructive"
       isLoading={isPending}
@@ -45,7 +47,7 @@ export function DeletePostButton({
           )}
         >
           <Trash2 className="w-4 h-4 mr-2" />
-          {showText && <span>Xóa bài viết</span>}
+          {showText && <span>Xóa chủ đề</span>}
         </div>
       }
     />

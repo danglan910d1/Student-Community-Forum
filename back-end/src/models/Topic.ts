@@ -64,7 +64,7 @@ const topicSchema = new Schema<ITopic>(
       virtuals: false,
       transform: transformFunc,
     },
-  }
+  },
 );
 
 // PRE-SAVE HOOK: Tự động tạo slug trước khi lưu
@@ -85,7 +85,8 @@ topicSchema.index({ name: "text" });
 // Thêm Partial Index ở cuối file
 topicSchema.index(
   { name: 1 },
-  { unique: true, partialFilterExpression: { is_deleted: false } }
+  { unique: true, partialFilterExpression: { is_deleted: false } },
 );
+topicSchema.index({ createdAt: -1 });
 
 export default model<ITopic>("Topic", topicSchema);

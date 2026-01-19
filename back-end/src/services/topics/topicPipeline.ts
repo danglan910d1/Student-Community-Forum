@@ -8,7 +8,7 @@ interface TopicPipelineConfig {
 
 export const buildTopicAggregationPipeline = (
   filter: any,
-  config: TopicPipelineConfig = {}
+  config: TopicPipelineConfig = {},
 ): PipelineStage[] => {
   const {
     includeUser = true,
@@ -30,6 +30,61 @@ export const buildTopicAggregationPipeline = (
     });
   }
 
+  // 2. Lookup để đếm số lượng POSTS thuộc Topic này
+  pipeline.push({
+    $lookup: {
+      from: "posts",
+      let: { topicId: "$_id" },
+      pipeline: [
+        {
+          $match: {
+            $expr: {
+              $and: [
+                {
+                  $eq: [{ $toString: "$topicId" }, { $toString: "$$topicId" }],
+                },
+                { $ne: ["$is_deleted", true] },
+                // Nếu không phải Admin, chỉ đếm các bài đã được duyệt
+                ...(isAdminView ? [] : [{ $eq: ["$status", "approved"] }]),
+              ],
+            },
+          },
+        },
+      ],
+      as: "postsInTopic",
+    },
+  });
+
+  // 3. Lookup để đếm số lượng TAGS thuộc Topic này
+  pipeline.push({
+    $lookup: {
+      from: "tags",
+      let: { topicId: "$_id" },
+      pipeline: [
+        {
+          $match: {
+            $expr: {
+              $and: [
+                { $eq: ["$topic", "$$topicId"] }, // Lưu ý: field trong Tag model là 'topic'
+                { $ne: ["$is_deleted", true] },
+                ...(isAdminView ? [] : [{ $eq: ["$status", "approved"] }]),
+              ],
+            },
+          },
+        },
+      ],
+      as: "tagsInTopic",
+    },
+  });
+
+  // 4. Thêm các trường đếm (Count Fields)
+  pipeline.push({
+    $addFields: {
+      postCount: { $size: "$postsInTopic" },
+      tagCount: { $size: "$tagsInTopic" },
+    },
+  });
+
   if (includeProjection) {
     pipeline.push({
       $project: {
@@ -41,6 +96,11 @@ export const buildTopicAggregationPipeline = (
         createdAt: 1,
         updatedAt: 1,
         status: { $cond: [isAdminView, "$status", "$$REMOVE"] },
+        is_deleted: { $cond: [isAdminView, "$is_deleted", "$$REMOVE"] },
+        _count: {
+          posts: "$postCount",
+          tags: "$tagCount",
+        },
 
         // Nếu là AdminView: Trả về object chi tiết
         // Nếu là Public: Biến mất hoàn toàn (không lộ ID Admin)

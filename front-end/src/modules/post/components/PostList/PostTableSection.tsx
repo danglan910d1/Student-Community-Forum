@@ -5,13 +5,20 @@ import { CardLayout } from "@/components/layout/CardLayout";
 import { PaginationSection } from "@/components/shared/PaginationSection";
 import { PostDataTable } from "./PostDataTable";
 import { IPost } from "../../types";
-import { MY_POST_FILTERS, POST_FILTERS } from "../../constants/post";
+import { POST_FILTERS } from "../../constants/post";
 import { ContentFilter } from "@/components/shared/FilterMenu";
 import { AdminFilter } from "./AdminFilter";
+import { useCallback } from "react";
 
 interface PostTableSectionProps {
   posts: IPost[];
-  params: { page: number; status: string; sort: string };
+  params: {
+    page: number;
+    status: string;
+    sort: string;
+    startDate?: string;
+    endDate?: string;
+  };
   pagination?: { totalPages: number; totalItems: number };
   isFetching: boolean;
   onUpdateParams: (next: Record<string, string | number | null>) => void;
@@ -38,6 +45,16 @@ export function PostTableSection({
     : isMine
       ? "Theo dõi và quản lý các nội dung bạn đã đóng góp."
       : "Danh sách các nội dung công khai của thành viên.";
+
+  const handleReset = useCallback(() => {
+    onUpdateParams({
+      status: "all", // Giá trị mặc định cho status
+      sort: "new", // Giá trị mặc định cho sort
+      startDate: null,
+      endDate: null,
+      page: 1,
+    });
+  }, [onUpdateParams]);
   return (
     <main className="animate-in fade-in duration-500 w-full min-w-0 h-[800px] flex flex-col">
       {/* CardLayout phải có flex-col và h-full */}
@@ -50,23 +67,29 @@ export function PostTableSection({
             </h2>
             <p className="text-sm text-muted-foreground">{description}</p>
           </header>
-          {isAdminView ? (
+          {isAdminView || isMine ? (
             <AdminFilter
               statusValue={params.status}
               sortValue={params.sort}
               totalCount={pagination?.totalItems ?? 0}
               onUpdateParams={onUpdateParams}
+              startDate={params.startDate}
+              endDate={params.endDate}
+              isMine={isMine}
+              onReset={handleReset}
             />
           ) : (
             <ContentFilter
-              titlePrefix={isMine ? "Trạng thái" : "Sắp xếp"}
+              titlePrefix="Sắp xếp"
               totalCount={pagination?.totalItems ?? 0}
-              options={isMine ? MY_POST_FILTERS : POST_FILTERS}
-              currentValue={isMine ? params.status : params.sort}
-              onFilterChange={(value) => {
-                const key = isMine ? "status" : "sort";
-                onUpdateParams({ [key]: value, page: 1 });
-              }}
+              options={POST_FILTERS}
+              currentValue={params.sort}
+              onFilterChange={(val) => onUpdateParams({ sort: val, page: 1 })}
+              startDate={params.startDate}
+              endDate={params.endDate}
+              onDateChange={(range) => onUpdateParams({ ...range, page: 1 })}
+              onReset={handleReset}
+              defaultFilterValue="new"
               className="mb-0"
             />
           )}

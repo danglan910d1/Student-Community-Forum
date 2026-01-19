@@ -64,7 +64,7 @@ const tagSchema = new Schema<ITag>(
       virtuals: false,
       transform: transformFunc,
     },
-  }
+  },
 );
 
 // PRE-SAVE HOOK: Tự động tạo slug trước khi lưu
@@ -79,7 +79,8 @@ tagSchema.pre<ITag>("save", function (next) {
 tagSchema.index({ topicId: 1, status: 1 });
 tagSchema.index(
   { name: 1 },
-  { unique: true, partialFilterExpression: { is_deleted: false } }
+  { unique: true, partialFilterExpression: { is_deleted: false } },
 );
+tagSchema.index({ createdAt: -1 });
 
 export default model<ITag>("Tag", tagSchema);

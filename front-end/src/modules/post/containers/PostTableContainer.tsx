@@ -58,8 +58,10 @@ export function PostTableContainer() {
       status: searchParams.get("status") || "all",
       sort: searchParams.get("sort") || "new",
       page: Number(searchParams.get("page")) || 1,
+      startDate: searchParams.get("startDate") || "",
+      endDate: searchParams.get("endDate") || "",
     }),
-    [searchParams]
+    [searchParams],
   );
 
   // 5. Xây dựng API Params sạch
@@ -71,6 +73,8 @@ export function PostTableContainer() {
       ...base,
       limit: 10,
       adminView: isAdminView ? true : undefined,
+      startDate: urlParams.startDate || undefined,
+      endDate: urlParams.endDate || undefined,
     };
 
     if (isAdminView) {
@@ -108,13 +112,24 @@ export function PostTableContainer() {
   const updateParams = useCallback(
     (next: Record<string, string | number | null>) => {
       const sp = new URLSearchParams(searchParams.toString());
+
       Object.entries(next).forEach(([key, value]) => {
-        if (value === null) sp.delete(key);
-        else sp.set(key, String(value));
+        // Xóa khỏi URL nếu giá trị là null, rỗng, hoặc reset về mặc định
+        if (value === null || value === "") {
+          sp.delete(key);
+        } else {
+          sp.set(key, String(value));
+        }
       });
+
+      // Reset về trang 1 khi lọc (trừ khi chính tham số truyền vào là page)
+      if (!next.page) {
+        sp.set("page", "1");
+      }
+
       router.push(`${pathname}?${sp.toString()}`, { scroll: false });
     },
-    [router, searchParams, pathname]
+    [router, searchParams, pathname],
   );
 
   return (
