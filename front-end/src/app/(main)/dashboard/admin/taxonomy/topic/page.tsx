@@ -1,5 +1,5 @@
 import { TopicTableContainer } from "@/modules/topic/containers/TopicTableContainer";
 
-export default function PostListPage() {
+export default function TopicListPage() {
   return <TopicTableContainer />;
 }

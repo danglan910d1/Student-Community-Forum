@@ -17,6 +17,8 @@ export interface ITag extends IBaseMetadata {
   postCount: number;
   // User: Pipeline trả về thông tin người tạo (createdBy) dưới dạng Object IAuthor
   user?: IAuthor | string;
+  startDate?: string;
+  endDate?: string;
 
   // Admin Only: Hiện ra nhờ isAdminView trong pipeline
   status?: GlobalStatus;
@@ -25,6 +27,10 @@ export interface ITag extends IBaseMetadata {
 // Params đặc thù cho Tag (kế thừa từ IGetListParams bạn đã chốt)
 export interface IGetTagsParams extends IGetListParams {
   topicId?: string; // Hỗ trợ lọc tag theo chuyên mục hoặc "null"
+  startDate?: string; // ISO String hoặc YYYY-MM-DD
+  endDate?: string;
+  sort?: string;
+  status?: GlobalStatus;
 }
 
 export interface IGetTagsRequestParams extends IGetTagsParams {
@@ -34,6 +40,7 @@ export interface IGetTagsRequestParams extends IGetTagsParams {
 export interface IGetAdminTagsParams extends IGetTagsParams {
   status?: GlobalStatus;
   showDeleted?: boolean;
+  slug?: string;
 }
 
 export type ITagResponse = IApiResponse<ITag, "tags">;

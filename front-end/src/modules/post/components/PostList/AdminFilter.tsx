@@ -11,7 +11,10 @@ interface AdminContentFilterProps {
   startDate?: string;
   endDate?: string;
   onReset?: () => void;
-  isMine?: boolean;
+  // Options linh hoạt: Nếu không truyền sẽ lấy mặc định từ Post
+  statusOptions?: { label: string; value: string }[];
+  sortOptions?: { label: string; value: string }[];
+  hideStatus?: boolean;
 }
 
 export const AdminFilter = ({
@@ -22,28 +25,33 @@ export const AdminFilter = ({
   endDate,
   onUpdateParams,
   onReset,
+  statusOptions = MY_POST_FILTERS, // Mặc định Post status
+  sortOptions = POST_FILTERS, // Mặc định Post sorting
+  hideStatus = false,
 }: AdminContentFilterProps) => {
+  // Logic kiểm tra để hiện nút "Đặt lại"
   const isAnyFilterActive =
-    statusValue !== "all" || sortValue !== "new" || !!startDate;
+    statusValue !== "all" || sortValue !== "new" || !!startDate || !!endDate;
 
   return (
     <div className="flex flex-col gap-4 relative">
-      {/* Hàng 1: Trạng thái */}
-      <ContentFilter
-        titlePrefix={"Trạng thái"}
-        totalCount={totalCount}
-        options={MY_POST_FILTERS}
-        currentValue={statusValue}
-        onFilterChange={(val) => onUpdateParams({ status: val, page: 1 })}
-        className="mb-0"
-      />
-
-      {/* Hàng 2: Sắp xếp & Ngày tháng */}
+      {/* Hàng 1: Trạng thái (Approved, Pending, Rejected...) */}
+      {!hideStatus && (
+        <ContentFilter
+          titlePrefix={"Trạng thái"}
+          totalCount={totalCount}
+          options={statusOptions}
+          currentValue={statusValue}
+          onFilterChange={(val) => onUpdateParams({ status: val, page: 1 })}
+          className="mb-0"
+        />
+      )}
+      {/* Hàng 2: Sắp xếp (New, Popular...) & Lọc theo ngày */}
       <div className="flex items-center justify-between border-t pt-4">
         <ContentFilter
           titlePrefix="Sắp xếp theo"
           totalCount={totalCount}
-          options={POST_FILTERS}
+          options={sortOptions}
           currentValue={sortValue}
           onFilterChange={(val) => onUpdateParams({ sort: val, page: 1 })}
           startDate={startDate}
@@ -52,7 +60,7 @@ export const AdminFilter = ({
           className="mb-0 flex-1"
         />
 
-        {/* NÚT RESET TỔNG: Nằm tách biệt để quản lý cả 2 hàng */}
+        {/* Nút Reset */}
         {isAnyFilterActive && (
           <Button
             variant="ghost"

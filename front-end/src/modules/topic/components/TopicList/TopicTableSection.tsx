@@ -1,12 +1,17 @@
+// modules/topic/components/TopicList/TopicTableSection.tsx
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useEffect, useState } from "react"; // Thêm useState
 import { CardLayout } from "@/components/layout/CardLayout";
 import { PaginationSection } from "@/components/shared/PaginationSection";
 import { TopicDataTable } from "./TopicDataTable";
 import { ITopic } from "../../types";
 import { AdminFilter } from "@/modules/post/components/PostList/AdminFilter";
 import { CreateTopicDialog } from "../TopicForm/CreateTopicDialog";
+import { TAXONOMY_SORT_OPTIONS } from "../../constants/topic";
+import { Search } from "lucide-react"; // Thêm icon Search
+import { Input } from "@/components/ui/input"; // Thêm Input
+
 interface TopicTableSectionProps {
   topics: ITopic[];
   params: {
@@ -15,6 +20,7 @@ interface TopicTableSectionProps {
     sort: string;
     startDate?: string;
     endDate?: string;
+    slug?: string; // Thêm slug vào type params
   };
   pagination?: { totalPages: number; totalItems: number };
   isFetching: boolean;
@@ -28,12 +34,22 @@ export function TopicTableSection({
   isFetching,
   onUpdateParams,
 }: TopicTableSectionProps) {
+  const [searchInput, setSearchInput] = useState(params.slug || "");
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      onUpdateParams({ slug: searchInput.trim() || null, page: 1 });
+    }
+  };
+
   const handleReset = useCallback(() => {
+    setSearchInput("");
     onUpdateParams({
       status: "all",
       sort: "new",
       startDate: null,
       endDate: null,
+      slug: null, // Xóa slug trên URL
       page: 1,
     });
   }, [onUpdateParams]);
@@ -49,14 +65,26 @@ export function TopicTableSection({
                 Quản trị chủ đề
               </h2>
               <p className="text-sm text-muted-foreground">
-                Xem, chỉnh sửa và quản lý toàn bộ các danh mục chủ đề trên hệ
-                thống.
+                Xem, chỉnh sửa và quản lý toàn bộ các danh mục chủ đề.
               </p>
             </div>
 
-            {/* NÚT THÊM CHỦ ĐỀ MỚI */}
-            <div className="flex-none">
-              <CreateTopicDialog />
+            {/* THANH TÌM KIẾM THEO SLUG/TÊN */}
+            <div className="flex items-center gap-3 flex-1 max-w-md ml-auto">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  key={params.slug || "empty"}
+                  placeholder="Tìm theo tên hoặc slug..."
+                  className="pl-9 h-9"
+                  defaultValue={params.slug || ""} // Dùng defaultValue thay vì value để gõ mượt hơn
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                />
+              </div>
+              <div className="flex-none">
+                <CreateTopicDialog />
+              </div>
             </div>
           </header>
 
@@ -67,8 +95,8 @@ export function TopicTableSection({
             onUpdateParams={onUpdateParams}
             startDate={params.startDate}
             endDate={params.endDate}
-            isMine={false}
             onReset={handleReset}
+            sortOptions={TAXONOMY_SORT_OPTIONS}
           />
         </div>
 

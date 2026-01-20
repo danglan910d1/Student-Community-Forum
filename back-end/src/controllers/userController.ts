@@ -45,20 +45,20 @@ export const getMe = asyncHandler(
   async (req: AuthenticatedRequest, res: Response) => {
     const user = await fetchUserByPipeline(
       { _id: new Types.ObjectId(req.userId) },
-      true
+      true,
     );
     if (!user) throw new AppError(404, "User not found.");
 
     await cacheUser(req.userId!, user);
     res.json(user);
-  }
+  },
 );
 
 /** * PUT /api/users/profile (Update Name/Avatar) */
 export const updateProfile = asyncHandler(
   async (
     req: AuthenticatedRequest<{}, {}, UpdateProfileBody> & MulterRequest,
-    res: Response
+    res: Response,
   ) => {
     const userId = req.userId!;
     const { name, avatar } = req.body;
@@ -73,7 +73,7 @@ export const updateProfile = asyncHandler(
     // Xử lý Upload Avatar & Xóa ảnh cũ
     if (req.file) {
       const filename = `avatar-${userId}-${Date.now()}${path.extname(
-        req.file.originalname
+        req.file.originalname,
       )}`;
       await fs.writeFile(path.join(UPLOADS_DIR, filename), req.file.buffer);
 
@@ -90,11 +90,11 @@ export const updateProfile = asyncHandler(
     const updatedUserRaw = await User.findByIdAndUpdate(
       userId,
       { $set: updateFields },
-      { new: true }
+      { new: true },
     );
     const userData = await fetchUserByPipeline(
       { _id: updatedUserRaw!._id },
-      true
+      true,
     );
 
     await cacheUser(userId, userData);
@@ -102,14 +102,14 @@ export const updateProfile = asyncHandler(
       await saveIdempotencyResult(requestId, 200, JSON.stringify(userData));
 
     res.json(userData);
-  }
+  },
 );
 
 /** * PUT /api/users/password (Security) */
 export const updatePassword = asyncHandler(
   async (
     req: AuthenticatedRequest<{}, {}, UpdatePasswordBody>,
-    res: Response
+    res: Response,
   ) => {
     const { oldPassword, newPassword } = req.body;
     const requestId = req.headers["x-request-id"] as string;
@@ -119,7 +119,7 @@ export const updatePassword = asyncHandler(
     if (newPassword.length < MIN_PASSWORD_LENGTH)
       throw new AppError(
         400,
-        `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`
+        `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`,
       );
 
     const user = await User.findById(req.userId).select("+password");
@@ -130,7 +130,7 @@ export const updatePassword = asyncHandler(
 
     user.password = await bcrypt.hash(
       newPassword,
-      await bcrypt.genSalt(BCRYPT_SALT_ROUNDS)
+      await bcrypt.genSalt(BCRYPT_SALT_ROUNDS),
     );
     await user.save();
 
@@ -141,7 +141,7 @@ export const updatePassword = asyncHandler(
       await saveIdempotencyResult(requestId, 200, JSON.stringify(result));
 
     res.json(result);
-  }
+  },
 );
 
 // --- [ 2. ADMIN & PUBLIC READS ] ---
@@ -160,13 +160,13 @@ export const getUserById = asyncHandler(
 
     const user = await fetchUserByPipeline(
       { _id: new Types.ObjectId(id) },
-      canViewFull
+      canViewFull,
     );
     if (!user) throw new AppError(404, "User not found.");
 
     await setCache(cacheKey, user, canViewFull ? 60 : 300);
     res.json(user);
-  }
+  },
 );
 
 /** * GET /api/users (Admin/Public List) */
@@ -186,7 +186,7 @@ export const getUsersList = asyncHandler(
       User,
       pipeline,
       req.query.page,
-      req.query.limit
+      req.query.limit,
     );
     res.json({
       users: result.items,
@@ -197,7 +197,7 @@ export const getUsersList = asyncHandler(
         limit: result.limit,
       },
     });
-  }
+  },
 );
 
 // --- [ 3. ADMINISTRATIVE & CASCADE DELETE ] ---
@@ -206,16 +206,24 @@ export const getUsersList = asyncHandler(
 export const updateUserStatus = asyncHandler(
   async (
     req: AuthenticatedRequest<GetUserParams, {}, UpdateUserStatusBody>,
-    res: Response
+    res: Response,
   ) => {
     const requestId = req.headers["x-request-id"] as string;
+    const targetId = req.params.id;
+    const currentAdminId = req.userId;
     if (req.userId === req.params.id)
       throw new AppError(403, "Cannot modify yourself.");
+    if (targetId === currentAdminId && req.body.role === "user") {
+      throw new AppError(
+        403,
+        "Bạn không thể tự hạ cấp chính mình để tránh mất quyền quản trị.",
+      );
+    }
 
     const updated = await User.findByIdAndUpdate(
       req.params.id,
       { $set: req.body },
-      { new: true }
+      { new: true },
     );
     if (!updated) throw new AppError(404, "User not found.");
 
@@ -226,7 +234,7 @@ export const updateUserStatus = asyncHandler(
       await saveIdempotencyResult(requestId, 200, JSON.stringify(userData));
 
     res.json(userData);
-  }
+  },
 );
 
 /** * DELETE /api/users/:id (Cascade Soft Delete) */
@@ -259,5 +267,5 @@ export const deleteUser = asyncHandler(
       await saveIdempotencyResult(requestId, 200, JSON.stringify(result));
 
     res.json(result);
-  }
+  },
 );

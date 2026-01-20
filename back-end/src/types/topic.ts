@@ -9,6 +9,7 @@ export interface TopicParams {
 export interface CreateTopicBody {
   name: string;
   description?: string;
+  status?: TopicStatus;
 }
 
 // 3. Dùng cho PUT /admin/:id (Cập nhật Topic)

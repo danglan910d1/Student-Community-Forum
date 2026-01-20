@@ -9,9 +9,11 @@ export const topicService = {
     // Trả về mảng topics bên trong
     return response.data.topics || [];
   },
+
   getAdminTopics: async (
     params?: IGetAdminTopicsParams,
   ): Promise<ITopicResponse> => {
+    console.log("Dữ liệu gửi lên API:", params); // Xem có field 'sort' chưa?
     const { data } = await api.get<ITopicResponse>("/topics/admin", { params });
     return data;
   },

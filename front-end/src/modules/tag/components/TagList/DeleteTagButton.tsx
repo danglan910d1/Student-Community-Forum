@@ -1,30 +1,30 @@
-// modules/topic/components/TopicList/DeleteTopicButton.tsx
+// modules/tag/components/TagList/DeleteTagButton.tsx
 "use client";
 
 import { useState } from "react";
 import { Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ConfirmActionModal } from "@/components/shared/ConfirmActionModal";
-import { useDeleteTopic } from "./hooks/useDeleteTopic";
+import { useDeleteTag } from "../../hooks/useDeleteTag";
 
-interface DeleteTopicButtonProps {
-  topicId: string;
-  topicName?: string;
+interface DeleteTagButtonProps {
+  tagId: string;
+  tagName?: string;
   className?: string;
   showText?: boolean;
 }
 
-export function DeleteTopicButton({
-  topicId,
-  topicName,
+export function DeleteTagButton({
+  tagId,
+  tagName,
   className,
   showText = true,
-}: DeleteTopicButtonProps) {
+}: DeleteTagButtonProps) {
   const [open, setOpen] = useState(false);
-  const { mutate, isPending } = useDeleteTopic();
+  const { mutate, isPending } = useDeleteTag();
 
   const handleConfirm = () => {
-    mutate(topicId, {
+    mutate(tagId, {
       onSuccess: () => setOpen(false),
     });
   };
@@ -33,8 +33,8 @@ export function DeleteTopicButton({
     <ConfirmActionModal
       open={open}
       onOpenChange={setOpen}
-      title="Xóa chủ đề bài viết?"
-      description={`Bạn đang chuẩn bị xóa chủ đề "${topicName}". Hành động này có thể ảnh hưởng đến các bài viết đang thuộc chủ đề này.`}
+      title="Xóa thẻ (Tag) này?"
+      description={`Bạn đang chuẩn bị xóa thẻ "#${tagName}". Thẻ này sẽ bị gỡ khỏi các bài viết liên quan và chuyển vào thùng rác.`}
       confirmLabel="Xác nhận xóa"
       variant="destructive"
       isLoading={isPending}
@@ -47,7 +47,7 @@ export function DeleteTopicButton({
           )}
         >
           <Trash2 className="w-4 h-4 mr-2" />
-          {showText && <span>Xóa chủ đề</span>}
+          {showText && <span>Xóa thẻ</span>}
         </div>
       }
     />

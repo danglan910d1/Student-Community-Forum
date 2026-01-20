@@ -2,7 +2,7 @@
 import { Pencil, Eye } from "lucide-react";
 import { ITopic } from "../types";
 import { ActionItemConfig } from "@/types/actionMenu";
-import { DeleteTopicButton } from "../DeleteTopicButton";
+import { DeleteTopicButton } from "../components/TopicList/DeleteTopicButton";
 export const TOPIC_ACTION_TYPES = {
   // Bộ hành động dành cho Admin quản lý Topic
   ADMIN: (topic: ITopic): ActionItemConfig[][] => {

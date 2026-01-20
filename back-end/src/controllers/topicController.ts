@@ -23,19 +23,34 @@ import { AppError } from "../utils/appError";
 /** * GET /api/topics (Public) & GET /api/topics/admin (Admin) */
 export const getTopicsList = asyncHandler(
   async (req: Request | AuthenticatedRequest, res: Response) => {
-    const query = req.query as GetTopicsQuery;
+    const query = req.query as any; // Dùng any để lấy field sort dễ dàng
     const isAdmin = req.userRole === "admin";
     const userId = (req as any).userId;
 
-    // 1. Xây dựng Filter & Pipeline
+    // 1. Xây dựng Filter
     const filter = buildTopicFilter(query, { userId, isAdmin });
+
+    // 2. Xây dựng Pipeline cơ bản
     const pipeline = buildTopicAggregationPipeline(filter, {
-      includeUser: isAdmin, // Chỉ hiện người tạo cho Admin
+      includeUser: isAdmin,
       includeProjection: true,
       isAdminView: isAdmin,
     });
 
-    // 2. Phân trang
+    // 3. LOGIC SẮP XẾP (Giống PostController)
+    const sortStage: any = {};
+    if (query.sort === "popular") {
+      // Sắp xếp theo số lượng bài viết giảm dần
+      sortStage.postCount = -1;
+    } else if (query.sort === "old") {
+      sortStage.createdAt = 1;
+    } else {
+      // Mặc định là mới nhất
+      sortStage.createdAt = -1;
+    }
+    pipeline.push({ $sort: sortStage });
+
+    // 4. Phân trang
     const result = await paginateAggregation(
       Topic,
       pipeline,
@@ -79,7 +94,7 @@ export const getTopicById = asyncHandler(
 /** * POST /api/topics/admin */
 export const createTopic = asyncHandler(
   async (req: AuthenticatedRequest<{}, {}, CreateTopicBody>, res: Response) => {
-    const { name, description } = req.body;
+    const { name, description, status } = req.body;
     if (!name?.trim()) throw new AppError(400, "Topic name is required.");
 
     const slug = generateSlug(name.trim());
@@ -91,7 +106,7 @@ export const createTopic = asyncHandler(
       slug,
       description: description?.trim(),
       createdBy: new Types.ObjectId(req.userId),
-      status: "approved",
+      status: status || "approved",
     });
 
     const topicArray = await Topic.aggregate(

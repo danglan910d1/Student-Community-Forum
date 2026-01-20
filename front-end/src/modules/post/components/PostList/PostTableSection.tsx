@@ -75,7 +75,6 @@ export function PostTableSection({
               onUpdateParams={onUpdateParams}
               startDate={params.startDate}
               endDate={params.endDate}
-              isMine={isMine}
               onReset={handleReset}
             />
           ) : (

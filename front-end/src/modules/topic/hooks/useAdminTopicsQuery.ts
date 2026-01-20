@@ -4,9 +4,16 @@ import { IGetAdminTopicsParams } from "../types";
 
 export const useAdminTopicsQuery = (params: IGetAdminTopicsParams) => {
   return useQuery({
-    queryKey: ["admin-topics", params],
+    queryKey: [
+      "admin",
+      "topics",
+      params.page,
+      params.status,
+      params.sort,
+      params.slug,
+    ],
     queryFn: () => topicService.getAdminTopics(params),
     placeholderData: (previousData) => previousData,
-    staleTime: 1000 * 60 * 5, // 5 phút cho dữ liệu Admin
+    staleTime: 1000 * 60 * 5,
   });
 };

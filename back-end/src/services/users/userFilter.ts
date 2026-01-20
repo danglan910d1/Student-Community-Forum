@@ -6,7 +6,7 @@ import { AuthContext, buildCommonFilter } from "../common/buildCommonFilter";
  */
 export const buildUserFilter = (
   queryParams: GetAllUsersQuery,
-  authContext: AuthContext
+  authContext: AuthContext,
 ) => {
   // 1. Khởi tạo filter bằng bộ lọc chung.
   // Hàm này đã tự xử lý is_deleted, search, và status (active/banned) cho User rồi.
@@ -20,7 +20,7 @@ export const buildUserFilter = (
     // Lọc chính xác Email (Hàm chung chỉ làm search mờ qua $text)
     if (email) {
       delete filter.$text; // Ưu tiên tìm chính xác theo email
-      filter.email = email.trim().toLowerCase();
+      filter.email = { $regex: email.trim().toLowerCase(), $options: "i" };
     }
 
     // Lọc chính xác Name

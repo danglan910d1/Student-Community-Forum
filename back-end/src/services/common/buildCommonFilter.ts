@@ -12,6 +12,7 @@ export interface CommonQuery {
   showDeleted?: string; // Bổ sung để Admin có thể xem thùng rác
   startDate?: string; // ISO String
   endDate?: string;
+  slug?: string;
 }
 
 export interface AuthContext {
@@ -27,7 +28,7 @@ export const buildCommonFilter = (
   authContext: AuthContext,
   modelType: "post" | "topic" | "tag" | "user" | "comment",
 ) => {
-  const { status, search, myPosts, showDeleted, startDate, endDate } =
+  const { status, search, myPosts, showDeleted, startDate, endDate, slug } =
     queryParams;
   const { userId, isAdmin } = authContext;
 
@@ -66,6 +67,11 @@ export const buildCommonFilter = (
       if (isAdmin && status) filter.status = status;
       else if (!isAdmin) filter.status = "approved";
     }
+  }
+
+  if (slug) {
+    // Sử dụng RegExp để tìm kiếm gần đúng (case-insensitive)
+    filter.slug = { $regex: slug, $options: "i" };
   }
 
   // --- 3. TÌM KIẾM TỪ KHÓA ---

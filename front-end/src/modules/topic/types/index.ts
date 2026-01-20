@@ -28,6 +28,8 @@ export interface IGetTopicsParams extends IGetListParams {
 export interface IGetAdminTopicsParams extends IGetTopicsParams {
   status?: GlobalStatus;
   showDeleted?: boolean;
+  sort?: string;
+  slug?: string;
 }
 
 export type ITopicResponse = IApiResponse<ITopic, "topics">;

@@ -30,6 +30,8 @@ export type IGetAdminUsersParams = IGetListParams & {
   role?: UserRole;
   status?: UserStatus;
   showDeleted?: boolean;
+  startDate?: string;
+  endDate?: string;
 };
 
 export interface UpdatePasswordRequest {

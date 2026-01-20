@@ -6,16 +6,15 @@ interface NotificationPipelineConfig {
 
 export const buildNotificationAggregationPipeline = (
   filter: any,
-  config: NotificationPipelineConfig = {}
+  config: NotificationPipelineConfig = {},
 ): PipelineStage[] => {
   const { includeSender = true } = config;
 
   const pipeline: PipelineStage[] = [
     { $match: filter },
-    { $sort: { createdAt: -1 } }, // Luôn ưu tiên thông báo mới nhất
+    { $sort: { createdAt: -1 } },
   ];
 
-  // Lookup để lấy thông tin người gửi (sender)
   if (includeSender) {
     pipeline.push({
       $lookup: {
@@ -27,21 +26,38 @@ export const buildNotificationAggregationPipeline = (
     });
   }
 
-  // Giai đoạn then chốt: Làm phẳng ID và định nghĩa cấu trúc trả về
+  // --- BƯỚC THÊM MỚI: Lấy Slug từ bảng posts ---
+  pipeline.push(
+    {
+      $lookup: {
+        from: "posts",
+        localField: "entityId", // ID của bài viết (hoặc ID comment nếu bạn cấu trúc khác)
+        foreignField: "_id",
+        as: "postData",
+      },
+    },
+    {
+      $addFields: {
+        // Lấy slug từ phần tử đầu tiên của mảng postData trả về
+        targetSlug: { $arrayElemAt: ["$postData.slug", 0] },
+      },
+    },
+  );
+
+  // Giai đoạn then chốt: Giữ nguyên cấu trúc cũ và thêm targetSlug
   pipeline.push({
     $project: {
-      _id: 0, // Loại bỏ _id gốc
-      notificationId: "$_id", // Chuyển _id thành notificationId
+      _id: 0,
+      notificationId: "$_id",
       recipientId: 1,
       type: 1,
-      // Thay vì để entityId, ta đổi tên thành targetId cho "phẳng"
-      targetId: "$entityId", // MongoDB sẽ tự chuyển ObjectId này thành String khi xuất ra
-      targetType: "$entityType", // "Post" hoặc "Comment"
+      targetId: "$entityId",
+      targetType: "$entityType",
+      targetSlug: 1, // <--- THÊM TRƯỜNG NÀY VÀO ĐÂY
       content: 1,
       is_read: 1,
       createdAt: 1,
 
-      // Xử lý object sender tương tự như cách làm với Topic/Post
       sender: includeSender
         ? {
             $let: {

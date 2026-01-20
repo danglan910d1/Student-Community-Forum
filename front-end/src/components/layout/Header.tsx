@@ -5,6 +5,7 @@ import { useAuthStore } from "@/stores/useAuthStore";
 import { Bell, HelpCircle } from "lucide-react";
 import { Button } from "../ui/button";
 import Link from "next/link";
+import { NotificationDropdown } from "@/modules/noti/components/NotiDropdown";
 
 export function Header() {
   const { user, isAuthenticated } = useAuthStore();
@@ -33,13 +34,13 @@ export function Header() {
                 <button className="p-1.5 rounded-full hover:bg-gray-100 transition-colors">
                   <HelpCircle className="h-5 w-5" />
                 </button>
-                <div className="relative p-1.5 rounded-full hover:bg-gray-100 transition-colors cursor-pointer">
+                {/* <div className="relative p-1.5 rounded-full hover:bg-gray-100 transition-colors cursor-pointer">
                   <Bell className="h-5 w-5" />
                   <span className="absolute top-0 right-0 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-base text-white">
                     3
                   </span>
-                </div>
-                {/* Bạn có thể thêm component UserInfo đã làm ở bước trước vào đây */}
+                </div> */}
+                <NotificationDropdown />
               </div>
             ) : (
               // HIỂN THỊ KHI CHƯA ĐĂNG NHẬP

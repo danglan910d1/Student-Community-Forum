@@ -1,4 +1,3 @@
-// modules/topic/components/TopicList/TopicTableContainer.tsx
 "use client";
 
 import { useMemo, useCallback, useEffect } from "react";
@@ -14,40 +13,34 @@ export function TopicTableContainer() {
   const searchParams = useSearchParams();
   const { user } = useAuthStore();
 
-  // Kiểm tra quyền truy cập ở Client (Bảo vệ UI)
   useEffect(() => {
     if (user && user.role !== "admin") {
-      router.push("/"); // Redirect nếu không phải admin
+      router.push("/");
     }
   }, [user, router]);
 
+  // 1. Lấy params từ URL - Đảm bảo key 'sort' khớp với AdminFilter gửi lên
   const urlParams = useMemo(
     () => ({
       status: searchParams.get("status") || "all",
-      sort: searchParams.get("sort") || "new",
+      sort: searchParams.get("sort") || "new", // Đồng bộ với sortValue
       page: Number(searchParams.get("page")) || 1,
       startDate: searchParams.get("startDate") || "",
       endDate: searchParams.get("endDate") || "",
+      slug: searchParams.get("slug") || "",
     }),
     [searchParams],
   );
 
+  // 2. Chuyển đổi để gọi API - Kiểm tra file mapper của bạn
   const apiParams = useMemo(
     () => mapTopicUrlParamsToApi(urlParams),
     [urlParams],
   );
 
-  // Hook này sẽ tự động gửi kèm Token trong Header nhờ Axios Interceptor
   const { data, isFetching, error } = useAdminTopicsQuery(apiParams);
 
-  // Debug để kiểm tra cấu trúc dữ liệu mới
-  useEffect(() => {
-    if (data) {
-      console.log("Admin Topics Data:", data.topics);
-      // Bạn sẽ thấy topics[0]._count.posts ở đây
-    }
-  }, [data]);
-
+  // 3. Hàm cập nhật URL - Giữ nguyên vì đã xử lý Record<string, string | number | null> rất tốt
   const updateParams = useCallback(
     (next: Record<string, string | number | null>) => {
       const sp = new URLSearchParams(searchParams.toString());
@@ -55,13 +48,20 @@ export function TopicTableContainer() {
         if (value === null || value === "") sp.delete(key);
         else sp.set(key, String(value));
       });
+      // Reset về page 1 khi thay đổi filter (trừ khi chính tham số thay đổi là page)
       if (!next.page) sp.set("page", "1");
+
       router.push(`${pathname}?${sp.toString()}`, { scroll: false });
     },
     [router, searchParams, pathname],
   );
 
-  if (error) return <div>Lỗi tải dữ liệu. Vui lòng kiểm tra quyền Admin.</div>;
+  if (error)
+    return (
+      <div className="p-4 text-red-500">
+        Lỗi tải dữ liệu. Vui lòng kiểm tra quyền Admin.
+      </div>
+    );
 
   return (
     <TopicTableSection

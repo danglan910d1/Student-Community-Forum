@@ -5,7 +5,7 @@
  */
 import { Request, Response } from "express";
 import { Types } from "mongoose";
-import Tag, { ITag } from "../models/Tag";
+import Tag, { ITag, TagStatus } from "../models/Tag";
 import Post from "../models/Post";
 import { AuthenticatedRequest } from "../types/express";
 import { GetTagsQuery, TagParams, UpdateTagBody } from "../types/tag";
@@ -23,34 +23,42 @@ import { AppError } from "../utils/appError";
  */
 export const getTagsList = asyncHandler(
   async (req: Request | AuthenticatedRequest, res: Response) => {
-    const query = req.query as GetTagsQuery;
+    const query = req.query as any;
 
-    // 1. Tự động xác định Admin dựa trên Route Path
-    // Nếu URL chứa "/admin", isAdmin sẽ được kích hoạt
     const isResourceAdminRoute = req.originalUrl.includes("/api/tags/admin");
     const userRole = (req as any).userRole;
-
-    // isAdmin chỉ true khi: đúng route admin VÀ user có role admin
     const isAdmin = isResourceAdminRoute && userRole === "admin";
-
     const userId = "userId" in req ? (req as any).userId : undefined;
 
-    // 2. Xây dựng filter (buildTagFilter sẽ nhận isAdmin để bỏ qua filter status="approved")
+    // 1. Xây dựng filter
     const filter = await buildTagFilter(query, { userId, isAdmin });
 
+    // 2. Xây dựng pipeline
     const pipeline = buildTagAggregationPipeline(filter, {
       includeTopic: true,
-      includeUser: isAdmin, // Public không cần biết ai tạo tag
+      includeUser: isAdmin,
       includeProjection: true,
-      isAdminView: isAdmin, // Quyết định postCount và hiển thị field status
+      isAdminView: isAdmin,
     });
 
-    // 3. Thực hiện phân trang
+    // 3. LOGIC SẮP XẾP
+    const sortStage: any = {};
+    if (query.sort === "popular") {
+      // Sắp xếp theo số lượng bài viết gắn tag này
+      sortStage.postCount = -1;
+    } else if (query.sort === "old") {
+      sortStage.createdAt = 1;
+    } else {
+      sortStage.createdAt = -1;
+    }
+    pipeline.push({ $sort: sortStage });
+
+    // 4. Thực hiện phân trang
     const result = await paginateAggregation(
       Tag,
       pipeline,
       query.page,
-      query.limit
+      query.limit,
     );
 
     res.json({
@@ -62,7 +70,7 @@ export const getTagsList = asyncHandler(
         limit: result.limit,
       },
     });
-  }
+  },
 );
 
 /** * GET /api/tags/admin/:id
@@ -82,13 +90,13 @@ export const getTagById = asyncHandler(
           includeUser: true,
           includeProjection: true,
           isAdminView: true,
-        }
-      )
+        },
+      ),
     );
 
     if (!tagArray[0]) throw new AppError(404, "Tag not found.");
     res.json(tagArray[0]);
-  }
+  },
 );
 
 // --- [ 2. WRITE OPERATIONS ] ---
@@ -98,10 +106,14 @@ export const getTagById = asyncHandler(
  */
 export const createTagByAdmin = asyncHandler(
   async (
-    req: AuthenticatedRequest<{}, {}, { name: string; topicId?: string }>,
-    res: Response
+    req: AuthenticatedRequest<
+      {},
+      {},
+      { name: string; topicId?: string; status?: TagStatus }
+    >,
+    res: Response,
   ) => {
-    const { name, topicId } = req.body;
+    const { name, topicId, status } = req.body;
     if (!name || name.trim().length === 0)
       throw new AppError(400, "Tag name is required.");
 
@@ -126,18 +138,18 @@ export const createTagByAdmin = asyncHandler(
       slug,
       topicId: topicId ? new Types.ObjectId(topicId) : null,
       createdBy: new Types.ObjectId(req.userId),
-      status: "approved",
+      status: status || "approved",
     });
 
     // 2. Trả về format chuẩn
     const tagArray = await Tag.aggregate(
       buildTagAggregationPipeline(
         { _id: newTag._id },
-        { includeTopic: true, includeUser: true, isAdminView: true }
-      )
+        { includeTopic: true, includeUser: true, isAdminView: true },
+      ),
     );
     res.status(201).json(tagArray[0]);
-  }
+  },
 );
 
 /** * PUT /api/tags/admin/:id
@@ -146,7 +158,7 @@ export const createTagByAdmin = asyncHandler(
 export const updateTag = asyncHandler(
   async (
     req: AuthenticatedRequest<TagParams, {}, UpdateTagBody>,
-    res: Response
+    res: Response,
   ) => {
     const { id } = req.params;
     const { name, topicId, status } = req.body;
@@ -167,18 +179,18 @@ export const updateTag = asyncHandler(
     const updatedTag = await Tag.findOneAndUpdate(
       { _id: id, is_deleted: { $ne: true } },
       { $set: updateFields },
-      { new: true }
+      { new: true },
     );
     if (!updatedTag) throw new AppError(404, "Tag not found or deleted.");
 
     const tagArray = await Tag.aggregate(
       buildTagAggregationPipeline(
         { _id: updatedTag._id },
-        { includeTopic: true, includeUser: true, isAdminView: true }
-      )
+        { includeTopic: true, includeUser: true, isAdminView: true },
+      ),
     );
     res.json(tagArray[0]);
-  }
+  },
 );
 
 /** * PATCH /api/tags/admin/bulk
@@ -187,20 +199,20 @@ export const updateTag = asyncHandler(
 export const bulkUpdateTags = asyncHandler(
   async (
     req: AuthenticatedRequest<{}, {}, { ids: string[]; status: string }>,
-    res: Response
+    res: Response,
   ) => {
     const { ids, status } = req.body;
     if (!ids?.length) throw new AppError(400, "List of Tag IDs is required.");
 
     const result = await Tag.updateMany(
       { _id: { $in: ids.map((id) => new Types.ObjectId(id)) } },
-      { $set: { status } }
+      { $set: { status } },
     );
 
     res.json({
       message: `Successfully updated ${result.modifiedCount} tags to ${status}.`,
     });
-  }
+  },
 );
 
 // --- [ 3. DELETE & RESTORE ] ---
@@ -224,11 +236,11 @@ export const deleteTag = asyncHandler(
     const tagObjectId = new Types.ObjectId(id);
     await Post.updateMany(
       { $or: [{ tags: tagObjectId }, { pending_tags: tagObjectId }] },
-      { $pull: { tags: tagObjectId, pending_tags: tagObjectId } }
+      { $pull: { tags: tagObjectId, pending_tags: tagObjectId } },
     );
 
     res.json({ message: "Tag moved to trash and removed from related posts." });
-  }
+  },
 );
 
 /** * PUT /api/tags/admin/restore/:id
@@ -240,16 +252,16 @@ export const restoreTag = asyncHandler(
     const result = await Tag.findByIdAndUpdate(
       id,
       { is_deleted: false },
-      { new: true }
+      { new: true },
     );
     if (!result) throw new AppError(404, "Tag not found.");
 
     const tagArray = await Tag.aggregate(
       buildTagAggregationPipeline(
         { _id: result._id },
-        { includeTopic: true, isAdminView: true }
-      )
+        { includeTopic: true, isAdminView: true },
+      ),
     );
     res.json({ message: "Tag restored successfully.", tag: tagArray[0] });
-  }
+  },
 );
