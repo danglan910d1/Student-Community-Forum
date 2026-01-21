@@ -26,21 +26,31 @@ const avatarVariants = cva(
       size: "md",
       shape: "circle",
     },
-  }
+  },
 );
 
 export interface UserAvatarProps extends VariantProps<typeof avatarVariants> {
-  user?: { userId?: string; name?: string; avatar?: string }; // Thêm userId vào đây
+  user?: { userId?: string; name?: string; avatar?: string };
   className?: string;
+  disableLink?: boolean; // Thêm prop này để kiểm soát việc bọc Link
 }
 
-export function UserAvatar({ user, size, shape, className }: UserAvatarProps) {
+export function UserAvatar({
+  user,
+  size,
+  shape,
+  className,
+  disableLink = false, // Mặc định là vẫn có Link nếu có userId
+}: UserAvatarProps) {
   const content = (
     <Avatar
       className={cn(
         avatarVariants({ size, shape }),
-        user?.userId && "cursor-pointer hover:opacity-80 active:scale-95", // Hiệu ứng nhấn
-        className
+        // Chỉ thêm hiệu ứng hover/cursor nếu có link hoặc không bị disable
+        user?.userId &&
+          !disableLink &&
+          "cursor-pointer hover:opacity-80 active:scale-95",
+        className,
       )}
     >
       <AvatarImage
@@ -51,7 +61,7 @@ export function UserAvatar({ user, size, shape, className }: UserAvatarProps) {
       <AvatarFallback
         className={cn(
           "bg-muted font-bold text-muted-foreground uppercase flex items-center justify-center",
-          size === "lg" || size === "xl" ? "text-2xl" : "text-[10px]"
+          size === "lg" || size === "xl" ? "text-2xl" : "text-[10px]",
         )}
       >
         {getInitials(user?.name || "U")}
@@ -59,10 +69,11 @@ export function UserAvatar({ user, size, shape, className }: UserAvatarProps) {
     </Avatar>
   );
 
-  // Nếu có userId thì bọc trong Link, nếu không thì trả về avatar thường
-  if (user?.userId) {
-    return <Link href={`/profile/${user.userId}`}>{content}</Link>;
+  // Nếu bị disable link hoặc không có userId, trả về nội dung avatar thuần
+  if (disableLink || !user?.userId) {
+    return content;
   }
 
-  return content;
+  // Ngược lại thì bọc trong Link như cũ
+  return <Link href={`/profile/${user.userId}`}>{content}</Link>;
 }

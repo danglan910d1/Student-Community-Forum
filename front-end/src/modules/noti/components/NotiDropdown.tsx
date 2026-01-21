@@ -44,11 +44,11 @@ export function NotificationDropdown() {
       <PopoverTrigger asChild>
         <Button
           variant="ghost"
-          size="icon"
-          className="relative h-10 w-10 rounded-full hover:bg-gray-100 dark:hover:bg-slate-800 transition-all active:scale-95 group"
+          size="icon-lg"
+          className="relative rounded-full hover:bg-gray-100 dark:hover:bg-slate-800 transition-all active:scale-95 group"
         >
           <Bell
-            className="h-5 w-5 text-gray-500 group-hover:text-primary transition-colors"
+            className="text-gray-500 group-hover:text-primary transition-colors"
             strokeWidth={2.5} // Tăng độ đậm nét vẽ ở đây
           />
 

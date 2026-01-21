@@ -12,6 +12,7 @@ import { DASHBOARD_NAV_ITEMS, ADMIN_NAV_GROUPS } from "@/constants/navigation";
 import { CardLayout } from "../CardLayout";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useNavStore } from "@/stores/useNavStore";
+import { Logo } from "@/components/shared/Logo";
 
 export function DashboardSidebar() {
   const { user } = useAuthStore();
@@ -19,7 +20,14 @@ export function DashboardSidebar() {
   const isAdmin = user?.role === "admin";
 
   return (
-    <BaseSidebar collapsible="none">
+    <BaseSidebar
+      collapsible="none"
+      header={
+        <div className="md:hidden flex justify-start py-4 border-b">
+          <Logo />
+        </div>
+      }
+    >
       <div className="flex flex-col gap-4">
         {/* GROUP 1: CÁ NHÂN */}
         <SidebarGroup className="p-0">
@@ -43,7 +51,7 @@ export function DashboardSidebar() {
             {Object.values(ADMIN_NAV_GROUPS).map((group) => {
               // Tự động mở menu nếu có item bên trong đang active
               const isGroupActive = group.items.some(
-                (item) => item.label === activeLabel
+                (item) => item.label === activeLabel,
               );
 
               return (
@@ -67,6 +75,7 @@ export function DashboardSidebar() {
                         showBorder={false}
                         isTrigger={true}
                         className="group-data-[state=open]/collapsible:bg-muted/50"
+                        onClick={(e) => e.stopPropagation()}
                       />
                     </CollapsibleTrigger>
 

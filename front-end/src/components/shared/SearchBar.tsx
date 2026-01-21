@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { FileText, Tag, Hash, Loader2 } from "lucide-react";
+import { FileText, Tag, Hash, Loader2, Search } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import {
@@ -22,6 +22,8 @@ import {
 } from "@/components/ui/command";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { useGlobalSearch } from "@/hooks/useGlobalSearch";
+import { Button } from "../ui/button";
+import { cn } from "@/lib/utils";
 
 export function SearchBar({ className }: { className?: string }) {
   const [open, setOpen] = React.useState(false);
@@ -41,12 +43,28 @@ export function SearchBar({ className }: { className?: string }) {
   return (
     <>
       {/* Trigger */}
-      <div className={className} onClick={() => setOpen(true)}>
-        <Input
-          readOnly
-          placeholder="Tìm kiếm bài viết, [thẻ], chủ đề..."
-          className="w-full cursor-pointer bg-muted/50 hover:bg-muted transition-colors"
-        />
+      <div className={cn("flex items-center w-full", className)}>
+        {/* Bản FULL: Hiện từ md trở lên */}
+        <div
+          className="hidden md:block w-full cursor-pointer"
+          onClick={() => setOpen(true)}
+        >
+          <Input
+            readOnly
+            placeholder="Tìm kiếm bài viết, [thẻ], chủ đề..."
+            className="w-full bg-muted/50 hover:bg-muted transition-colors"
+          />
+        </div>
+
+        {/* Bản ICON: Chỉ hiện dưới md */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="md:hidden h-10 w-10 shrink-0"
+          onClick={() => setOpen(true)}
+        >
+          <Search className="h-5 w-5" />
+        </Button>
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>

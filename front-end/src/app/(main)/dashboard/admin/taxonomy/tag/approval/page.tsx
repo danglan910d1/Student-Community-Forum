@@ -1,5 +1,5 @@
 import { TagApprovalContainer } from "@/modules/tag/containers/TagApprovalContainer";
 
-export default function TagListPage() {
+export default function TagApprovalPage() {
   return <TagApprovalContainer />;
 }
