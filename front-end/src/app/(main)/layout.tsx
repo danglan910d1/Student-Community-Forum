@@ -3,7 +3,6 @@ import { Header } from "@/components/layout/Header";
 import { MainContainer } from "@/components/layout/MainContainer";
 import { MainFooter } from "@/components/layout/MainFooter";
 import { SidebarProvider } from "@/components/ui/sidebar";
-import { Suspense } from "react";
 
 export default function MainLayout({
   children,

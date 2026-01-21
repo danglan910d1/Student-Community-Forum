@@ -29,8 +29,8 @@ export function MainFooter() {
     },
     {
       name: "Phạm Hoàng Bảo Ngọc",
-      mssv: "21110456",
-      profileId: "id_cua_ngoc",
+      mssv: "24003845",
+      profileId: "6961fb07fa7b1d6a4f723209",
       role: "Business Analyst, System Architect & QA Tester",
       isLeader: false,
     },
