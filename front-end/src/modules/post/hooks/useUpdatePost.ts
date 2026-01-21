@@ -13,11 +13,18 @@ export function useUpdatePost(postId: string) {
     mutationFn: (body: ICreatePostBody) => postService.updatePost(postId, body),
     onSuccess: (data) => {
       toast.success("Cập nhật bài viết thành công!");
-      // Làm mới danh sách và chi tiết bài viết
+
+      // Invalidate để các component khác (như List bài viết) lấy data mới
       queryClient.invalidateQueries({ queryKey: ["posts"] });
       queryClient.invalidateQueries({ queryKey: ["post", postId] });
 
-      router.push(`/posts/${postId}/${data.slug}`);
+      // Điều hướng dựa trên trạng thái bài viết sau khi update
+      if (data.status === "approved") {
+        router.push(`/posts/${postId}/${data.slug}`);
+      } else {
+        router.push(`/dashboard/posts?status=${data.status}`);
+      }
+
       router.refresh();
     },
     onError: (error: AxiosError<{ message: string }>) => {

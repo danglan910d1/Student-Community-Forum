@@ -1,7 +1,8 @@
 // modules/post/schemas/postSchema.ts
 import { z } from "zod";
+import { generateSlug } from "../utils/slug";
 
-export const createPostSchema = z.object({
+const basePostSchema = z.object({
   title: z
     .string()
     .min(1, "Tiêu đề không được để trống")
@@ -20,7 +21,23 @@ export const createPostSchema = z.object({
       })
     )
     .min(1, "Vui lòng chọn ít nhất 1 tag")
-    .max(5, "Tối đa chỉ được chọn 5 tags"),
+    .max(5, "Tối đa chỉ được chọn 5 tags")
+    .refine(
+      (tags) => {
+        const slugs = tags.map((t) => t.slug || generateSlug(t.name));
+        return new Set(slugs).size === slugs.length;
+      },
+      { message: "Các thẻ không được trùng lặp" }
+    ),
+});
+
+// Schema cho Tạo mới
+export const createPostSchema = basePostSchema;
+
+// Schema cho Cập nhật (Backend hỗ trợ thêm is_resolved và status)
+export const updatePostSchema = basePostSchema.extend({
+  is_resolved: z.boolean().optional(),
 });
 
 export type CreatePostInput = z.infer<typeof createPostSchema>;
+export type UpdatePostInput = z.infer<typeof updatePostSchema>;

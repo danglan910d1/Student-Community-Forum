@@ -94,7 +94,7 @@ const postSchema = new Schema<IPost>(
       virtuals: false,
       transform: postTransformFunc,
     },
-  }
+  },
 );
 
 // PRE-SAVE HOOK: Chỉ tạo slug nếu chưa có slug nào được cung cấp
@@ -111,7 +111,7 @@ postSchema.pre<IPost & Document>("save", function (next) {
 // Slug duy nhất trên toàn hệ thống nhưng chỉ tính các bài chưa xóa
 postSchema.index(
   { slug: 1 },
-  { unique: true, partialFilterExpression: { is_deleted: false } }
+  { unique: true, partialFilterExpression: { is_deleted: false } },
 );
 
 // Tạo Index cho các trường thường dùng để truy vấn/lọc
@@ -119,8 +119,9 @@ postSchema.index({ topicId: 1, status: 1 });
 postSchema.index({ tags: 1, status: 1 });
 postSchema.index(
   { title: "text", content: "text" },
-  { weights: { title: 10, content: 1 } }
+  { weights: { title: 10, content: 1 } },
 );
 postSchema.index({ is_sticky: -1, views_count: -1, createdAt: -1 });
+postSchema.index({ createdAt: -1 });
 
 export default model<IPost>("Post", postSchema);

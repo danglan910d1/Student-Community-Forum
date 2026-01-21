@@ -18,9 +18,7 @@ export function useCreatePost() {
       // Xóa cache danh sách bài viết để khi quay lại trang chủ sẽ thấy dữ liệu mới nhất
       queryClient.invalidateQueries({ queryKey: ["posts"] });
 
-      // Điều hướng về trang chi tiết bài viết vừa tạo
-      //   router.push(`/posts/${newPost.postId}/${newPost.slug}`);
-      router.push("/posts");
+      router.push("/dashboard/posts?status=pending");
     },
     onError: (error: AxiosError<{ message: string }>) => {
       const message =

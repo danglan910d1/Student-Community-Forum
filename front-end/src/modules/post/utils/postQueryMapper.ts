@@ -7,29 +7,32 @@ interface RawParams {
   status?: string;
   topic?: string | null;
   tag?: string | null;
+  // THÊM 2 DÒNG NÀY
+  startDate?: string | null;
+  endDate?: string | null;
 }
 
 export const mapUrlParamsToApi = (
   params: RawParams,
-  isMine: boolean = false
+  isMine: boolean = false,
 ) => {
   return {
     page: params.page || 1,
-    // Nếu là trang của mình, ưu tiên lọc theo trạng thái duyệt bài
-    // Nếu trang công khai, mặc định chỉ lấy bài đã duyệt
     status: isMine
       ? params.status !== "all"
         ? (params.status as GlobalStatus)
         : undefined
       : ("approved" as GlobalStatus),
 
-    // Logic cho bộ lọc công khai (Mới nhất, Phổ biến, Đã giải quyết)
     is_resolved: params.sort === "resolved" ? true : undefined,
     sortBy: params.sort === "popular" ? "popular" : undefined,
 
-    // Topic và Tag
     topicSlug: params.topic ?? undefined,
     tagSlug: params.tag ?? undefined,
+
+    // THÊM LOGIC MAPPING NGÀY THÁNG Ở ĐÂY
+    startDate: params.startDate ?? undefined,
+    endDate: params.endDate ?? undefined,
   };
 };
 
@@ -39,7 +42,7 @@ export const mapUrlParamsToApi = (
 export const getPostLink = (
   post: IPost,
   isAdminView: boolean,
-  isMine: boolean
+  isMine: boolean,
 ): string => {
   const isApproved = post.status === "approved";
   // 1. Trường hợp Admin

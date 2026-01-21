@@ -14,7 +14,16 @@ export interface ICreateNotificationInput {
 // Tạo và gửi thông báo (Dùng trong Post/Comment/Like Controller)
 export const createNotification = async (data: ICreateNotificationInput) => {
   // Logic nghiệp vụ: Không tự thông báo cho chính mình
-  if (data.recipientId?.toString() === data.senderId?.toString()) return;
+  const isSelfNotify =
+    data.recipientId?.toString() === data.senderId?.toString();
+
+  // Cho phép tự thông báo nếu là duyệt/từ chối bài, các loại khác thì chặn
+  const isModerationAction =
+    data.type === NotificationType.POST_APPROVED ||
+    data.type === NotificationType.POST_REJECTED;
+
+  if (isSelfNotify && !isModerationAction) return; //
+
   return await Notification.create(data);
 };
 

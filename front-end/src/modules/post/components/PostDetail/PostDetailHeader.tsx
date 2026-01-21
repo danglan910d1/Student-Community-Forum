@@ -14,7 +14,13 @@ import { useAuthStore } from "@/stores/useAuthStore";
 import { ActionMenuContainer } from "@/components/shared/DropdownMenu/ActionMenuContainer";
 import { usePostActions } from "../../hooks/usePostActionGroups";
 
-export function PostDetailHeader({ post }: { post: IPost }) {
+export function PostDetailHeader({
+  post,
+  isAdminReview = false,
+}: {
+  post: IPost;
+  isAdminReview?: boolean;
+}) {
   const { user } = useAuthStore();
   const isAuthor = user?.userId === post.user.userId;
 
@@ -35,7 +41,7 @@ export function PostDetailHeader({ post }: { post: IPost }) {
         </h1>
 
         {/* Chỉ hiển thị menu hành động cho tác giả */}
-        {isAuthor && (
+        {isAuthor && !isAdminReview && (
           <ActionMenuContainer
             trigger={
               <Button variant="ghost" size="icon" className="shrink-0">
@@ -48,36 +54,38 @@ export function PostDetailHeader({ post }: { post: IPost }) {
         )}
       </div>
 
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-3 text-sm text-muted-foreground">
-        <div className="flex items-center gap-1.5">
-          <Clock className="w-4 h-4" />
-          <span>
-            Đăng ngày{" "}
-            {format(new Date(post.createdAt), "dd/MM/yyyy", { locale: vi })}
-          </span>
-        </div>
+      {!isAdminReview && (
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-3 text-sm text-muted-foreground">
+          <div className="flex items-center gap-1.5">
+            <Clock className="w-4 h-4" />
+            <span>
+              Đăng ngày{" "}
+              {format(new Date(post.createdAt), "dd/MM/yyyy", { locale: vi })}
+            </span>
+          </div>
 
-        <div className="flex items-center gap-1.5">
-          <Eye className="w-4 h-4" />
-          <span>{post.views_count.toLocaleString()} lượt xem</span>
-        </div>
+          <div className="flex items-center gap-1.5">
+            <Eye className="w-4 h-4" />
+            <span>{post.views_count.toLocaleString()} lượt xem</span>
+          </div>
 
-        <div className="flex items-center gap-1.5">
-          <MessageSquare className="w-4 h-4" />
-          <span>{post.comments_count} bình luận</span>
-        </div>
+          <div className="flex items-center gap-1.5">
+            <MessageSquare className="w-4 h-4" />
+            <span>{post.comments_count} bình luận</span>
+          </div>
 
-        <LoginGuard
-          title="Yêu thích bài viết"
-          description="Đăng nhập để ủng hộ tác giả bạn nhé!"
-        >
-          <LikeButton
-            isLiked={isLiked}
-            likesCount={likesCount}
-            onLike={toggleLike}
-          />
-        </LoginGuard>
-      </div>
+          <LoginGuard
+            title="Yêu thích bài viết"
+            description="Đăng nhập để ủng hộ tác giả bạn nhé!"
+          >
+            <LikeButton
+              isLiked={isLiked}
+              likesCount={likesCount}
+              onLike={toggleLike}
+            />
+          </LoginGuard>
+        </div>
+      )}
 
       <Separator />
     </header>

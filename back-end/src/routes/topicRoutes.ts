@@ -19,7 +19,7 @@ router.get(
   authMiddleware,
   adminMiddleware,
   generalLimiter,
-  topicCtrl.getTopicsList
+  topicCtrl.getTopicsList,
 );
 
 // POST /api/topics/admin - Tạo Topic chính thống mới
@@ -29,7 +29,7 @@ router.post(
   adminMiddleware,
   sensitiveLimiter,
   preventDuplicateRequest,
-  topicCtrl.createTopic
+  topicCtrl.createTopic,
 );
 
 // PUT /api/topics/admin/restore/:id - Khôi phục Topic đã xóa mềm
@@ -38,7 +38,7 @@ router.put(
   authMiddleware,
   adminMiddleware,
   sensitiveLimiter,
-  topicCtrl.restoreTopic
+  topicCtrl.restoreTopic,
 );
 
 // GET /api/topics/admin/:id - Chi tiết Topic (Admin View)
@@ -47,7 +47,7 @@ router.get(
   authMiddleware,
   adminMiddleware,
   generalLimiter,
-  topicCtrl.getTopicById
+  topicCtrl.getTopicById,
 );
 
 // PUT /api/topics/admin/:id - Cập nhật thông tin/trạng thái Topic
@@ -56,8 +56,8 @@ router.put(
   authMiddleware,
   adminMiddleware,
   sensitiveLimiter,
-  preventDuplicateRequest,
-  topicCtrl.updateTopic
+  // preventDuplicateRequest,
+  topicCtrl.updateTopic,
 );
 
 // DELETE /api/topics/admin/:id - Xóa mềm Topic
@@ -66,7 +66,7 @@ router.delete(
   authMiddleware,
   adminMiddleware,
   sensitiveLimiter,
-  topicCtrl.deleteTopic
+  topicCtrl.deleteTopic,
 );
 
 /**

@@ -1,6 +1,5 @@
-import { CreatePostContainer } from "@/modules/post/containers/CreatePostContainer";
 import { UpdatePostContainer } from "@/modules/post/containers/UpdatePostContainer";
 
-export default function PostListPage() {
+export default function EditPostPage() {
   return <UpdatePostContainer />;
 }

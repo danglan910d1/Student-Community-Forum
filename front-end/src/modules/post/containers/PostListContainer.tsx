@@ -1,4 +1,3 @@
-// modules/post/containers/PostListContainer.tsx
 "use client";
 
 import { useCallback, useMemo } from "react";
@@ -14,17 +13,20 @@ export function PostListContainer() {
   const searchParams = useSearchParams();
   const { topics } = useTopicStore();
 
+  // 1. Đọc đầy đủ params từ URL
   const params = useMemo(
     () => ({
-      topic: searchParams.get("topic"),
-      tag: searchParams.get("tag"),
-      sort: searchParams.get("sort") || "new",
+      topic: searchParams.get("topic") || undefined,
+      tag: searchParams.get("tag") || undefined,
+      sort: searchParams.get("sort") || "new", // Mặc định là 'new'
       page: Number(searchParams.get("page")) || 1,
+      startDate: searchParams.get("startDate") || undefined,
+      endDate: searchParams.get("endDate") || undefined,
     }),
-    [searchParams]
+    [searchParams],
   );
 
-  // Tái sử dụng helper (isMine = false)
+  // 2. Chuyển đổi sang API params (Đảm bảo mapper nhận startDate/endDate)
   const apiParams = useMemo(() => mapUrlParamsToApi(params, false), [params]);
 
   const postsQuery = usePostsQuery({
@@ -33,17 +35,31 @@ export function PostListContainer() {
     adminView: false,
   });
 
+  // 3. Hàm cập nhật URL không lỗi Type
   const updateParams = useCallback(
-    (next: Record<string, string | number | null>) => {
+    (next: Record<string, string | number | null | undefined>) => {
       const sp = new URLSearchParams(searchParams.toString());
+
       Object.entries(next).forEach(([key, value]) => {
-        if (value === null) sp.delete(key);
-        else sp.set(key, String(value));
+        if (value === null || value === undefined || value === "") {
+          sp.delete(key);
+        } else {
+          sp.set(key, String(value));
+        }
       });
+
+      // Reset về trang 1 nếu thay đổi filter (trừ khi chính tham số thay đổi là page)
+      if (!next.hasOwnProperty("page")) {
+        sp.set("page", "1");
+      }
+
       router.push(`?${sp.toString()}`, { scroll: false });
-      window.scrollTo({ top: 0, behavior: "smooth" });
+
+      if (window.scrollY > 0) {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
     },
-    [router, searchParams]
+    [router, searchParams],
   );
 
   const headerTitle = useMemo(() => {
@@ -58,7 +74,7 @@ export function PostListContainer() {
   return (
     <PostSection
       headerTitle={headerTitle}
-      params={{ page: params.page, sort: params.sort }}
+      params={params} // Truyền toàn bộ object params
       posts={postsQuery.data?.posts ?? []}
       pagination={postsQuery.data?.pagination}
       isFetching={postsQuery.isFetching}

@@ -23,24 +23,39 @@ import { AppError } from "../utils/appError";
 /** * GET /api/topics (Public) & GET /api/topics/admin (Admin) */
 export const getTopicsList = asyncHandler(
   async (req: Request | AuthenticatedRequest, res: Response) => {
-    const query = req.query as GetTopicsQuery;
-    const isAdmin = (req as any).userRole === "admin";
+    const query = req.query as any; // Dùng any để lấy field sort dễ dàng
+    const isAdmin = req.userRole === "admin";
     const userId = (req as any).userId;
 
-    // 1. Xây dựng Filter & Pipeline
+    // 1. Xây dựng Filter
     const filter = buildTopicFilter(query, { userId, isAdmin });
+
+    // 2. Xây dựng Pipeline cơ bản
     const pipeline = buildTopicAggregationPipeline(filter, {
-      includeUser: isAdmin, // Chỉ hiện người tạo cho Admin
+      includeUser: isAdmin,
       includeProjection: true,
       isAdminView: isAdmin,
     });
 
-    // 2. Phân trang
+    // 3. LOGIC SẮP XẾP (Giống PostController)
+    const sortStage: any = {};
+    if (query.sort === "popular") {
+      // Sắp xếp theo số lượng bài viết giảm dần
+      sortStage.postCount = -1;
+    } else if (query.sort === "old") {
+      sortStage.createdAt = 1;
+    } else {
+      // Mặc định là mới nhất
+      sortStage.createdAt = -1;
+    }
+    pipeline.push({ $sort: sortStage });
+
+    // 4. Phân trang
     const result = await paginateAggregation(
       Topic,
       pipeline,
       query.page,
-      query.limit
+      query.limit,
     );
 
     res.json({
@@ -52,7 +67,7 @@ export const getTopicsList = asyncHandler(
         limit: result.limit,
       },
     });
-  }
+  },
 );
 
 /** * GET /api/topics/admin/:id */
@@ -65,13 +80,13 @@ export const getTopicById = asyncHandler(
     const topicArray = await Topic.aggregate(
       buildTopicAggregationPipeline(
         { _id: new Types.ObjectId(id) },
-        { includeUser: true, includeProjection: true, isAdminView: true }
-      )
+        { includeUser: true, includeProjection: true, isAdminView: true },
+      ),
     );
 
     if (!topicArray[0]) throw new AppError(404, "Topic not found.");
     res.json(topicArray[0]);
-  }
+  },
 );
 
 // --- [ 2. WRITE OPERATIONS ] ---
@@ -79,7 +94,7 @@ export const getTopicById = asyncHandler(
 /** * POST /api/topics/admin */
 export const createTopic = asyncHandler(
   async (req: AuthenticatedRequest<{}, {}, CreateTopicBody>, res: Response) => {
-    const { name, description } = req.body;
+    const { name, description, status } = req.body;
     if (!name?.trim()) throw new AppError(400, "Topic name is required.");
 
     const slug = generateSlug(name.trim());
@@ -91,24 +106,24 @@ export const createTopic = asyncHandler(
       slug,
       description: description?.trim(),
       createdBy: new Types.ObjectId(req.userId),
-      status: "approved",
+      status: status || "approved",
     });
 
     const topicArray = await Topic.aggregate(
       buildTopicAggregationPipeline(
         { _id: newTopic._id },
-        { includeUser: true, isAdminView: true }
-      )
+        { includeUser: true, isAdminView: true },
+      ),
     );
     res.status(201).json(topicArray[0]);
-  }
+  },
 );
 
 /** * PUT /api/topics/admin/:id */
 export const updateTopic = asyncHandler(
   async (
     req: AuthenticatedRequest<TopicParams, {}, UpdateTopicBody>,
-    res: Response
+    res: Response,
   ) => {
     const { id } = req.params;
     const { name, description, status } = req.body;
@@ -128,9 +143,9 @@ export const updateTopic = asyncHandler(
       throw new AppError(400, "No fields provided for update.");
 
     const updatedTopic = await Topic.findOneAndUpdate(
-      { _id: id, is_deleted: false },
+      { _id: id },
       { $set: updateFields },
-      { new: true, runValidators: true }
+      { new: true, runValidators: true },
     );
 
     if (!updatedTopic) throw new AppError(404, "Topic not found or deleted.");
@@ -138,11 +153,11 @@ export const updateTopic = asyncHandler(
     const topicArray = await Topic.aggregate(
       buildTopicAggregationPipeline(
         { _id: updatedTopic._id },
-        { includeUser: true, isAdminView: true }
-      )
+        { includeUser: true, isAdminView: true },
+      ),
     );
     res.json(topicArray[0]);
-  }
+  },
 );
 
 // --- [ 3. DELETE & RESTORE ] ---
@@ -170,7 +185,7 @@ export const deleteTopic = asyncHandler(
     ]);
 
     res.json({ message: "Topic soft deleted and linked entities decoupled." });
-  }
+  },
 );
 
 /** * PUT /api/topics/admin/restore/:id */
@@ -181,16 +196,16 @@ export const restoreTopic = asyncHandler(
     const restoredTopic = await Topic.findByIdAndUpdate(
       id,
       { is_deleted: false },
-      { new: true }
+      { new: true },
     );
     if (!restoredTopic) throw new AppError(404, "Topic not found.");
 
     const topicArray = await Topic.aggregate(
       buildTopicAggregationPipeline(
         { _id: restoredTopic._id },
-        { includeUser: true, isAdminView: true }
-      )
+        { includeUser: true, isAdminView: true },
+      ),
     );
     res.json({ message: "Topic restored successfully.", topic: topicArray[0] });
-  }
+  },
 );

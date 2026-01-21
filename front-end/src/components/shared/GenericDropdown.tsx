@@ -33,7 +33,7 @@ export const GenericDropdown = ({
           variant="outline"
           className={cn(
             "justify-between w-full text-md focus-visible:ring-0",
-            className
+            className,
           )}
         >
           <span className="truncate">{label}</span>
@@ -54,7 +54,7 @@ export const GenericDropdown = ({
                 className={cn(
                   "py-3 cursor-pointer relative transition-colors text-md",
                   "[&>span]:hidden",
-                  isSelected && "bg-accent text-primary font-bold"
+                  isSelected && "bg-accent text-primary font-bold",
                 )}
               >
                 {item.label}

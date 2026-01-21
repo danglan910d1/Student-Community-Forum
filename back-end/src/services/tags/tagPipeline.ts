@@ -1,4 +1,4 @@
-import { PipelineStage } from "mongoose";
+import { PipelineStage, Types } from "mongoose";
 
 interface TagPipelineConfig {
   includeTopic?: boolean;
@@ -9,11 +9,11 @@ interface TagPipelineConfig {
 
 /**
  * Xây dựng các Aggregation Pipeline Stages cho Tag Model.
- * Cập nhật để bỏ _id và đồng nhất tagId theo Model Transform.
+ * Hỗ trợ đồng nhất tagId, postCount và bảo mật thông tin theo View.
  */
 export const buildTagAggregationPipeline = (
   filter: any,
-  config: TagPipelineConfig = {}
+  config: TagPipelineConfig = {},
 ): PipelineStage[] => {
   const {
     includeTopic = true,
@@ -22,8 +22,10 @@ export const buildTagAggregationPipeline = (
     isAdminView = false,
   } = config;
 
+  // Giai đoạn 1: Lọc dữ liệu đầu vào (Đã bao gồm filter startDate/endDate từ buildTagFilter)
   const pipeline: PipelineStage[] = [{ $match: filter }];
 
+  // Giai đoạn 2: Lookup Topic liên quan
   if (includeTopic) {
     pipeline.push({
       $lookup: {
@@ -46,6 +48,7 @@ export const buildTagAggregationPipeline = (
     });
   }
 
+  // Giai đoạn 3: Lookup User tạo thẻ (Chỉ Admin mới thấy hoặc theo config)
   if (includeUser) {
     pipeline.push({
       $lookup: {
@@ -56,6 +59,8 @@ export const buildTagAggregationPipeline = (
       },
     });
   }
+
+  // Giai đoạn 4: Lookup đếm số lượng POSTS sử dụng Tag này
   pipeline.push({
     $lookup: {
       from: "posts",
@@ -65,25 +70,30 @@ export const buildTagAggregationPipeline = (
           $match: {
             $expr: {
               $and: [
-                { $in: ["$$tagId", "$tags"] },
+                // Kiểm tra xem tagId có nằm trong mảng tags của Post không
+                { $in: ["$$tagId", { $ifNull: ["$tags", []] }] },
                 { $ne: ["$is_deleted", true] },
-                // Nếu không phải adminView, chỉ lấy post đã duyệt
+                // Nếu là Public view, chỉ đếm các bài viết đã được approved
                 ...(isAdminView ? [] : [{ $eq: ["$status", "approved"] }]),
               ],
             },
           },
         },
+        // Chỉ cần lấy field cần thiết để tối ưu bộ nhớ khi đếm
+        { $project: { _id: 1 } },
       ],
       as: "postsUsingThisTag",
     },
   });
-  // Thêm field postCount
+
+  // Giai đoạn 5: Thêm trường đếm postCount
   pipeline.push({
     $addFields: {
       postCount: { $size: "$postsUsingThisTag" },
     },
   });
 
+  // Giai đoạn cuối: Projection - Định dạng dữ liệu đầu ra
   if (includeProjection) {
     pipeline.push({
       $project: {
@@ -94,8 +104,12 @@ export const buildTagAggregationPipeline = (
         createdAt: 1,
         updatedAt: 1,
         postCount: 1,
-        status: { $cond: [isAdminView, "$status", "$$REMOVE"] },
 
+        // Admin View mới thấy các trường nhạy cảm
+        status: { $cond: [isAdminView, "$status", "$$REMOVE"] },
+        is_deleted: { $cond: [isAdminView, "$is_deleted", "$$REMOVE"] },
+
+        // Topic Object
         topic: includeTopic
           ? {
               $let: {
@@ -113,26 +127,29 @@ export const buildTagAggregationPipeline = (
                 },
               },
             }
-          : "$topicId",
+          : "$$REMOVE",
 
-        user: includeUser
-          ? {
-              $let: {
-                vars: { user: { $arrayElemAt: ["$userData", 0] } },
-                in: {
-                  $cond: [
-                    { $ifNull: ["$$user", false] },
-                    {
-                      userId: "$$user._id",
-                      name: "$$user.name",
-                      avatar: "$$user.avatar",
-                    },
-                    null,
-                  ],
+        // User Object (Đồng nhất với Topic Pipeline của bạn)
+        user:
+          isAdminView && includeUser
+            ? {
+                $let: {
+                  vars: { user: { $arrayElemAt: ["$userData", 0] } },
+                  in: {
+                    $cond: [
+                      { $ifNull: ["$$user", false] },
+                      {
+                        userId: "$$user._id",
+                        name: "$$user.name",
+                        avatar: "$$user.avatar",
+                        email: "$$user.email",
+                      },
+                      null,
+                    ],
+                  },
                 },
-              },
-            }
-          : "$createdBy",
+              }
+            : "$$REMOVE",
       },
     });
   }

@@ -15,6 +15,8 @@ import {
   useComboboxAnchor,
 } from "@/components/ui/combobox";
 import { Field, FieldLabel, FieldError } from "@/components/ui/field";
+import { generateSlug } from "@/modules/post/utils/slug";
+import { toast } from "sonner";
 
 export interface Tag {
   tagId: string;
@@ -50,7 +52,7 @@ export default function MultiAutocomplete<T extends FieldValues>({
   disabled = false,
 }: MultiAutocompleteProps<T>) {
   const [inputValue, setInputValue] = React.useState("");
-  const [open, setOpen] = React.useState(false); // Điều khiển trạng thái đóng/mở
+  const [open, setOpen] = React.useState(false);
 
   const {
     field: { value = [], onChange },
@@ -65,30 +67,69 @@ export default function MultiAutocomplete<T extends FieldValues>({
 
   const isLimitReached = value.length >= max;
 
+  // 1. XỬ LÝ KHI NHẤN PHÍM CÁCH (TẠO TAG MỚI)
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === " " && inputValue.trim() !== "") {
+    // Chấp nhận Space hoặc Enter để hoàn tất Tag
+    if ((e.key === " " || e.key === "Enter") && inputValue.trim() !== "") {
       e.preventDefault();
       if (isLimitReached || disabled) return;
 
       const tagName = inputValue.trim();
-      const tagSlug = tagName.toLowerCase().replace(/\s+/g, "-");
+      const tagSlug = generateSlug(tagName); // Ví dụ: "nodejs"
 
-      if (!value.some((v: Tag) => v.slug === tagSlug)) {
+      /**
+       * BƯỚC 1: Kiểm tra trùng lặp trong danh sách ĐÃ CHỌN
+       * So sánh slug sau khi san phẳng để bắt được cả "Node JS" lẫn "nodejs"
+       */
+      const isAlreadySelected = value.some(
+        (v: Tag) =>
+          generateSlug(v.name) === tagSlug || generateSlug(v.slug) === tagSlug
+      );
+
+      if (isAlreadySelected) {
+        toast.error(`Thẻ "${tagName}" đã có trong danh sách chọn.`);
+        setInputValue("");
+        return;
+      }
+
+      /**
+       * BƯỚC 2: Kiểm tra chéo với Tag Hệ thống (Topic Tags + System Tags)
+       * Nếu người dùng gõ trùng với một Tag đã tồn tại, hãy dùng dữ liệu của hệ thống
+       * để lấy được tagId chuẩn, giúp Backend không phải xử lý tạo mới (Pending).
+       */
+      const existingSystemTag = [...topicTags, ...systemTags].find(
+        (t) =>
+          generateSlug(t.name) === tagSlug || generateSlug(t.slug) === tagSlug
+      );
+
+      if (existingSystemTag) {
+        // Nếu tìm thấy tag hệ thống, dùng tag đó luôn (có đầy đủ tagId, slug chuẩn)
+        onChange([...value, existingSystemTag]);
+      } else {
+        // Nếu là tag hoàn toàn mới, tạo object tạm (tagId để rỗng để BE xử lý insert)
         onChange([
           ...value,
-          { tagId: `temp-${Date.now()}`, name: tagName, slug: tagSlug },
+          {
+            tagId: "", // Backend sẽ nhận diện đây là tag mới và chạy processTags
+            name: tagName,
+            slug: tagSlug,
+          },
         ]);
-        setOpen(false); // Đóng menu sau khi "tạo" tag bằng phím cách
       }
+
       setInputValue("");
+      setOpen(false); // Đóng dropdown gợi ý
     }
   };
-
+  // 2. XỬ LÝ KHI CHỌN TỪ DANH SÁCH (COMBOBOX ITEM)
   const handleValueChange = React.useCallback(
     (nextSlugs: string[] | unknown) => {
       const slugs = nextSlugs as string[];
 
-      const nextValue: Tag[] = slugs
+      // Lọc bỏ các slug trùng lặp trước khi map
+      const uniqueSlugs = Array.from(new Set(slugs));
+
+      const nextValue: Tag[] = uniqueSlugs
         .map(
           (slug) =>
             value.find((v: Tag) => v.slug === slug) ||
@@ -99,7 +140,7 @@ export default function MultiAutocomplete<T extends FieldValues>({
 
       if (nextValue.length <= max) {
         onChange(nextValue);
-        setOpen(false); // ĐÓNG MENU NGAY SAU KHI CHỌN
+        setOpen(false);
       }
     },
     [value, topicTags, systemTags, max, onChange]

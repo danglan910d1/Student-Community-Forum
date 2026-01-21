@@ -15,6 +15,7 @@ export const api = axios.create({
 api.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     const token = useAuthStore.getState().token;
+    console.log("Token current state:", token);
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -26,7 +27,7 @@ api.interceptors.request.use(
 
     return config;
   },
-  (error: AxiosError) => Promise.reject(error)
+  (error: AxiosError) => Promise.reject(error),
 );
 
 api.interceptors.response.use(
@@ -38,8 +39,8 @@ api.interceptors.response.use(
         response.data = JSON.parse(
           stringified.replace(
             /http:\/\/localhost:3000/g,
-            "http://localhost:5000"
-          )
+            "http://localhost:5000",
+          ),
         );
       }
     }
@@ -49,10 +50,10 @@ api.interceptors.response.use(
   (error: AxiosError) => {
     if (error.response?.status === 401) {
       useAuthStore.getState().logout();
-      if (typeof window !== "undefined") {
-        window.location.href = "/login";
-      }
+      // if (typeof window !== "undefined") {
+      //   window.location.href = "/auth/login";
+      // }
     }
     return Promise.reject(error);
-  }
+  },
 );

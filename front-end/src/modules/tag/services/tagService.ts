@@ -26,9 +26,8 @@ export const tagService = {
   /**
    * Lấy chi tiết một tag (Dùng cho trang edit tag của Admin)
    */
-  getTagById: async (id: string, adminView: boolean = false): Promise<ITag> => {
-    const endpoint = adminView ? `/tags/admin/${id}` : `/tags/${id}`;
-    const { data } = await api.get<ITag>(endpoint);
+  getTagById: async (id: string): Promise<ITag> => {
+    const { data } = await api.get<ITag>(`/tags/admin/${id}`);
     return data;
   },
 
@@ -45,7 +44,7 @@ export const tagService = {
    */
   updateTag: async (
     id: string,
-    body: Partial<ICreateTagBody>
+    body: Partial<ICreateTagBody>,
   ): Promise<ITag> => {
     const { data } = await api.put<ITag>(`/tags/admin/${id}`, body);
     return data;
@@ -55,7 +54,7 @@ export const tagService = {
    * Duyệt/Từ chối hàng loạt Tags (Chức năng bulk của Admin)
    */
   bulkUpdateTags: async (
-    body: IBulkUpdateTagBody
+    body: IBulkUpdateTagBody,
   ): Promise<{ message: string }> => {
     const { data } = await api.patch("/tags/admin/bulk", body);
     return data;

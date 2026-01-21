@@ -1,3 +1,4 @@
+import { Tag } from "@/modules/tag/types";
 import {
   GlobalStatus,
   IApiResponse,
@@ -21,7 +22,7 @@ export interface IPost {
   updatedAt: string;
   user: IAuthor; // Đã đổi tên
   topic: { topicId: string; name: string; slug: string } | null;
-  tags: { tagId: string; name: string; slug: string }[];
+  tags: Tag[];
   pending_tags?: {
     tagId: string;
     name: string;
@@ -52,6 +53,8 @@ export interface IGetPostsParams extends IGetListParams {
   // Chỉ Admin dùng:
   showDeleted?: boolean;
   userId?: string;
+  startDate?: string; // ISO String hoặc YYYY-MM-DD
+  endDate?: string;
 }
 
 export interface IGetPostsRequestParams extends IGetPostsParams {
@@ -66,6 +69,11 @@ export interface ICreatePostBody {
   content: string;
   topicId: string;
   tags: string[]; // Đổi từ Tag[] thành string[]
+}
+
+export interface IUpdatePostBody extends Partial<ICreatePostBody> {
+  status?: GlobalStatus;
+  is_resolved?: boolean;
 }
 
 export interface IComment {
@@ -129,12 +137,11 @@ export type ICommentResponse = IApiResponse<IComment, "comments">;
  * Khớp hoàn toàn với TagApprovalAction tại Backend
  */
 export type TagApprovalAction =
-  // | "approve_post_only" // Chỉ duyệt cho bài viết này tag đã duyệt-post
   | "approve_and_add_topic" // Duyệt cho bài và gán Tag vào Topic post-topic
   | "approve_and_mark_free" // Duyệt cho bài và biến Tag thành thẻ chung
-  | "reject_tag_from_post" // Loại tag khỏi bài viết
   | "approve_topic_and_reject_from_post" // Duyệt Tag vào Topic hệ thống nhưng KHÔNG gắn vào bài
-  | "approve_global_and_reject_from_post"; // Duyệt Tag vào hệ thống chung nhưng KHÔNG gắn vào bài
+  | "approve_global_and_reject_from_post" // Duyệt Tag vào hệ thống chung nhưng KHÔNG gắn vào bài
+  | "reject_tag";
 
 /**
  * Cấu trúc hành động cho từng Tag đơn lẻ

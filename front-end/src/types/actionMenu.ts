@@ -9,4 +9,5 @@ export interface ActionItemConfig {
   variant?: "default" | "destructive";
   component?: ReactNode; // Dành cho DeletePostButton
   show?: boolean;
+  className?: string;
 }

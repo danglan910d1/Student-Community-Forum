@@ -30,22 +30,42 @@ export function PostDataTable({
   isMine,
   isAdminView,
 }: PostDataTableProps) {
+  const canShowActions = isAdminView || isMine;
+
   return (
-    <div className="rounded-md border bg-card overflow-hidden">
-      <div className="relative w-full overflow-x-auto">
-        <Table className="min-w-[800px] w-full table-fixed">
-          <TableHeader className="sticky top-0 bg-card z-10 shadow-sm">
-            <TableRow className="bg-muted/50 hover:bg-muted/50">
-              <TableHead className="w-[30%]">Bài viết</TableHead>
+    <div className="flex flex-col h-full w-full min-h-0">
+      <div className="relative flex-1 overflow-auto border rounded-md shadow-sm bg-card custom-scrollbar">
+        <Table className="min-w-[800px] w-full border-separate border-spacing-0">
+          <TableHeader className="sticky top-0 z-30">
+            <TableRow className="bg-muted/100 hover:bg-muted/100">
+              <TableHead className="sticky top-0 bg-muted z-20 w-[30%] text-base font-bold px-6 py-4 border-b">
+                Bài viết
+              </TableHead>
+
               {isAdminView && (
-                <TableHead className="w-[20%]">Tác giả</TableHead>
+                <TableHead className="sticky top-0 bg-muted z-20 w-[20%] text-base font-bold px-6 py-4 border-b">
+                  Tác giả
+                </TableHead>
               )}
-              <TableHead className="w-[15%] text-center">Trạng thái</TableHead>
-              <TableHead className="w-[15%] text-center">Tương tác</TableHead>
-              <TableHead className="w-[15%] text-center">Ngày đăng</TableHead>
-              <TableHead className="w-[10%] text-right"></TableHead>
+
+              <TableHead className="sticky top-0 bg-muted z-20 w-[15%] text-center text-base font-bold px-4 py-4 border-b">
+                Trạng thái
+              </TableHead>
+
+              <TableHead className="sticky top-0 bg-muted z-20 w-[15%] text-center text-base font-bold px-4 py-4 border-b">
+                Tương tác
+              </TableHead>
+
+              <TableHead className="sticky top-0 bg-muted z-20 w-[15%] text-center text-base font-bold px-4 py-4 border-b">
+                Ngày đăng
+              </TableHead>
+
+              {canShowActions && (
+                <TableHead className="sticky top-0 bg-muted z-20 w-[10%] border-b"></TableHead>
+              )}
             </TableRow>
           </TableHeader>
+
           <TableBody>
             {posts.length > 0 ? (
               posts.map((post) => {
@@ -55,8 +75,9 @@ export function PostDataTable({
                     key={post.postId}
                     className="group hover:bg-muted/30 transition-colors"
                   >
-                    <TableCell className="align-top py-4">
-                      <div className="flex flex-col gap-1 w-full max-w-[250px]">
+                    {/* Style Cell: align-top, padding py-5 px-6 từ bản 1 */}
+                    <TableCell className="align-top py-5 px-6 border-b">
+                      <div className="flex flex-col gap-1.5 w-full min-w-[200px]">
                         <Link
                           href={postHref}
                           className="font-semibold hover:text-primary transition-colors whitespace-normal break-words leading-tight line-clamp-2"
@@ -64,33 +85,34 @@ export function PostDataTable({
                           {post.title}
                         </Link>
 
-                        <span className="text-xs text-muted-foreground whitespace-normal opacity-80">
+                        <Link
+                          href={`/posts?topic=${post.topic?.slug || "unclassified"}`}
+                          className="text-xs text-muted-foreground hover:text-primary opacity-80"
+                        >
                           {post.topic?.name || "Chưa phân loại"}
-                        </span>
+                        </Link>
                       </div>
                     </TableCell>
 
                     {isAdminView && (
-                      <TableCell className="text-sm align-top py-4">
-                        <div className="max-w-[200px]">
-                          <UserIdentity
-                            user={{
-                              userId: post.user?.userId,
-                              name: post.user?.name || "Người dùng",
-                              avatar: post.user?.avatar ?? undefined,
-                            }}
-                            size="sm"
-                            // Bạn có thể thêm className để tinh chỉnh thêm nếu cần
-                            className="font-medium"
-                          />
-                        </div>
+                      <TableCell className="align-top py-5 px-6 border-b">
+                        <UserIdentity
+                          user={{
+                            userId: post.user?.userId,
+                            name: post.user?.name || "Người dùng",
+                            avatar: post.user?.avatar ?? undefined,
+                          }}
+                          size="sm"
+                          className="flex-1 max-w-[85%]"
+                        />
                       </TableCell>
                     )}
-                    <TableCell className="text-center align-top py-4">
+
+                    <TableCell className="text-center align-top py-5 px-4 border-b">
                       <StatusBadge status={post.status} />
                     </TableCell>
 
-                    <TableCell className="text-center align-top py-4">
+                    <TableCell className="text-center align-top py-5 px-4 border-b">
                       <div className="flex items-center justify-center gap-3 text-muted-foreground">
                         <Stat
                           icon={<Eye className="w-3.5 h-3.5" />}
@@ -107,26 +129,28 @@ export function PostDataTable({
                       </div>
                     </TableCell>
 
-                    <TableCell className="text-center align-top py-4 text-sm text-muted-foreground">
+                    <TableCell className="text-center align-top py-5 px-4 text-sm text-muted-foreground border-b">
                       {format(new Date(post.createdAt), "dd/MM/yyyy", {
                         locale: vi,
                       })}
                     </TableCell>
 
-                    <TableCell className="text-right align-top py-4">
-                      <PostRowActions
-                        post={post}
-                        isAdminView={isAdminView}
-                        isMine={isMine}
-                      />
-                    </TableCell>
+                    {canShowActions && (
+                      <TableCell className="text-right align-top py-5 px-6 border-b">
+                        <PostRowActions
+                          post={post}
+                          isAdminView={isAdminView}
+                          isMine={isMine}
+                        />
+                      </TableCell>
+                    )}
                   </TableRow>
                 );
               })
             ) : (
               <TableRow>
                 <TableCell
-                  colSpan={isAdminView ? 6 : 5}
+                  colSpan={isAdminView ? 6 : canShowActions ? 5 : 4}
                   className="h-32 text-center text-muted-foreground"
                 >
                   Không tìm thấy bài viết nào.

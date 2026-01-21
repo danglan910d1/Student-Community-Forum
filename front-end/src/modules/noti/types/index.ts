@@ -1,30 +1,39 @@
-// src/modules/notifications/types.ts
-
 import { IAuthor } from "@/types/common";
-
-// Khớp hoàn toàn với enum NotificationType ở BE
-export type NotificationType =
-  | "post_approved"
-  | "post_rejected"
-  | "new_comment"
-  | "new_reply"
-  | "new_like"
-  | "system_alert";
+import { EntityType, NotificationType } from "./enum";
 
 export interface INotification {
   notificationId: string;
   recipientId: string;
-  sender?: IAuthor | null; // Có thể null nếu là system_alert
   type: NotificationType;
-  targetId: string; // Backend Pipeline đã đổi entityId -> targetId
-  targetType: "post" | "comment"; // Backend enum: ["post", "comment"]
+  targetId: string; // entityId từ BE
+  targetType: EntityType; // "post" | "comment"
   content: string;
   is_read: boolean;
   createdAt: string;
+  sender?: {
+    userId: string;
+    name: string;
+    avatar?: string;
+  };
+  targetSlug?: string;
 }
 
-// Cấu trúc Response đặc thù của Notification Controller
+// Params khi gọi API
+export interface IGetNotificationsParams {
+  page?: number;
+  limit?: number;
+  is_read?: boolean;
+  targetId?: string;
+}
+
+// Response từ API (Khớp với Controller của bạn)
 export interface IGetNotificationsResponse {
   notifications: INotification[];
   unreadCount: number;
+  pagination: {
+    totalItems: number;
+    totalPages: number;
+    currentPage: number;
+    limit: number;
+  };
 }

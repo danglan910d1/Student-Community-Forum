@@ -4,12 +4,20 @@ import { SidebarGroup } from "@/components/ui/sidebar";
 import { QuickNavItem } from "@/components/shared/Navigation/QuickNavigation/QuickNavItem";
 import { PUBLIC_PROFILE_NAV_ITEMS } from "@/constants/navigation";
 import { CardLayout } from "../CardLayout";
+import { Logo } from "@/components/shared/Logo";
 
 export function ProfileSidebar({ userId }: { userId: string }) {
   const items = PUBLIC_PROFILE_NAV_ITEMS(userId);
 
   return (
-    <BaseSidebar collapsible="none">
+    <BaseSidebar
+      collapsible="none"
+      header={
+        <div className="md:hidden flex justify-start py-4 border-b">
+          <Logo />
+        </div>
+      }
+    >
       <SidebarGroup className="p-0">
         <CardLayout className="shadow-sm border-none">
           <div className="px-4 py-3 text-xs font-bold text-muted-foreground uppercase bg-muted/30">

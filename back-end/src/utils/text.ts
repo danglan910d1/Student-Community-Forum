@@ -6,15 +6,14 @@ import Post from "../models/Post";
  * @param text Chuỗi đầu vào (ví dụ: Tên Tag).
  * @returns Slug đã chuẩn hóa.
  */
-
 export const generateSlug = (text: string): string => {
   return slugify(text, {
     lower: true,
     locale: "vi",
     remove: /[*+~.()'"!:@]/g,
-  });
+  }).replace(/[^a-z0-9]/g, ""); // Xóa sạch dấu gạch ngang, dấu cách, ký tự lạ
+  // Kết quả: "node-js" hay "node js" đều thành "nodejs"
 };
-
 /**
  * Hàm nâng cao: Tạo slug không trùng lặp cho Bài viết
  * Dùng riêng cho: Post Controller

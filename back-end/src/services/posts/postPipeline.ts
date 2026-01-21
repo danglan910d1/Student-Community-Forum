@@ -1,4 +1,5 @@
 import { PipelineStage, Types } from "mongoose";
+import { NotificationType } from "../../models/Notification";
 
 interface PostPipelineConfig {
   includeUser?: boolean;
@@ -104,6 +105,37 @@ export const buildPostAggregationPipeline = (
     );
   }
 
+  pipeline.push({
+    $lookup: {
+      from: "notifications",
+      let: { pId: "$_id" },
+      pipeline: [
+        {
+          $match: {
+            $expr: {
+              $and: [
+                { $eq: ["$entityId", "$$pId"] },
+                {
+                  $in: [
+                    "$type",
+                    [
+                      NotificationType.POST_APPROVED,
+                      NotificationType.POST_REJECTED,
+                      NotificationType.POST_SUBMITTED, // THÊM: Admin thấy vết khi user gửi bài
+                    ],
+                  ],
+                },
+              ],
+            },
+          },
+        },
+        { $sort: { createdAt: -1 } },
+        { $limit: 1 },
+      ],
+      as: "moderationNotice",
+    },
+  });
+
   // 4. Projection
   if (includeProjection) {
     pipeline.push({
@@ -203,6 +235,15 @@ export const buildPostAggregationPipeline = (
               ],
             }
           : "$pending_tags",
+
+        moderationNote: {
+          $let: {
+            vars: { notice: { $arrayElemAt: ["$moderationNotice", 0] } },
+            in: {
+              $cond: [{ $or: canSeeSensitive }, "$$notice.content", "$$REMOVE"],
+            },
+          },
+        },
       },
     });
   }

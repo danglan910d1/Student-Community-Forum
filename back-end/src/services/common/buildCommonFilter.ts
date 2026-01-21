@@ -10,6 +10,9 @@ export interface CommonQuery {
   page?: string;
   limit?: string;
   showDeleted?: string; // Bổ sung để Admin có thể xem thùng rác
+  startDate?: string; // ISO String
+  endDate?: string;
+  slug?: string;
 }
 
 export interface AuthContext {
@@ -23,9 +26,10 @@ export interface AuthContext {
 export const buildCommonFilter = (
   queryParams: CommonQuery,
   authContext: AuthContext,
-  modelType: "post" | "topic" | "tag" | "user" | "comment"
+  modelType: "post" | "topic" | "tag" | "user" | "comment",
 ) => {
-  const { status, search, myPosts, showDeleted } = queryParams;
+  const { status, search, myPosts, showDeleted, startDate, endDate, slug } =
+    queryParams;
   const { userId, isAdmin } = authContext;
 
   const filter: any = {};
@@ -65,10 +69,35 @@ export const buildCommonFilter = (
     }
   }
 
+  if (slug) {
+    // Sử dụng RegExp để tìm kiếm gần đúng (case-insensitive)
+    filter.slug = { $regex: slug, $options: "i" };
+  }
+
   // --- 3. TÌM KIẾM TỪ KHÓA ---
   if (search) {
     // Lưu ý: Để dùng $text, bạn phải tạo Text Index trong Mongoose Schema
     filter.$text = { $search: search as string };
+  }
+
+  if (startDate || endDate) {
+    filter.createdAt = {};
+
+    if (startDate) {
+      const start = new Date(startDate);
+      if (!isNaN(start.getTime())) {
+        filter.createdAt.$gte = start;
+      }
+    }
+
+    if (endDate) {
+      const end = new Date(endDate);
+      if (!isNaN(end.getTime())) {
+        // Đặt mốc thời gian cuối ngày để lấy trọn vẹn dữ liệu ngày đó
+        end.setHours(23, 59, 59, 999);
+        filter.createdAt.$lte = end;
+      }
+    }
   }
 
   return filter;

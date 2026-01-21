@@ -12,17 +12,24 @@ export interface ITopic {
   description: string;
   createdAt: string;
   updatedAt: string;
-
-  // Pipeline của bạn: Admin mới thấy người tạo topic
   user?: IAuthor;
   status?: GlobalStatus;
+  _count?: {
+    posts: number;
+    tags: number;
+  };
 }
 
-export type IGetTopicsParams = IGetListParams; // Chỉ Public Get
+export interface IGetTopicsParams extends IGetListParams {
+  startDate?: string; // ISO String hoặc YYYY-MM-DD
+  endDate?: string;
+} // Chỉ Public Get
 
 export interface IGetAdminTopicsParams extends IGetTopicsParams {
   status?: GlobalStatus;
   showDeleted?: boolean;
+  sort?: string;
+  slug?: string;
 }
 
 export type ITopicResponse = IApiResponse<ITopic, "topics">;
