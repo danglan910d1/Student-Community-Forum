@@ -4,15 +4,14 @@ import { AxiosError } from "axios";
 import { IGetPostsRequestParams, IPostResponse } from "@/modules/post/types";
 
 export const usePostsQuery = (params: IGetPostsRequestParams) => {
-  // Cách tốt nhất: Đưa object params vào key để theo dõi mọi sự thay đổi
-  const queryKey = ["posts", params];
-
   return useQuery<IPostResponse, AxiosError>({
-    queryKey,
+    queryKey: ["posts", params],
     queryFn: () => postService.getPosts(params),
     staleTime: 0,
-    gcTime: 1000 * 60 * 5,
-    refetchOnWindowFocus: true,
-    retry: 1,
+    gcTime: 0,
+    // Thêm cái này để bỏ qua mọi cache trung gian
+    meta: {
+      headers: { "Cache-Control": "no-cache" },
+    },
   });
 };

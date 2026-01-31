@@ -31,99 +31,86 @@ export function PostTableContainer() {
   const searchParams = useSearchParams();
   const { user: currentUser } = useAuthStore();
 
-  // 1. Xác định ngữ cảnh Dashboard
+  // 1. Xác định ngữ cảnh
   const isDashboard = pathname.startsWith("/dashboard");
-
-  // 2. Xác định chế độ Admin
   const isAdminView = useMemo(() => {
     const isRoleAdmin = currentUser?.role?.toLowerCase() === "admin";
     const isInAdminRoute = pathname.startsWith("/dashboard/admin");
     return !!(isRoleAdmin && isInAdminRoute);
   }, [currentUser?.role, pathname]);
 
-  // 3. Quyền sở hữu (isMine)
-  // - Admin: false
-  // - Dashboard: true (mặc định quản lý bài của mình)
-  // - Profile công khai: true nếu ID trong URL trùng với ID bản thân
   const targetUserId = routeParams.id as string;
+
+  // 2. Quyền sở hữu (isMine)
   const isMine = useMemo(() => {
     if (isAdminView) return false;
     if (isDashboard) return true;
     return !!(currentUser?.userId && targetUserId === currentUser?.userId);
   }, [isAdminView, isDashboard, targetUserId, currentUser?.userId]);
 
-  // 4. Lấy params từ URL
+  // 3. Đọc params từ URL
   const urlParams = useMemo(
     () => ({
       status: searchParams.get("status") || "all",
       sort: searchParams.get("sort") || "new",
       page: Number(searchParams.get("page")) || 1,
-      startDate: searchParams.get("startDate") || "",
-      endDate: searchParams.get("endDate") || "",
+      startDate: searchParams.get("startDate") || undefined,
+      endDate: searchParams.get("endDate") || undefined,
     }),
     [searchParams],
   );
 
-  // 5. Xây dựng API Params sạch
+  // 4. Xây dựng API Params sạch (đây là "Key" để React Query tự động refetch)
   const cleanApiParams = useMemo(() => {
-    // mapUrlParamsToApi sẽ dựa vào isMine để quyết định có gửi status/myPosts mặc định không
     const base = mapUrlParamsToApi(urlParams, isMine);
 
     const params: PostApiParams = {
       ...base,
       limit: 10,
       adminView: isAdminView ? true : undefined,
-      startDate: urlParams.startDate || undefined,
-      endDate: urlParams.endDate || undefined,
     };
 
     if (isAdminView) {
+      // Logic Admin: 'all' thì không gửi status để lấy tất cả
       params.status = (
         urlParams.status === "all" ? undefined : urlParams.status
       ) as GlobalStatus;
-    }
-    // TRƯỜNG HỢP DASHBOARD: Ưu tiên dùng myPosts để lấy toàn bộ bài (nháp/duyệt/từ chối)
-    else if (isDashboard) {
+      params.myPosts = undefined;
+    } else if (isDashboard) {
+      // Logic Dashboard cá nhân
       params.myPosts = true;
       params.userId = undefined;
-    }
-    // TRƯỜNG HỢP PROFILE CÔNG KHAI: Dùng userId (kể cả khi tự xem chính mình)
-    else if (targetUserId) {
+    } else if (targetUserId) {
+      // Logic Profile công khai
       params.userId = targetUserId;
-      params.status = "approved" as GlobalStatus; // Chỉ xem bài đã duyệt công khai
+      params.status = "approved" as GlobalStatus;
       params.myPosts = undefined;
     }
 
-    // Lọc bỏ undefined/null
-    const finalParams: PostApiParams = {};
-    Object.keys(params).forEach((key) => {
-      if (params[key] !== undefined && params[key] !== null) {
-        finalParams[key] = params[key];
-      }
-    });
-
-    return finalParams;
+    // Loại bỏ các giá trị null/undefined để Query Key luôn chuẩn
+    return Object.fromEntries(
+      Object.entries(params).filter(([_, v]) => v !== undefined && v !== null),
+    ) as PostApiParams;
   }, [urlParams, isMine, isAdminView, isDashboard, targetUserId]);
 
-  // 6. Fetch dữ liệu
+  // 5. FETCH DỮ LIỆU (Tự động chạy lại khi cleanApiParams thay đổi)
   const postsQuery = usePostsQuery(cleanApiParams);
 
-  // 7. Cập nhật URL (Pagination & Filter)
+  // 6. Hàm cập nhật URL đồng nhất với PostList
   const updateParams = useCallback(
-    (next: Record<string, string | number | null>) => {
+    (next: Record<string, string | number | null | undefined>) => {
       const sp = new URLSearchParams(searchParams.toString());
 
       Object.entries(next).forEach(([key, value]) => {
-        // Xóa khỏi URL nếu giá trị là null, rỗng, hoặc reset về mặc định
-        if (value === null || value === "") {
+        if (value === null || value === undefined || value === "") {
           sp.delete(key);
         } else {
           sp.set(key, String(value));
         }
       });
 
-      // Reset về trang 1 khi lọc (trừ khi chính tham số truyền vào là page)
-      if (!next.page) {
+      // Reset về trang 1 nếu thay đổi filter (trừ khi chính tham số thay đổi là page)
+      if (!next.hasOwnProperty("page")) {
         sp.set("page", "1");
       }
 
