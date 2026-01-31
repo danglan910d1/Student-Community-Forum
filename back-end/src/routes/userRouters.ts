@@ -23,7 +23,7 @@ router.put(
   sensitiveLimiter,
   multerErrorHandler(uploadSingleAvatar),
   preventDuplicateRequest,
-  userCtrl.updateProfile
+  userCtrl.updateProfile,
 );
 
 // PUT /api/users/password - Đổi mật khẩu
@@ -32,7 +32,7 @@ router.put(
   authMiddleware,
   sensitiveLimiter,
   preventDuplicateRequest,
-  userCtrl.updatePassword
+  userCtrl.updatePassword,
 );
 
 // DELETE /api/users/me - Tự xóa tài khoản cá nhân
@@ -41,7 +41,7 @@ router.delete(
   authMiddleware,
   sensitiveLimiter,
   preventDuplicateRequest,
-  userCtrl.deleteUser
+  userCtrl.deleteUser,
 );
 
 /**
@@ -54,7 +54,7 @@ router.get(
   authMiddleware,
   adminMiddleware,
   generalLimiter,
-  userCtrl.getUsersList
+  userCtrl.getUsersList,
 );
 
 // PUT /api/users/admin/:id/status - Admin cập nhật trạng thái/role
@@ -64,7 +64,7 @@ router.put(
   adminMiddleware,
   sensitiveLimiter,
   preventDuplicateRequest,
-  userCtrl.updateUserStatus
+  userCtrl.updateUserStatus,
 );
 
 // GET /api/users/admin/:id - Admin xem chi tiết User theo ID
@@ -73,7 +73,7 @@ router.get(
   authMiddleware,
   adminMiddleware,
   generalLimiter,
-  userCtrl.getUserById
+  userCtrl.getUserById,
 );
 
 // DELETE /api/users/admin/:id - Admin xóa tài khoản người dùng
@@ -83,7 +83,7 @@ router.delete(
   adminMiddleware,
   sensitiveLimiter,
   preventDuplicateRequest,
-  userCtrl.deleteUser
+  userCtrl.deleteUser,
 );
 
 /**

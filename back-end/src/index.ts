@@ -1,5 +1,8 @@
+import "dotenv/config";
+
 import express from "express";
 import cors from "cors";
+import { initializeConfig } from "./config";
 import authRoutes from "./routes/authRoutes";
 import userRoutes from "./routes/userRouters";
 import topicRoutes from "./routes/topicRoutes";
@@ -8,10 +11,8 @@ import postRoutes from "./routes/postRoutes";
 import commentRoutes from "./routes/commentRoutes";
 import likeRoutes from "./routes/likeRoutes";
 import notificationRoutes from "./routes/notificationRoutes";
-import { initializeConfig } from "./config";
 import { globalErrorHandler } from "./middleware/error";
 import { initSyncStatsJob } from "./core/scheduler";
-import { UPLOADS_DIR } from "./middleware/multer";
 
 // Khởi tạo ứng dụng Express
 const app = express();
@@ -20,11 +21,10 @@ const app = express();
 app.use(
   cors({
     exposedHeaders: ["x-request-id"], // Cực kỳ quan trọng để FE đọc được ID
-  })
+  }),
 );
 app.use(express.json());
 
-app.use("/uploads", express.static(UPLOADS_DIR));
 // --- 2. ĐỊNH TUYẾN (ROUTING) ---
 // Áp dụng Rate Limiter cho các route nhạy cảm (Auth)
 app.use("/api/auth", authRoutes); // Áp dụng Rate Limiter
@@ -54,6 +54,10 @@ const PORT = process.env.PORT || 5000;
 // Sử dụng initializeConfig để kết nối DB và tải Env an toàn
 initializeConfig()
   .then(() => {
+    console.log("--- CHECK CLOUDINARY ENV ---");
+    console.log("Name:", process.env.CLOUDINARY_NAME);
+    console.log("Key:", process.env.CLOUDINARY_KEY);
+    console.log("Secret length:", process.env.CLOUDINARY_SECRET?.length);
     app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 
     initSyncStatsJob();

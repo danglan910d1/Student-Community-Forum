@@ -2,7 +2,7 @@
   // Visit https://aka.ms/tsconfig to read more about this file
   "compilerOptions": {
     // File Layout
-    "rootDir": "./src", // nơi đặt code gốc .ts 
+    "rootDir": "./src", // nơi đặt code gốc .ts
     "outDir": "./dist", // nơi chứa file .js sau khi build
 
     "esModuleInterop": true, // cho phép import/export theo kiểu ESModule
@@ -15,12 +15,13 @@
     // Tùy chọn quan trọng: HƯỚNG DẪN TypeScript tìm kiếm file .d.ts
     "typeRoots": [
       "./node_modules/@types", // Mặc định: Nơi @types/* được cài đặt
-      "./src/types"           // THÊM ĐƯỜNG DẪN NÀY (nơi file express.d.ts được đặt)
+      "./src/types" // THÊM ĐƯỜNG DẪN NÀY (nơi file express.d.ts được đặt)
     ],
     // For nodejs:
     // "lib": ["esnext"],
     // "types": ["node"],
     // and npm install -D @types/node
+    "noImplicitAny": false,
 
     // Other Outputs
     "sourceMap": true,
@@ -46,8 +47,8 @@
     "isolatedModules": true,
     "noUncheckedSideEffectImports": true,
     "moduleDetection": "force",
-    "skipLibCheck": true,
+    "skipLibCheck": true
   },
-  "include": ["src"],
+  "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]
 }

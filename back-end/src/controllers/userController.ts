@@ -29,13 +29,12 @@ import {
   setCache,
   saveIdempotencyResult,
 } from "../services/common/redis";
-import { UPLOADS_DIR } from "../middleware/multer";
 import { buildUserAggregationPipeline } from "../services/users/userPipeline";
 import { fetchUserByPipeline } from "../services/users/fetchUserByPipeline";
 import { AppError } from "../utils/appError";
 
 interface MulterRequest extends Request {
-  file?: Express.Multer.File;
+  file?: Express.Multer.File & { path: string };
 }
 
 // --- [ 1. PROFILE & SECURITY ] ---
@@ -55,6 +54,16 @@ export const getMe = asyncHandler(
 );
 
 /** * PUT /api/users/profile (Update Name/Avatar) */
+/**
+ * Interface mở rộng để hỗ trợ các thuộc tính trả về từ Cloudinary
+ */
+interface MulterRequest extends Request {
+  file?: Express.Multer.File & { path: string };
+}
+
+/** * PUT /api/users/profile (Update Name/Avatar)
+ * Sử dụng Cloudinary Storage
+ */
 export const updateProfile = asyncHandler(
   async (
     req: AuthenticatedRequest<{}, {}, UpdateProfileBody> & MulterRequest,
@@ -70,36 +79,47 @@ export const updateProfile = asyncHandler(
     const updateFields: Partial<IUser> = {};
     if (name?.trim()) updateFields.name = name.trim();
 
-    // Xử lý Upload Avatar & Xóa ảnh cũ
+    // --- [XỬ LÝ AVATAR VỚI CLOUDINARY] ---
     if (req.file) {
-      const filename = `avatar-${userId}-${Date.now()}${path.extname(
-        req.file.originalname,
-      )}`;
-      await fs.writeFile(path.join(UPLOADS_DIR, filename), req.file.buffer);
+      /**
+       * Với multer-storage-cloudinary:
+       * req.file.path là URL đầy đủ (https://res.cloudinary.com/...)
+       */
+      updateFields.avatar = req.file.path;
 
-      // Xóa file cũ nếu có (tránh rác server)
-      if (user.avatar && user.avatar.startsWith("/uploads/")) {
-        const oldPath = path.join(UPLOADS_DIR, path.basename(user.avatar));
-        await fs.unlink(oldPath).catch(() => null);
-      }
-      updateFields.avatar = `/uploads/${filename}`;
+      // Lưu ý: Việc xóa ảnh cũ trên Cloudinary để tiết kiệm dung lượng
+      // yêu cầu lấy public_id từ URL cũ. Tạm thời lưu link mới đã giúp
+      // hiển thị ảnh công khai cho toàn bộ hệ thống.
     } else if (avatar === "null") {
       updateFields.avatar = null;
     }
 
+    console.log("--- ĐÃ VÀO ĐƯỢC CONTROLLER UPDATE PROFILE ---");
+    console.log("File nhận được:", req.file);
+
+    // Cập nhật Database
     const updatedUserRaw = await User.findByIdAndUpdate(
       userId,
       { $set: updateFields },
       { new: true },
     );
+
+    if (!updatedUserRaw)
+      throw new AppError(404, "Update failed, user not found.");
+
+    // Lấy dữ liệu user đầy đủ thông qua Pipeline (bao gồm stats, role...)
     const userData = await fetchUserByPipeline(
-      { _id: updatedUserRaw!._id },
+      { _id: updatedUserRaw._id },
       true,
     );
 
+    // Cập nhật Cache Redis
     await cacheUser(userId, userData);
-    if (requestId)
+
+    // Xử lý Idempotency (Chống trùng lặp request)
+    if (requestId) {
       await saveIdempotencyResult(requestId, 200, JSON.stringify(userData));
+    }
 
     res.json(userData);
   },
