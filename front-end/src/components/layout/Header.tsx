@@ -80,19 +80,17 @@ export function Header() {
                 </div>
               </div>
             ) : (
-              <div className="flex items-center space-x-2">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  asChild
-                  className="hidden sm:flex"
-                >
+              <div className="flex items-center justify-end">
+                {/* Nút Đăng nhập: Luôn hiển thị */}
+                <Button variant="ghost" size="sm" asChild className="flex">
                   <Link href="/auth/login">Đăng nhập</Link>
                 </Button>
+
+                {/* Nút Đăng ký: Ẩn trên mobile (dưới 640px), hiện từ 'sm' trở lên */}
                 <Button
                   size="sm"
                   asChild
-                  className="bg-primary hover:bg-primary/90 text-white font-bold h-9 px-4"
+                  className="hidden sm:flex bg-primary hover:bg-primary/90 text-white font-bold h-9 px-4 ml-2"
                 >
                   <Link href="/auth/register">Đăng ký</Link>
                 </Button>

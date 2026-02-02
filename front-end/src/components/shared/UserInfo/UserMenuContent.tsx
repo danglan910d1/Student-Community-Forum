@@ -1,6 +1,6 @@
 "use client";
 
-import { LogOut, User, LayoutDashboard, Globe } from "lucide-react";
+import { LogOut, LayoutDashboard, Globe } from "lucide-react";
 import Link from "next/link";
 import {
   DropdownMenuContent,
@@ -9,6 +9,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import { useRouter } from "next/navigation";
 
 interface UserMenuContentProps {
   userId?: string;
@@ -16,6 +17,17 @@ interface UserMenuContentProps {
 }
 
 export const UserMenuContent = ({ userId, logout }: UserMenuContentProps) => {
+  const router = useRouter();
+  const handleLogout = () => {
+    // 1. Chuyển hướng ngay lập tức (Để user thấy UI thay đổi ngay)
+    router.push("/");
+
+    // 2. Xóa dữ liệu đồng thời
+    logout();
+
+    // 3. Làm mới để xóa cache server (Chỉ cần thiết nếu bạn dùng Next.js App Router)
+    router.refresh();
+  };
   return (
     <DropdownMenuContent
       align="end"
@@ -53,7 +65,7 @@ export const UserMenuContent = ({ userId, logout }: UserMenuContentProps) => {
       {/* Lựa chọn 3: Đăng xuất - Giữ nguyên style text-destructive */}
       <DropdownMenuItem
         className="text-red-600 focus:text-red-600 focus:bg-red-50 dark:focus:bg-red-950/30 cursor-pointer"
-        onClick={() => logout()}
+        onClick={handleLogout}
       >
         <LogOut className="mr-2 h-4 w-4" />
         <span>Đăng xuất</span>
