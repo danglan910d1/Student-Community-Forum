@@ -55,9 +55,9 @@ const PORT = process.env.PORT || 5000;
 initializeConfig()
   .then(() => {
     console.log("--- CHECK CLOUDINARY ENV ---");
-    console.log("Name:", process.env.CLOUDINARY_NAME);
-    console.log("Key:", process.env.CLOUDINARY_KEY);
-    console.log("Secret length:", process.env.CLOUDINARY_SECRET?.length);
+    // console.log("Name:", process.env.CLOUDINARY_NAME);
+    // console.log("Key:", process.env.CLOUDINARY_KEY);
+    // console.log("Secret length:", process.env.CLOUDINARY_SECRET?.length);
     app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 
     initSyncStatsJob();
