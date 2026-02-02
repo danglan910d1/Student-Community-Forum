@@ -101,6 +101,7 @@ export function PostDataTable({
                             userId: post.user?.userId,
                             name: post.user?.name || "Người dùng",
                             avatar: post.user?.avatar ?? undefined,
+                            role: post.user?.role,
                           }}
                           size="sm"
                           className="flex-1 max-w-[85%]"
