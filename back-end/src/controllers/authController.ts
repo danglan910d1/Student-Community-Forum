@@ -5,9 +5,16 @@
  */
 import { Request, Response } from "express";
 import { asyncHandler } from "../utils/asyncHandler";
-import { MIN_PASSWORD_LENGTH } from "../config/constants";
+import bcrypt from "bcrypt";
+import { BCRYPT_SALT_ROUNDS, MIN_PASSWORD_LENGTH } from "../config/constants";
 import { LoginBody, RegisterBody } from "../types/user";
-import { clearRateLimitsByIdentifier } from "../services/common/redis";
+import {
+  cacheUser,
+  clearRateLimitsByIdentifier,
+  deleteOTP,
+  getOTP,
+  setOTP,
+} from "../services/common/redis";
 import { AuthenticatedRequest } from "../types/express";
 import {
   loginService,
@@ -15,6 +22,7 @@ import {
   registerService,
 } from "../services/users/authlLayer";
 import { AppError } from "../utils/appError";
+import User from "../models/User";
 
 /** * POST /api/auth/register */
 export const register = asyncHandler(
@@ -27,7 +35,7 @@ export const register = asyncHandler(
     if (password.length < MIN_PASSWORD_LENGTH) {
       throw new AppError(
         400,
-        `Password must be at least ${MIN_PASSWORD_LENGTH} characters long.`
+        `Password must be at least ${MIN_PASSWORD_LENGTH} characters long.`,
       );
     }
 
@@ -38,7 +46,7 @@ export const register = asyncHandler(
     await clearRateLimitsByIdentifier(userIp, "rate:general");
 
     res.status(201).json({ ...user, token });
-  }
+  },
 );
 
 /** * POST /api/auth/login */
@@ -58,7 +66,74 @@ export const login = asyncHandler(
     await clearRateLimitsByIdentifier(userIp, "rate:general");
 
     res.json({ ...user, token });
-  }
+  },
+);
+
+export const sendOTP = asyncHandler(async (req: Request, res: Response) => {
+  const { email } = req.body; // Loại bỏ 'action' khỏi body nếu không dùng đến
+
+  if (!email) throw new AppError(400, "Email là bắt buộc.");
+
+  const user = await User.findOne({ email });
+  if (!user)
+    throw new AppError(404, "Không tìm thấy người dùng với email này.");
+
+  // 1. Tạo mã OTP 6 số
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+  // 2. Lưu vào Redis
+  // Vì trong redis.ts đã để action mặc định là "reset-password",
+  // bạn chỉ cần truyền userId và otp.
+  await setOTP(user.id.toString(), otp);
+
+  // 3. Gửi Email (Hiện tại đang debug console)
+  // await mailService.sendOTP(email, otp);
+
+  console.log(`--- [DEBUG] OTP RESET cho ${email} là: ${otp} ---`);
+
+  res.json({
+    success: true,
+    message: "Mã xác thực đã được gửi đến email của bạn.",
+  });
+});
+
+export const resetPassword = asyncHandler(
+  async (req: Request, res: Response) => {
+    const { email, otpCode, newPassword } = req.body;
+
+    if (!email || !otpCode || !newPassword)
+      throw new AppError(400, "Email, OTP và mật khẩu mới là bắt buộc.");
+
+    // Tìm user bằng email
+
+    const user = await User.findOne({ email });
+
+    if (!user) throw new AppError(404, "Email không tồn tại trên hệ thống.");
+
+    // 1. Xác thực OTP từ Redis (Action: reset-password)
+
+    const storedOtp = await getOTP(user.id.toString(), "reset-password");
+
+    if (!storedOtp || storedOtp !== otpCode)
+      throw new AppError(400, "Mã OTP không chính xác hoặc đã hết hạn.");
+
+    // 2. Hash mật khẩu mới và lưu
+
+    user.password = await bcrypt.hash(newPassword, BCRYPT_SALT_ROUNDS);
+
+    await user.save();
+
+    // 3. Dọn dẹp OTP
+
+    await deleteOTP(user.id.toString(), "reset-password");
+
+    await cacheUser(user.id.toString(), null, 0);
+
+    res.json({
+      success: true,
+      message: "Mật khẩu đã được đặt lại thành công. Vui lòng đăng nhập lại.",
+    });
+  },
 );
 
 /** * POST /api/auth/logout */
@@ -71,5 +146,5 @@ export const logout = asyncHandler(
     await logoutService(token);
 
     res.json({ message: "Logged out successfully." });
-  }
+  },
 );

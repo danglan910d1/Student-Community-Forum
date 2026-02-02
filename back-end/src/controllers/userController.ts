@@ -28,6 +28,7 @@ import {
   getCache,
   setCache,
   saveIdempotencyResult,
+  setOTP,
 } from "../services/common/redis";
 import { buildUserAggregationPipeline } from "../services/users/userPipeline";
 import { fetchUserByPipeline } from "../services/users/fetchUserByPipeline";
@@ -148,10 +149,8 @@ export const updatePassword = asyncHandler(
     const isMatch = await bcrypt.compare(oldPassword, user.password);
     if (!isMatch) throw new AppError(401, "Invalid current password.");
 
-    user.password = await bcrypt.hash(
-      newPassword,
-      await bcrypt.genSalt(BCRYPT_SALT_ROUNDS),
-    );
+    const salt = await bcrypt.genSalt(BCRYPT_SALT_ROUNDS);
+    user.password = await bcrypt.hash(newPassword, salt);
     await user.save();
 
     await cacheUser(req.userId!, null, 0); // Invalidate cache

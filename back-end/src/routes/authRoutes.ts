@@ -1,7 +1,11 @@
 // src/routes/authRoutes.ts
 import { Router } from "express";
 import * as authCtrl from "../controllers/authController";
-import { authLimiter, logoutLimiter } from "../middleware/ratelimit";
+import {
+  authLimiter,
+  logoutLimiter,
+  sensitiveLimiter,
+} from "../middleware/ratelimit";
 import { preventDuplicateRequest } from "../middleware/idempotency";
 import { authMiddleware } from "../middleware/auth";
 
@@ -16,11 +20,20 @@ router.post(
   "/register",
   authLimiter,
   preventDuplicateRequest,
-  authCtrl.register
+  authCtrl.register,
 );
 
 // POST /api/auth/login - Đăng nhập
 router.post("/login", authLimiter, preventDuplicateRequest, authCtrl.login);
+
+// Quên mật khẩu & OTP (PUBLIC)
+router.post("/sendOtp", sensitiveLimiter, authCtrl.sendOTP);
+router.post(
+  "/resetPassword",
+  sensitiveLimiter,
+  preventDuplicateRequest,
+  authCtrl.resetPassword,
+);
 
 /**
  * NHÓM 2: AUTH REQUIRED (USER ACCESS)
@@ -31,7 +44,7 @@ router.post(
   "/logout",
   authMiddleware, // Cần định danh để biết token nào cần revoke
   logoutLimiter,
-  authCtrl.logout
+  authCtrl.logout,
 );
 
 export default router;

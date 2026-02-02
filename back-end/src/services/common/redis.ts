@@ -43,7 +43,7 @@ export async function getCache(key: string): Promise<any | null> {
 export async function setCache(
   key: string,
   value: any,
-  expirationInSeconds: number = 3600
+  expirationInSeconds: number = 3600,
 ): Promise<void> {
   try {
     const data = JSON.stringify(value);
@@ -111,7 +111,7 @@ const LIKE_KEY = (postId: string) => `likes:post:${postId}`;
 export async function togglePostLike(
   postId: string,
   userId: string,
-  action: "add" | "remove"
+  action: "add" | "remove",
 ): Promise<number> {
   const key = LIKE_KEY(postId);
   if (action === "add") {
@@ -148,7 +148,7 @@ export async function getPostLikeCount(postId: string): Promise<number> {
 export async function checkRateLimit(
   uniqueKey: string, // KHÓA DUY NHẤT (bao gồm prefix, identifier, và actionId)
   limit: number,
-  windowInSeconds: number
+  windowInSeconds: number,
 ): Promise<boolean> {
   const key = uniqueKey;
 
@@ -171,7 +171,7 @@ export async function checkRateLimit(
  */
 export async function clearRateLimitsByIdentifier(
   identifier: string,
-  keyPrefix: string
+  keyPrefix: string,
 ): Promise<void> {
   // Sử dụng KEYS hoặc SCAN để tìm tất cả các key bắt đầu bằng prefix:identifier:*
   const pattern = `${keyPrefix}:${identifier}:*`;
@@ -189,7 +189,7 @@ const EMAIL_LOCKOUT_SECONDS = 30 * 60; // Thời gian khóa tài khoản tạm t
  */
 export async function handleLoginFailure(
   email: string,
-  userIp: string
+  userIp: string,
 ): Promise<void> {
   const key = `fail:email:${email.toLowerCase()}`;
   const lockoutKey = `lockout:email:${email.toLowerCase()}`;
@@ -257,7 +257,7 @@ export async function isAccountLockedOut(email: string): Promise<boolean> {
 export async function cacheUser(
   userId: string,
   userData: any,
-  expirationInSeconds: number = 3600
+  expirationInSeconds: number = 3600,
 ): Promise<void> {
   const key = `user:profile:${userId}`;
   await setCache(key, userData, expirationInSeconds);
@@ -286,7 +286,7 @@ const REVOKED_TOKEN_PREFIX = "revoked:token";
  */
 export async function addRevokedToken(
   jwtId: string,
-  expirationInSeconds: number
+  expirationInSeconds: number,
 ): Promise<void> {
   const key = `${REVOKED_TOKEN_PREFIX}:${jwtId}`;
   // Lưu giá trị '1' (hoặc bất kỳ giá trị nào) với TTL
@@ -323,7 +323,7 @@ export async function isTokenRevoked(jwtId: string): Promise<boolean> {
  */
 export async function reserveIdempotencyKey(
   requestId: string,
-  expirationInSeconds: number = 60
+  expirationInSeconds: number = 60,
 ): Promise<boolean> {
   const key = `idempotency:${requestId}`;
 
@@ -336,7 +336,7 @@ export async function reserveIdempotencyKey(
     {
       NX: true, // Chỉ đặt nếu key KHÔNG tồn tại
       EX: expirationInSeconds, // Đặt thời gian sống
-    }
+    },
   );
 
   // Nếu result là 'OK', thì key đã được đặt thành công (Request MỚI)
@@ -358,7 +358,7 @@ export async function saveIdempotencyResult(
   requestId: string,
   statusCode: number,
   responseBody: string,
-  expirationInSeconds: number = 600 // Lưu kết quả trong 10 phút
+  expirationInSeconds: number = 600, // Lưu kết quả trong 10 phút
 ): Promise<boolean> {
   const key = `idempotency:${requestId}`;
   const resultData = JSON.stringify({ status: statusCode, body: responseBody });
@@ -373,10 +373,59 @@ export async function saveIdempotencyResult(
 }
 
 export async function getIdempotencyKey(
-  requestId: string
+  requestId: string,
 ): Promise<string | null> {
   const key = `idempotency:${requestId}`;
   return redisClient.get(key);
+}
+
+// ----------------------------------------------------------------------
+// CÁC HÀM XỬ LÝ OTP (Xác thực 2 lớp / Đổi mật khẩu)
+// ----------------------------------------------------------------------
+
+/**
+ * Lưu mã OTP vào Redis với thời gian hết hạn ngắn.
+ * @param userId ID người dùng
+ * @param otp Mã số OTP (thường là 6 số)
+ * @param action Loại tác vụ (ví dụ: 'change-password', 'reset-password')
+ * @param expirationInSeconds Thời gian sống của OTP (Mặc định 5 phút = 300s)
+ */
+export async function setOTP(
+  userId: string,
+  otp: string,
+  action: string = "reset-password", // Cập nhật mặc định thành reset-password
+  expirationInSeconds: number = 300,
+): Promise<void> {
+  const key = `otp:${action}:${userId}`;
+  // Lưu OTP dạng chuỗi thường, không cần JSON.stringify nếu chỉ là mã số
+  await redisClient.setEx(key, expirationInSeconds, otp);
+}
+
+/**
+ * Lấy mã OTP đang lưu trong Redis để so sánh.
+ * @param userId ID người dùng
+ * @param action Loại tác vụ
+ * @returns Mã OTP hoặc null nếu hết hạn/không tồn tại
+ */
+export async function getOTP(
+  userId: string,
+  action: string = "reset-password", // Cập nhật mặc định thành reset-password
+): Promise<string | null> {
+  const key = `otp:${action}:${userId}`;
+  return redisClient.get(key);
+}
+
+/**
+ * Xóa OTP ngay lập tức sau khi xác thực thành công (Tránh dùng lại).
+ * @param userId ID người dùng
+ * @param action Loại tác vụ
+ */
+export async function deleteOTP(
+  userId: string,
+  action: string = "reset-password", // Cập nhật mặc định thành reset-password
+): Promise<void> {
+  const key = `otp:${action}:${userId}`;
+  await redisClient.del(key);
 }
 
 export default redisClient;

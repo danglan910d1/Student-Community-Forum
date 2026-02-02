@@ -24,6 +24,7 @@ app.use(
   }),
 );
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // --- 2. ĐỊNH TUYẾN (ROUTING) ---
 // Áp dụng Rate Limiter cho các route nhạy cảm (Auth)
